@@ -1,6 +1,6 @@
 "use client";
 
-import type { CSSProperties } from "react";
+import type { CSSProperties, MouseEvent } from "react";
 import type { LandingData } from "../landing-data";
 
 type LandingCanvasProps = {
@@ -17,10 +17,33 @@ export function LandingCanvas({ data, compact = false }: LandingCanvasProps) {
     "--site-line": data.palette.line,
   } as CSSProperties;
 
+  function handlePreviewNavigation(event: MouseEvent<HTMLElement>) {
+    if (!compact) return;
+
+    const anchor = (event.target as HTMLElement).closest("a");
+    if (!anchor) return;
+
+    event.preventDefault();
+    const href = anchor.getAttribute("href");
+    if (!href?.startsWith("#")) return;
+
+    const scroller = event.currentTarget.closest(".preview-scroll");
+    const destination = event.currentTarget.querySelector<HTMLElement>(href);
+    if (!scroller || !destination) return;
+
+    const destinationTop =
+      destination.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top +
+      scroller.scrollTop;
+
+    scroller.scrollTo({ top: destinationTop, behavior: "smooth" });
+  }
+
   return (
     <article
       className={`landing-canvas${compact ? " is-compact" : ""}`}
       style={style}
+      onClick={handlePreviewNavigation}
     >
       <header className="landing-nav">
         <a className="landing-brand" href="#top" aria-label={`${data.brand} — trang chủ`}>

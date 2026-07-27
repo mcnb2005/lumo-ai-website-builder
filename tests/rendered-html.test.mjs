@@ -13,14 +13,17 @@ test("defines the complete Lumo studio experience", async () => {
   assert.match(studio, /\/api\/ai/);
   assert.match(studio, /\/api\/publish/);
   assert.match(landing, /landing-hero/);
+  assert.match(landing, /handlePreviewNavigation/);
+  assert.match(landing, /event\.preventDefault\(\)/);
   assert.doesNotMatch(studio, /codex-preview|react-loading-skeleton/i);
 });
 
 test("ships production metadata and removes starter artifacts", async () => {
-  const [layout, page, packageJson] = await Promise.all([
+  const [layout, page, packageJson, css] = await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(layout, /Lumo — Tạo landing page bằng AI/);
@@ -28,6 +31,8 @@ test("ships production metadata and removes starter artifacts", async () => {
   assert.match(page, /<Studio \/>/);
   assert.match(packageJson, /"name": "lumo-ai-landing-studio"/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
+  assert.match(css, /"Times New Roman", Times, "Noto Serif", serif/);
+  assert.match(css, /letter-spacing: normal/);
   await assert.rejects(
     access(new URL("../app/_sites-preview/SkeletonPreview.tsx", import.meta.url))
   );

@@ -23,20 +23,6 @@ function isLandingData(value: unknown): value is LandingData {
   return requiredKeys.every((key) => key in record);
 }
 
-function extractOutputText(payload: {
-  output?: Array<{
-    type?: string;
-    content?: Array<{ type?: string; text?: string }>;
-  }>;
-}) {
-  for (const item of payload.output || []) {
-    for (const content of item.content || []) {
-      if (content.type === "output_text" && content.text) return content.text;
-    }
-  }
-  return "";
-}
-
 function parseJsonObject(text: string) {
   const cleaned = text.replace(/^```(?:json)?/i, "").replace(/```$/i, "").trim();
   const start = cleaned.indexOf("{");
@@ -189,7 +175,14 @@ export async function POST(request: Request) {
     }
 
     const runtime = getRuntimeEnv();
-    if (!runtime.OPENAI_API_KEY) {
+    const apiKey = runtime.AI_API_KEY || runtime.OPENAI_API_KEY;
+    const providerUrl = (
+      runtime.AI_PROVIDER_URL || "https://api.openai.com/v1"
+    ).replace(/\/+$/, "");
+    const modelName =
+      runtime.AI_MODEL_NAME || runtime.OPENAI_MODEL || "gpt-5.6-terra";
+
+    if (!apiKey) {
       return Response.json({
         landing: applyDemoPrompt(prompt, current),
         message:
@@ -198,36 +191,42 @@ export async function POST(request: Request) {
       });
     }
 
-    const apiResponse = await fetch("https://api.openai.com/v1/responses", {
+    const systemPrompt =
+      "Bạn là chuyên gia conversion copywriting và thiết kế landing page. Cập nhật toàn bộ JSON landing page theo yêu cầu bằng tiếng Việt tự nhiên. Giữ đúng cấu trúc, đủ số lượng 3 stats và 3 features. Màu phải là mã hex hợp lệ. Không thêm khóa mới. Chỉ trả về một JSON object hợp lệ, không markdown, không giải thích.";
+
+    const apiResponse = await fetch(`${providerUrl}/chat/completions`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${runtime.OPENAI_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: runtime.OPENAI_MODEL || "gpt-5.6-terra",
-        reasoning: { effort: "low" },
-        text: { verbosity: "low" },
-        instructions:
-          "Bạn là chuyên gia conversion copywriting và thiết kế landing page. Cập nhật toàn bộ JSON landing page theo yêu cầu bằng tiếng Việt tự nhiên. Giữ đúng cấu trúc, đủ số lượng 3 stats và 3 features. Màu phải là mã hex hợp lệ. Không thêm khóa mới. Chỉ trả về một JSON object hợp lệ, không markdown, không giải thích.",
-        input: `Yêu cầu của người dùng:\n${prompt}\n\nLanding page hiện tại:\n${JSON.stringify(current)}`,
+        model: modelName,
+        reasoning_effort: "low",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: `Yêu cầu của người dùng:\n${prompt}\n\nLanding page hiện tại:\n${JSON.stringify(current)}`,
+          },
+        ],
       }),
     });
 
     if (!apiResponse.ok) {
       const detail = await apiResponse.text();
       throw new Error(
-        `OpenAI API lỗi ${apiResponse.status}: ${detail.slice(0, 180)}`
+        `Nhà cung cấp AI trả về lỗi ${apiResponse.status}: ${detail.slice(0, 180)}`
       );
     }
 
     const apiPayload = (await apiResponse.json()) as {
-      output?: Array<{
-        type?: string;
-        content?: Array<{ type?: string; text?: string }>;
+      choices?: Array<{
+        message?: { content?: string | null };
       }>;
     };
-    const generated = parseJsonObject(extractOutputText(apiPayload));
+    const outputText = apiPayload.choices?.[0]?.message?.content || "";
+    const generated = parseJsonObject(outputText);
     if (!isLandingData(generated)) {
       throw new Error("AI chưa trả về đủ nội dung landing page.");
     }

@@ -4,6 +4,9 @@ import * as schema from "./schema";
 
 export type RuntimeEnv = {
   DB?: D1Database;
+  AI_API_KEY?: string;
+  AI_PROVIDER_URL?: string;
+  AI_MODEL_NAME?: string;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
 };

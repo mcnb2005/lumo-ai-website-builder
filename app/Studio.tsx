@@ -47,6 +47,18 @@ export function Studio() {
   const [notice, setNotice] = useState("");
   const hydrated = useRef(false);
   const conversationEnd = useRef<HTMLDivElement>(null);
+  const previewScroll = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (window.location.hash) {
+      window.history.replaceState(
+        null,
+        "",
+        `${window.location.pathname}${window.location.search}`
+      );
+    }
+    previewScroll.current?.scrollTo({ top: 0, behavior: "auto" });
+  }, []);
 
   useEffect(() => {
     async function loadProject() {
@@ -157,7 +169,7 @@ export function Studio() {
       ]);
       if (result.mode === "demo") {
         setNotice(
-          "Đang dùng chế độ mẫu. Thêm OPENAI_API_KEY để bật AI tạo nội dung tự do."
+          "Đang dùng chế độ mẫu. Thêm AI_API_KEY để bật AI tạo nội dung tự do."
         );
       }
     } catch (error) {
@@ -413,7 +425,7 @@ export function Studio() {
                 <p><span>⌕</span> {PROJECT_SLUG}.lumo.site</p>
                 <span aria-hidden="true">↻</span>
               </div>
-              <div className="preview-scroll">
+              <div className="preview-scroll" ref={previewScroll}>
                 <LandingCanvas data={landing} compact />
               </div>
             </div>

@@ -697,7 +697,7 @@ textarea:focus-visible {
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.04em;
@@ -813,7 +813,7 @@ textarea:focus-visible {
 .landing-hero h1 {
   max-width: 850px;
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: clamp(58px, 7.6vw, 108px);
   font-weight: 500;
   line-height: 0.86;
@@ -831,7 +831,7 @@ textarea:focus-visible {
   max-width: 620px;
   margin: 30px auto 0;
   color: color-mix(in srgb, var(--site-ink) 69%, transparent);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 17px;
   line-height: 1.65;
   position: relative;
@@ -950,7 +950,7 @@ textarea:focus-visible {
 
 .stat-card strong {
   color: var(--site-accent);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 44px;
   font-weight: 500;
   letter-spacing: -0.06em;
@@ -986,7 +986,7 @@ textarea:focus-visible {
 
 .section-heading h2 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 58px;
   font-weight: 500;
   line-height: 0.98;
@@ -1008,13 +1008,13 @@ textarea:focus-visible {
 
 .feature-item > span {
   color: var(--site-accent);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 13px;
 }
 
 .feature-item h3 {
   margin: 0;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.03em;
@@ -1053,7 +1053,7 @@ textarea:focus-visible {
 .quote-mark {
   margin: 0;
   color: var(--site-accent);
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 70px;
   line-height: 0.6;
 }
@@ -1061,7 +1061,7 @@ textarea:focus-visible {
 .quote-section blockquote {
   max-width: 790px;
   margin: 35px auto;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 36px;
   line-height: 1.25;
   letter-spacing: -0.035em;
@@ -1121,7 +1121,7 @@ textarea:focus-visible {
 
 .final-cta h2 {
   margin: 0 0 34px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 64px;
   font-weight: 500;
   line-height: 0.95;
@@ -1139,6 +1139,29 @@ textarea:focus-visible {
 .landing-footer p {
   color: color-mix(in srgb, var(--site-ink) 52%, transparent);
   font-size: 10px;
+}
+
+/*
+ * Times New Roman ships complete Vietnamese glyphs on Windows. Keeping all
+ * editorial copy in one font prevents per-character fallback gaps such as
+ * "Nế p" and "Biế n" in Chromium.
+ */
+.landing-brand,
+.landing-hero h1,
+.landing-description,
+.stat-card strong,
+.section-heading h2,
+.feature-item > span,
+.feature-item h3,
+.quote-mark,
+.quote-section blockquote,
+.final-cta h2,
+.public-state > span,
+.public-state h1 {
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
+  font-kerning: normal;
+  letter-spacing: normal;
+  text-rendering: optimizeLegibility;
 }
 
 /* Compact preview scales typography with its container. */
@@ -1369,13 +1392,13 @@ textarea:focus-visible {
 
 .public-state > span {
   color: #d95534;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 60px;
 }
 
 .public-state h1 {
   margin: 12px 0 8px;
-  font-family: Georgia, "Times New Roman", serif;
+  font-family: "Times New Roman", Times, "Noto Serif", serif;
   font-size: 42px;
   letter-spacing: -0.04em;
 }
