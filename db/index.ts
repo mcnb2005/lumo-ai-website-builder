@@ -91,7 +91,10 @@ export async function ensureDatabase() {
         id TEXT PRIMARY KEY NOT NULL,
         project_id TEXT NOT NULL,
         payload TEXT NOT NULL,
-        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+        status TEXT NOT NULL DEFAULT 'new',
+        notes TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`
     ),
     binding.prepare(
@@ -113,6 +116,28 @@ export async function ensureDatabase() {
       .run();
   }
 
+  const leadColumns = await binding
+    .prepare("PRAGMA table_info(leads)")
+    .all<{ name: string }>();
+  const leadColumnNames = new Set(
+    leadColumns.results?.map((column) => column.name) || []
+  );
+  if (!leadColumnNames.has("status")) {
+    await binding
+      .prepare("ALTER TABLE leads ADD COLUMN status TEXT NOT NULL DEFAULT 'new'")
+      .run();
+  }
+  if (!leadColumnNames.has("notes")) {
+    await binding
+      .prepare("ALTER TABLE leads ADD COLUMN notes TEXT NOT NULL DEFAULT ''")
+      .run();
+  }
+  if (!leadColumnNames.has("updated_at")) {
+    await binding
+      .prepare("ALTER TABLE leads ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
+      .run();
+  }
+
   await binding.batch([
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS projects_slug_idx ON projects (slug)"
@@ -125,6 +150,9 @@ export async function ensureDatabase() {
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS leads_project_idx ON leads (project_id)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS leads_status_idx ON leads (project_id, status)"
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS ai_usage_period_idx ON ai_usage (period)"

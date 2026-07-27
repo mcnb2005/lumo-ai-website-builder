@@ -27,12 +27,6 @@ type ProjectSummary = {
   updatedAt: string;
   publishedAt: string | null;
 };
-type LeadEntry = {
-  id: string;
-  values: Record<string, string>;
-  createdAt: string;
-};
-
 const GUEST_DRAFT_KEY = "lumo-guest-draft-v2";
 const SIGN_IN_URL = "/signin-with-chatgpt?return_to=%2F";
 const SIGN_OUT_URL = "/signout-with-chatgpt?return_to=%2F";
@@ -78,9 +72,6 @@ export function Studio() {
   const [projectId, setProjectId] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
   const [isUploading, setIsUploading] = useState(false);
-  const [leads, setLeads] = useState<LeadEntry[]>([]);
-  const [showLeads, setShowLeads] = useState(false);
-  const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const saveEnabled = useRef(false);
   const conversationEnd = useRef<HTMLDivElement>(null);
   const previewScroll = useRef<HTMLDivElement>(null);
@@ -478,33 +469,6 @@ export function Studio() {
     }
   }
 
-  async function openLeads() {
-    if (!user) return;
-    setShowLeads(true);
-    setIsLoadingLeads(true);
-    try {
-      const response = await fetch(
-        `/api/leads?projectId=${encodeURIComponent(projectId)}`
-      );
-      const result = (await response.json()) as {
-        leads?: LeadEntry[];
-        error?: string;
-      };
-      if (!response.ok) {
-        throw new Error(result.error || "Không thể tải danh sách liên hệ.");
-      }
-      setLeads(result.leads || []);
-    } catch (error) {
-      setNotice(
-        error instanceof Error
-          ? error.message
-          : "Không thể tải danh sách liên hệ."
-      );
-    } finally {
-      setIsLoadingLeads(false);
-    }
-  }
-
   return (
     <main className="studio-shell">
       <header className="studio-header">
@@ -563,9 +527,12 @@ export function Studio() {
           </button>
           {authReady && user ? (
             <>
-              <button className="leads-button" type="button" onClick={openLeads}>
-                Liên hệ
-              </button>
+              <a
+                className="leads-button"
+                href={`/dashboard?projectId=${encodeURIComponent(projectId)}`}
+              >
+                Khách hàng
+              </a>
               <span className="account-chip" title={user.email}>
                 <b>{user.name.slice(0, 1).toUpperCase()}</b>
                 <small>{user.name}</small>
@@ -714,48 +681,6 @@ export function Studio() {
         </section>
       </div>
 
-      {showLeads ? (
-        <div className="leads-backdrop" role="presentation" onMouseDown={() => setShowLeads(false)}>
-          <section
-            className="leads-drawer"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="leads-title"
-            onMouseDown={(event) => event.stopPropagation()}
-          >
-            <header>
-              <div>
-                <span>Khách hàng tiềm năng</span>
-                <h2 id="leads-title">{landing.brand}</h2>
-              </div>
-              <button type="button" onClick={() => setShowLeads(false)} aria-label="Đóng">×</button>
-            </header>
-            {isLoadingLeads ? (
-              <p className="leads-empty">Đang tải danh sách…</p>
-            ) : leads.length ? (
-              <div className="leads-list">
-                {leads.map((lead) => (
-                  <article key={lead.id}>
-                    <time>{new Date(lead.createdAt).toLocaleString("vi-VN")}</time>
-                    <dl>
-                      {Object.entries(lead.values).map(([key, value]) => (
-                        <div key={key}>
-                          <dt>{key.replaceAll("_", " ")}</dt>
-                          <dd>{value}</dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="leads-empty">
-                Chưa có thông tin liên hệ. Dữ liệu từ form trên trang đã xuất bản sẽ xuất hiện ở đây.
-              </p>
-            )}
-          </section>
-        </div>
-      ) : null}
     </main>
   );
 }

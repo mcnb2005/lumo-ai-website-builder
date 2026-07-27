@@ -22,6 +22,13 @@
       "when": 1785125032755,
       "tag": "0002_tidy_agent_zero",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1785129205320,
+      "tag": "0003_overjoyed_trauma",
+      "breakpoints": true
     }
   ]
 }

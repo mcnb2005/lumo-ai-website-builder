@@ -43,7 +43,10 @@ export const leads = sqliteTable("leads", {
     .notNull()
     .references(() => projects.id),
   payload: text("payload").notNull(),
+  status: text("status").notNull().default("new"),
+  notes: text("notes").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const aiUsage = sqliteTable("ai_usage", {
