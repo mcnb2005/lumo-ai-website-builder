@@ -60,8 +60,6 @@ export const orders = sqliteTable("orders", {
   amount: integer("amount").notNull(),
   currency: text("currency").notNull().default("vnd"),
   status: text("status").notNull().default("new"),
-  paymentStatus: text("payment_status").notNull().default("pending"),
-  stripeSessionId: text("stripe_session_id"),
   notes: text("notes").notNull().default(""),
   confirmationEmailSentAt: text("confirmation_email_sent_at"),
   calendarEventId: text("calendar_event_id"),

@@ -1,6 +1,6 @@
 import { getRuntimeEnv } from "../../db";
 
-type PaidOrder = {
+type OrderRecord = {
   id: string;
   productName: string;
   amount: number;
@@ -85,7 +85,7 @@ async function getGoogleAccessToken() {
 
 async function sendConfirmationEmail(
   accessToken: string,
-  order: PaidOrder
+  order: OrderRecord
 ) {
   const env = getRuntimeEnv();
   const recipient = findValue(order.values, ["email", "thu_dien_tu"]);
@@ -102,7 +102,7 @@ async function sendConfirmationEmail(
   const body = [
     `Xin chào ${customerName},`,
     "",
-    "Thanh toán của bạn đã được xác nhận.",
+    "Đơn hàng của bạn đã được ghi nhận.",
     `Sản phẩm: ${order.productName}`,
     `Số tiền: ${amount}`,
     `Mã đơn: ${order.id}`,
@@ -138,7 +138,7 @@ async function sendConfirmationEmail(
 
 async function createDeliveryEvent(
   accessToken: string,
-  order: PaidOrder
+  order: OrderRecord
 ) {
   const env = getRuntimeEnv();
   const requestedTime = findValue(order.values, [
@@ -191,8 +191,8 @@ async function createDeliveryEvent(
   return result.id || null;
 }
 
-export async function runPaidOrderWorkflow(
-  order: PaidOrder
+export async function runOrderWorkflow(
+  order: OrderRecord
 ): Promise<WorkflowResult> {
   const accessToken = await getGoogleAccessToken();
   if (!accessToken) {

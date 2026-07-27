@@ -1,8 +1,9 @@
 import { and, desc, eq } from "drizzle-orm";
-import { ensureDatabase, getDb, getRuntimeEnv } from "../../../db";
+import { ensureDatabase, getDb } from "../../../db";
 import { orders, projects } from "../../../db/schema";
 import { inferDashboardType } from "../../dashboard-config";
 import { getCurrentDatabaseUser } from "../../server-user";
+import { runOrderWorkflow } from "../../server/google-workflow";
 
 const workflowStatuses = [
   "new",
@@ -32,13 +33,6 @@ function sanitizeValues(values: Record<string, string>) {
   );
 }
 
-function findValue(values: Record<string, string>, patterns: string[]) {
-  const entry = Object.entries(values).find(([key]) =>
-    patterns.some((pattern) => key.toLowerCase().includes(pattern))
-  );
-  return entry?.[1]?.trim() || "";
-}
-
 function parseVndPrice(value: unknown) {
   if (typeof value !== "string") return 0;
   const digits = value.replace(/[^\d]/g, "");
@@ -62,19 +56,6 @@ function orderProduct(landing: {
   };
 }
 
-function paymentLabel(status: string) {
-  return (
-    {
-      pending: "Chờ thanh toán",
-      awaiting_payment: "Đã mở trang thanh toán",
-      paid: "Đã thanh toán",
-      failed: "Thanh toán thất bại",
-      manual: "Chưa bật thanh toán trực tuyến",
-      checkout_error: "Không thể mở trang thanh toán",
-    }[status] || status
-  );
-}
-
 function serializeOrder(row: typeof orders.$inferSelect) {
   const values = JSON.parse(row.payload) as Record<string, string>;
   return {
@@ -86,60 +67,12 @@ function serializeOrder(row: typeof orders.$inferSelect) {
         style: "currency",
         currency: row.currency.toUpperCase(),
       }).format(row.amount),
-      thanh_toan: paymentLabel(row.paymentStatus),
     },
     status: isWorkflowStatus(row.status) ? row.status : "new",
-    paymentStatus: row.paymentStatus,
     notes: row.notes || "",
     createdAt: row.createdAt,
     updatedAt: row.updatedAt || row.createdAt,
   };
-}
-
-async function createStripeCheckout(input: {
-  orderId: string;
-  slug: string;
-  origin: string;
-  productName: string;
-  amount: number;
-  customerEmail: string;
-}) {
-  const secretKey = getRuntimeEnv().STRIPE_SECRET_KEY;
-  if (!secretKey || !input.amount) return null;
-
-  const body = new URLSearchParams({
-    mode: "payment",
-    success_url: `${input.origin}/p/${encodeURIComponent(input.slug)}?payment=success&order=${input.orderId}`,
-    cancel_url: `${input.origin}/p/${encodeURIComponent(input.slug)}?payment=cancelled&order=${input.orderId}`,
-    client_reference_id: input.orderId,
-    "metadata[order_id]": input.orderId,
-    "line_items[0][quantity]": "1",
-    "line_items[0][price_data][currency]": "vnd",
-    "line_items[0][price_data][unit_amount]": String(input.amount),
-    "line_items[0][price_data][product_data][name]": input.productName,
-  });
-  if (input.customerEmail) {
-    body.set("customer_email", input.customerEmail);
-  }
-
-  const response = await fetch("https://api.stripe.com/v1/checkout/sessions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      "Content-Type": "application/x-www-form-urlencoded",
-      "Idempotency-Key": input.orderId,
-    },
-    body,
-  });
-  const result = (await response.json()) as {
-    id?: string;
-    url?: string;
-    error?: { message?: string };
-  };
-  if (!response.ok || !result.id || !result.url) {
-    throw new Error(result.error?.message || "Stripe không thể tạo thanh toán.");
-  }
-  return { id: result.id, url: result.url };
 }
 
 export async function GET(request: Request) {
@@ -316,67 +249,38 @@ export async function POST(request: Request) {
     const product = orderProduct(landing);
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
-    const canCheckout = Boolean(
-      getRuntimeEnv().STRIPE_SECRET_KEY && product.amount
-    );
     await db.insert(orders).values({
       id,
       projectId: project.id,
       payload: JSON.stringify(safeValues),
       productName: product.name,
       amount: product.amount,
-      paymentStatus: canCheckout ? "pending" : "manual",
       createdAt: now,
       updatedAt: now,
     });
 
-    if (!canCheckout) {
-      return Response.json({
-        submitted: true,
-        orderId: id,
-        message:
-          "Đã ghi nhận đơn hàng. Chủ trang sẽ liên hệ để xác nhận thanh toán.",
-      });
-    }
-
-    try {
-      const checkout = await createStripeCheckout({
-        orderId: id,
-        slug,
-        origin: new URL(request.url).origin,
-        productName: product.name,
-        amount: product.amount,
-        customerEmail: findValue(safeValues, ["email", "thu_dien_tu"]),
-      });
-      if (!checkout) throw new Error("Chưa thể mở thanh toán trực tuyến.");
+    const workflow = await runOrderWorkflow({
+      id,
+      productName: product.name,
+      amount: product.amount,
+      currency: "vnd",
+      values: safeValues,
+    });
+    if (workflow.confirmationEmailSentAt || workflow.calendarEventId) {
       await db
         .update(orders)
         .set({
-          stripeSessionId: checkout.id,
-          paymentStatus: "awaiting_payment",
+          confirmationEmailSentAt: workflow.confirmationEmailSentAt,
+          calendarEventId: workflow.calendarEventId,
           updatedAt: new Date().toISOString(),
         })
         .where(eq(orders.id, id));
-      return Response.json({
-        submitted: true,
-        orderId: id,
-        checkoutUrl: checkout.url,
-      });
-    } catch {
-      await db
-        .update(orders)
-        .set({
-          paymentStatus: "checkout_error",
-          updatedAt: new Date().toISOString(),
-        })
-        .where(eq(orders.id, id));
-      return Response.json({
-        submitted: true,
-        orderId: id,
-        message:
-          "Đã lưu đơn hàng nhưng chưa thể mở thanh toán. Chủ trang sẽ liên hệ lại.",
-      });
     }
+    return Response.json({
+      submitted: true,
+      orderId: id,
+      message: "Đã ghi nhận đơn hàng. Chủ trang sẽ liên hệ để xác nhận.",
+    });
   } catch (error) {
     return Response.json(
       {

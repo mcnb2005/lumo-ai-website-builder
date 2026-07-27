@@ -94,15 +94,10 @@ export function LandingCanvas({
       });
       const result = (await response.json()) as {
         error?: string;
-        checkoutUrl?: string;
         message?: string;
       };
       if (!response.ok) {
         throw new Error(result.error || "Không thể gửi thông tin.");
-      }
-      if (result.checkoutUrl) {
-        window.location.assign(result.checkoutUrl);
-        return;
       }
       formElement.reset();
       setFormState("sent");
