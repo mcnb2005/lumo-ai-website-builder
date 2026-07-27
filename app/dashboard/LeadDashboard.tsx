@@ -1,13 +1,18 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
-type LeadStatus = "new" | "contacted" | "qualified" | "won" | "lost";
+import {
+  dashboardConfigs,
+  dashboardTypeOptions,
+  type DashboardType,
+  type ResolvedDashboardType,
+  type WorkflowStatus,
+} from "../dashboard-config";
 
 type Lead = {
   id: string;
   values: Record<string, string>;
-  status: LeadStatus;
+  status: WorkflowStatus;
   notes: string;
   createdAt: string;
   updatedAt: string;
@@ -18,6 +23,8 @@ type Project = {
   name: string;
   slug: string;
   status: string;
+  dashboardType: DashboardType;
+  resolvedDashboardType: ResolvedDashboardType;
   updatedAt: string;
   publishedAt: string | null;
 };
@@ -26,21 +33,6 @@ type DashboardUser = {
   email: string;
   name: string;
 };
-
-const statusOptions: Array<{
-  value: LeadStatus;
-  label: string;
-}> = [
-  { value: "new", label: "Mới" },
-  { value: "contacted", label: "Đã liên hệ" },
-  { value: "qualified", label: "Tiềm năng" },
-  { value: "won", label: "Đã chốt" },
-  { value: "lost", label: "Không phù hợp" },
-];
-
-const statusLabels = Object.fromEntries(
-  statusOptions.map((option) => [option.value, option.label])
-) as Record<LeadStatus, string>;
 
 function findLeadValue(
   values: Record<string, string>,
@@ -54,9 +46,15 @@ function findLeadValue(
 
 function leadName(lead: Lead) {
   return (
-    findLeadValue(lead.values, ["ho_va_ten", "ho_ten", "full_name", "name", "ten_"]) ||
+    findLeadValue(lead.values, [
+      "ho_va_ten",
+      "ho_ten",
+      "full_name",
+      "name",
+      "ten_",
+    ]) ||
     Object.values(lead.values).find(Boolean) ||
-    "Khách hàng chưa đặt tên"
+    "Chưa có tên"
   );
 }
 
@@ -80,6 +78,12 @@ function leadNeed(lead: Lead) {
     "message",
     "yeu_cau",
     "noi_dung",
+    "san_pham",
+    "dich_vu",
+    "khoa_hoc",
+    "su_kien",
+    "tai_lieu",
+    "ngay_gio",
   ]);
 }
 
@@ -113,11 +117,14 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
   const [projectId, setProjectId] = useState("");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [selectedLeadId, setSelectedLeadId] = useState("");
-  const [statusFilter, setStatusFilter] = useState<LeadStatus | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<
+    WorkflowStatus | "all"
+  >("all");
   const [search, setSearch] = useState("");
   const [isLoadingProjects, setIsLoadingProjects] = useState(true);
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [savingLeadId, setSavingLeadId] = useState("");
+  const [isSavingDashboardType, setIsSavingDashboardType] = useState(false);
   const [notice, setNotice] = useState("");
 
   useEffect(() => {
@@ -172,7 +179,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
           error?: string;
         };
         if (!response.ok) {
-          throw new Error(result.error || "Không thể tải khách hàng.");
+          throw new Error(result.error || "Không thể tải dữ liệu.");
         }
         const items = result.leads || [];
         setLeads(items);
@@ -185,7 +192,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
         setLeads([]);
         setSelectedLeadId("");
         setNotice(
-          error instanceof Error ? error.message : "Không thể tải khách hàng."
+          error instanceof Error ? error.message : "Không thể tải dữ liệu."
         );
       } finally {
         setIsLoadingLeads(false);
@@ -196,6 +203,17 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
   }, [projectId]);
 
   const currentProject = projects.find((project) => project.id === projectId);
+  const resolvedDashboardType =
+    currentProject?.resolvedDashboardType || "leads";
+  const dashboard = dashboardConfigs[resolvedDashboardType];
+  const statusOptions = useMemo(
+    () =>
+      Object.entries(dashboard.statuses).map(([value, label]) => ({
+        value: value as WorkflowStatus,
+        label,
+      })),
+    [dashboard]
+  );
 
   const filteredLeads = useMemo(() => {
     const query = search.trim().toLocaleLowerCase("vi");
@@ -229,6 +247,59 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
     [leads]
   );
 
+  async function updateDashboardType(value: DashboardType) {
+    if (!currentProject) return;
+    setIsSavingDashboardType(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/projects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: currentProject.id,
+          dashboardType: value,
+        }),
+      });
+      const result = (await response.json()) as {
+        dashboardType?: DashboardType;
+        resolvedDashboardType?: ResolvedDashboardType;
+        error?: string;
+      };
+      if (
+        !response.ok ||
+        !result.dashboardType ||
+        !result.resolvedDashboardType
+      ) {
+        throw new Error(result.error || "Không thể đổi loại quản lý.");
+      }
+      setProjects((current) =>
+        current.map((project) =>
+          project.id === currentProject.id
+            ? {
+                ...project,
+                dashboardType: result.dashboardType!,
+                resolvedDashboardType: result.resolvedDashboardType!,
+              }
+            : project
+        )
+      );
+      setStatusFilter("all");
+      setNotice(
+        value === "auto"
+          ? `Đã tự nhận diện: ${dashboardConfigs[result.resolvedDashboardType].label}.`
+          : `Đã chuyển sang: ${dashboardConfigs[result.resolvedDashboardType].label}.`
+      );
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể đổi loại quản lý."
+      );
+    } finally {
+      setIsSavingDashboardType(false);
+    }
+  }
+
   async function updateLead(
     lead: Lead,
     changes: Partial<Pick<Lead, "status" | "notes">>
@@ -259,7 +330,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
           item.id === lead.id ? { ...item, ...result.lead } : item
         )
       );
-      setNotice("Đã lưu thay đổi khách hàng.");
+      setNotice(`Đã lưu thay đổi ${dashboard.recordSingular}.`);
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Không thể lưu thay đổi."
@@ -277,7 +348,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
 
   function exportCsv() {
     if (!filteredLeads.length) {
-      setNotice("Không có khách hàng phù hợp để xuất.");
+      setNotice(`Không có ${dashboard.recordPlural} phù hợp để xuất.`);
       return;
     }
     const valueKeys = Array.from(
@@ -285,7 +356,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
     );
     const rows = [
       [
-        "Mã khách hàng",
+        "Mã",
         "Trạng thái",
         "Ghi chú",
         "Ngày gửi",
@@ -293,7 +364,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
       ],
       ...filteredLeads.map((lead) => [
         lead.id,
-        statusLabels[lead.status],
+        dashboard.statuses[lead.status],
         lead.notes,
         formatDate(lead.createdAt),
         ...valueKeys.map((key) => lead.values[key] || ""),
@@ -306,16 +377,16 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;
-    anchor.download = `khach-hang-${currentProject?.slug || "lumo"}.csv`;
+    anchor.download = `${dashboard.csvPrefix}-${currentProject?.slug || "lumo"}.csv`;
     document.body.appendChild(anchor);
     anchor.click();
     anchor.remove();
     URL.revokeObjectURL(url);
-    setNotice(`Đã xuất ${filteredLeads.length} khách hàng.`);
+    setNotice(`Đã xuất ${filteredLeads.length} ${dashboard.recordPlural}.`);
   }
 
   return (
-    <main className="crm-shell">
+    <main className={`crm-shell crm-type-${resolvedDashboardType}`}>
       <aside className="crm-sidebar">
         <a className="crm-logo" href="/" aria-label="Lumo — trang tạo landing page">
           <span aria-hidden="true">✦</span>
@@ -327,9 +398,9 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
             <span aria-hidden="true">⌂</span>
             Tổng quan
           </a>
-          <a className="is-active" href="#customers">
+          <a className="is-active" href="#records">
             <span aria-hidden="true">◎</span>
-            Khách hàng
+            {dashboard.navLabel}
           </a>
         </nav>
         <div className="crm-sidebar-spacer" />
@@ -349,30 +420,54 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
       <section className="crm-main">
         <header className="crm-header">
           <div>
-            <p>Trung tâm khách hàng</p>
-            <h1>Quản lý liên hệ</h1>
+            <p>{dashboard.centerLabel}</p>
+            <h1>{dashboard.title}</h1>
           </div>
-          <div className="crm-project-picker">
-            <label htmlFor="crm-project">Landing page</label>
-            <select
-              id="crm-project"
-              value={projectId}
-              onChange={(event) => {
-                setProjectId(event.target.value);
-                setStatusFilter("all");
-                setSearch("");
-              }}
-              disabled={isLoadingProjects || !projects.length}
-            >
-              {!projects.length ? (
-                <option value="">Chưa có dự án</option>
-              ) : null}
-              {projects.map((project) => (
-                <option value={project.id} key={project.id}>
-                  {project.name}
-                </option>
-              ))}
-            </select>
+          <div className="crm-context-pickers">
+            <div className="crm-project-picker">
+              <label htmlFor="crm-project">Landing page</label>
+              <select
+                id="crm-project"
+                value={projectId}
+                onChange={(event) => {
+                  setProjectId(event.target.value);
+                  setStatusFilter("all");
+                  setSearch("");
+                }}
+                disabled={isLoadingProjects || !projects.length}
+              >
+                {!projects.length ? (
+                  <option value="">Chưa có dự án</option>
+                ) : null}
+                {projects.map((project) => (
+                  <option value={project.id} key={project.id}>
+                    {project.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="crm-project-picker crm-type-picker">
+              <label htmlFor="crm-dashboard-type">Loại quản lý</label>
+              <select
+                id="crm-dashboard-type"
+                value={currentProject?.dashboardType || "auto"}
+                onChange={(event) =>
+                  void updateDashboardType(event.target.value as DashboardType)
+                }
+                disabled={!currentProject || isSavingDashboardType}
+              >
+                {dashboardTypeOptions.map((option) => (
+                  <option value={option.value} key={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+              <small>
+                {currentProject?.dashboardType === "auto"
+                  ? `Đang nhận diện: ${dashboard.label}`
+                  : "Đã chọn thủ công"}
+              </small>
+            </div>
           </div>
         </header>
 
@@ -380,41 +475,50 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
           <div className="crm-notice" role="status">
             <span aria-hidden="true">●</span>
             {notice}
-            <button type="button" onClick={() => setNotice("")} aria-label="Đóng thông báo">
+            <button
+              type="button"
+              onClick={() => setNotice("")}
+              aria-label="Đóng thông báo"
+            >
               ×
             </button>
           </div>
         ) : null}
 
-        <section className="crm-overview" id="overview" aria-label="Tổng quan khách hàng">
+        <section
+          className="crm-overview"
+          id="overview"
+          aria-label={`Tổng quan ${dashboard.recordPlural}`}
+        >
           <article>
-            <span>Tổng khách hàng</span>
+            <span>{dashboard.metrics.total}</span>
             <strong>{metrics.total}</strong>
-            <small>Tất cả liên hệ đã nhận</small>
+            <small>{dashboard.metrics.totalHint}</small>
           </article>
           <article>
-            <span>Khách mới</span>
+            <span>{dashboard.metrics.fresh}</span>
             <strong>{metrics.fresh}</strong>
-            <small>Đang chờ xử lý</small>
+            <small>{dashboard.metrics.freshHint}</small>
           </article>
           <article>
-            <span>Đang chăm sóc</span>
+            <span>{dashboard.metrics.active}</span>
             <strong>{metrics.active}</strong>
-            <small>Đã liên hệ hoặc tiềm năng</small>
+            <small>{dashboard.metrics.activeHint}</small>
           </article>
           <article className="is-success">
-            <span>Đã chốt</span>
+            <span>{dashboard.metrics.won}</span>
             <strong>{metrics.won}</strong>
-            <small>Khách hàng thành công</small>
+            <small>{dashboard.metrics.wonHint}</small>
           </article>
         </section>
 
-        <section className="crm-workspace" id="customers">
+        <section className="crm-workspace" id="records">
           <div className="crm-toolbar">
             <div>
-              <p>Danh sách khách hàng</p>
+              <p>Danh sách {dashboard.recordPlural}</p>
               <span>
-                {currentProject?.name || "Chưa chọn dự án"} · {filteredLeads.length} kết quả
+                {currentProject?.name || "Chưa chọn dự án"} ·{" "}
+                {filteredLeads.length} kết quả
               </span>
             </div>
             <div className="crm-toolbar-actions">
@@ -424,14 +528,16 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                   type="search"
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Tìm tên, số điện thoại, email…"
-                  aria-label="Tìm khách hàng"
+                  placeholder={dashboard.searchPlaceholder}
+                  aria-label={`Tìm ${dashboard.recordPlural}`}
                 />
               </label>
               <select
                 value={statusFilter}
                 onChange={(event) =>
-                  setStatusFilter(event.target.value as LeadStatus | "all")
+                  setStatusFilter(
+                    event.target.value as WorkflowStatus | "all"
+                  )
                 }
                 aria-label="Lọc theo trạng thái"
               >
@@ -453,7 +559,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
               {isLoadingLeads || isLoadingProjects ? (
                 <div className="crm-state">
                   <span className="crm-loader" aria-hidden="true" />
-                  Đang tải khách hàng…
+                  Đang tải dữ liệu…
                 </div>
               ) : !projects.length ? (
                 <div className="crm-state">
@@ -464,21 +570,23 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
               ) : !filteredLeads.length ? (
                 <div className="crm-state">
                   <strong>
-                    {leads.length ? "Không tìm thấy khách hàng" : "Chưa có khách hàng"}
+                    {leads.length
+                      ? `Không tìm thấy ${dashboard.recordSingular}`
+                      : dashboard.emptyTitle}
                   </strong>
                   <span>
                     {leads.length
                       ? "Thử thay đổi từ khóa hoặc bộ lọc trạng thái."
-                      : "Thông tin từ form trên trang đã xuất bản sẽ xuất hiện tại đây."}
+                      : dashboard.emptyDescription}
                   </span>
                 </div>
               ) : (
                 <table className="crm-table">
                   <thead>
                     <tr>
-                      <th>Khách hàng</th>
+                      <th>{dashboard.actorLabel}</th>
                       <th>Liên hệ</th>
-                      <th>Nhu cầu</th>
+                      <th>{dashboard.needLabel}</th>
                       <th>Ngày gửi</th>
                       <th>Trạng thái</th>
                     </tr>
@@ -486,7 +594,9 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                   <tbody>
                     {filteredLeads.map((lead) => (
                       <tr
-                        className={selectedLeadId === lead.id ? "is-selected" : ""}
+                        className={
+                          selectedLeadId === lead.id ? "is-selected" : ""
+                        }
                         key={lead.id}
                         onClick={() => setSelectedLeadId(lead.id)}
                       >
@@ -496,23 +606,31 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                             type="button"
                             onClick={() => setSelectedLeadId(lead.id)}
                           >
-                            <span>{leadName(lead).slice(0, 1).toLocaleUpperCase("vi")}</span>
+                            <span>
+                              {leadName(lead)
+                                .slice(0, 1)
+                                .toLocaleUpperCase("vi")}
+                            </span>
                             <strong>{leadName(lead)}</strong>
                           </button>
                         </td>
                         <td>
                           <strong>{leadPhone(lead) || "—"}</strong>
-                          <small>{leadEmail(lead) || "Chưa có email"}</small>
+                          <small>
+                            {leadEmail(lead) || "Chưa có email"}
+                          </small>
                         </td>
                         <td>
-                          <span className="crm-need">{leadNeed(lead) || "Chưa ghi nhu cầu"}</span>
+                          <span className="crm-need">
+                            {leadNeed(lead) || "Chưa có nội dung"}
+                          </span>
                         </td>
                         <td>
                           <span>{formatDate(lead.createdAt)}</span>
                         </td>
                         <td>
                           <span className={`crm-status is-${lead.status}`}>
-                            {statusLabels[lead.status]}
+                            {dashboard.statuses[lead.status]}
                           </span>
                         </td>
                       </tr>
@@ -522,7 +640,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
               )}
             </div>
 
-            <aside className="crm-detail" aria-label="Chi tiết khách hàng">
+            <aside className="crm-detail" aria-label={dashboard.detailLabel}>
               {selectedLead ? (
                 <>
                   <header>
@@ -532,7 +650,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                         .toLocaleUpperCase("vi")}
                     </span>
                     <div>
-                      <small>Chi tiết khách hàng</small>
+                      <small>{dashboard.detailLabel}</small>
                       <h2>{leadName(selectedLead)}</h2>
                     </div>
                   </header>
@@ -542,7 +660,9 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                       <a href={`tel:${leadPhone(selectedLead)}`}>Gọi điện</a>
                     ) : null}
                     {leadEmail(selectedLead) ? (
-                      <a href={`mailto:${leadEmail(selectedLead)}`}>Gửi email</a>
+                      <a href={`mailto:${leadEmail(selectedLead)}`}>
+                        Gửi email
+                      </a>
                     ) : null}
                   </div>
 
@@ -552,7 +672,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                       value={selectedLead.status}
                       onChange={(event) =>
                         void updateLead(selectedLead, {
-                          status: event.target.value as LeadStatus,
+                          status: event.target.value as WorkflowStatus,
                         })
                       }
                       disabled={savingLeadId === selectedLead.id}
@@ -568,24 +688,26 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                   <div className="crm-form-values">
                     <h3>Thông tin từ form</h3>
                     <dl>
-                      {Object.entries(selectedLead.values).map(([key, value]) => (
-                        <div key={key}>
-                          <dt>{fieldLabel(key)}</dt>
-                          <dd>{value || "—"}</dd>
-                        </div>
-                      ))}
+                      {Object.entries(selectedLead.values).map(
+                        ([key, value]) => (
+                          <div key={key}>
+                            <dt>{fieldLabel(key)}</dt>
+                            <dd>{value || "—"}</dd>
+                          </div>
+                        )
+                      )}
                     </dl>
                   </div>
 
                   <label className="crm-detail-field crm-notes">
-                    <span>Ghi chú chăm sóc</span>
+                    <span>{dashboard.notesLabel}</span>
                     <textarea
                       rows={5}
                       value={selectedLead.notes}
                       onChange={(event) =>
                         updateLeadDraft(selectedLead.id, event.target.value)
                       }
-                      placeholder="Ví dụ: Đã gọi lúc 10:30, khách quan tâm gói cao cấp…"
+                      placeholder={dashboard.notesPlaceholder}
                     />
                   </label>
                   <button
@@ -605,8 +727,10 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
               ) : (
                 <div className="crm-detail-empty">
                   <span aria-hidden="true">◎</span>
-                  <strong>Chọn một khách hàng</strong>
-                  <p>Thông tin chi tiết và công cụ xử lý sẽ hiển thị tại đây.</p>
+                  <strong>Chọn một {dashboard.recordSingular}</strong>
+                  <p>
+                    Thông tin chi tiết và công cụ xử lý sẽ hiển thị tại đây.
+                  </p>
                 </div>
               )}
             </aside>

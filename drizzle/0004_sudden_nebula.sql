@@ -1,0 +1,1 @@
+ALTER TABLE `projects` ADD `dashboard_type` text DEFAULT 'auto' NOT NULL;

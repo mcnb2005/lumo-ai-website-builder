@@ -2678,6 +2678,12 @@ textarea:focus-visible {
   gap: 6px;
 }
 
+.crm-context-pickers {
+  display: flex;
+  align-items: start;
+  gap: 10px;
+}
+
 .crm-project-picker label {
   color: #718077;
   font-size: 8px;
@@ -2703,6 +2709,16 @@ textarea:focus-visible {
 
 .crm-project-picker select {
   min-width: 220px;
+}
+
+.crm-type-picker select {
+  min-width: 236px;
+}
+
+.crm-type-picker small {
+  color: #7d8c82;
+  font-size: 8px;
+  font-weight: 650;
 }
 
 .crm-project-picker select:focus,
@@ -3402,6 +3418,16 @@ textarea:focus-visible {
 
   .crm-project-picker select {
     width: 100%;
+  }
+
+  .crm-context-pickers {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .crm-context-pickers .crm-project-picker {
+    min-width: min(100%, 240px);
+    flex: 1;
   }
 
   .crm-overview {

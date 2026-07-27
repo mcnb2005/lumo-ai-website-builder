@@ -17,6 +17,7 @@ export const projects = sqliteTable("projects", {
   data: text("data").notNull(),
   messages: text("messages").notNull().default("[]"),
   status: text("status").notNull().default("draft"),
+  dashboardType: text("dashboard_type").notNull().default("auto"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   publishedAt: text("published_at"),

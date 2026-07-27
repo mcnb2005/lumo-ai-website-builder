@@ -69,6 +69,7 @@ export async function ensureDatabase() {
         data TEXT NOT NULL,
         messages TEXT NOT NULL DEFAULT '[]',
         status TEXT NOT NULL DEFAULT 'draft',
+        dashboard_type TEXT NOT NULL DEFAULT 'auto',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         published_at TEXT
@@ -113,6 +114,13 @@ export async function ensureDatabase() {
   if (!columns.results?.some((column) => column.name === "owner_id")) {
     await binding
       .prepare("ALTER TABLE projects ADD COLUMN owner_id TEXT")
+      .run();
+  }
+  if (!columns.results?.some((column) => column.name === "dashboard_type")) {
+    await binding
+      .prepare(
+        "ALTER TABLE projects ADD COLUMN dashboard_type TEXT NOT NULL DEFAULT 'auto'"
+      )
       .run();
   }
 

@@ -1,6 +1,11 @@
 import { and, desc, eq } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
 import { projects } from "../../../db/schema";
+import {
+  inferDashboardType,
+  isDashboardType,
+  type DashboardType,
+} from "../../dashboard-config";
 import { getCurrentDatabaseUser } from "../../server-user";
 
 type ProjectPayload = {
@@ -10,13 +15,19 @@ type ProjectPayload = {
   data?: unknown;
   messages?: unknown;
   status?: string;
+  dashboardType?: DashboardType;
 };
 
 function parseProject(row: typeof projects.$inferSelect) {
+  const data = JSON.parse(row.data);
   return {
     ...row,
-    data: JSON.parse(row.data),
+    data,
     messages: JSON.parse(row.messages),
+    resolvedDashboardType:
+      row.dashboardType === "auto"
+        ? inferDashboardType(data)
+        : row.dashboardType,
   };
 }
 
@@ -49,13 +60,23 @@ export async function GET(request: Request) {
         name: projects.name,
         slug: projects.slug,
         status: projects.status,
+        dashboardType: projects.dashboardType,
+        data: projects.data,
         updatedAt: projects.updatedAt,
         publishedAt: projects.publishedAt,
       })
       .from(projects)
       .where(eq(projects.ownerId, user.id))
       .orderBy(desc(projects.updatedAt));
-    return Response.json({ projects: rows });
+    return Response.json({
+      projects: rows.map(({ data, ...row }) => ({
+        ...row,
+        resolvedDashboardType:
+          row.dashboardType === "auto"
+            ? inferDashboardType(JSON.parse(data))
+            : row.dashboardType,
+      })),
+    });
   } catch (error) {
     return Response.json(
       {
@@ -92,7 +113,10 @@ export async function POST(request: Request) {
     await ensureDatabase();
     const db = getDb();
     const [existing] = await db
-      .select({ ownerId: projects.ownerId })
+      .select({
+        ownerId: projects.ownerId,
+        dashboardType: projects.dashboardType,
+      })
       .from(projects)
       .where(eq(projects.id, id))
       .limit(1);
@@ -112,6 +136,9 @@ export async function POST(request: Request) {
       data: JSON.stringify(payload.data),
       messages: JSON.stringify(payload.messages || []),
       status: payload.status === "published" ? "published" : "draft",
+      dashboardType: isDashboardType(payload.dashboardType)
+        ? payload.dashboardType
+        : existing?.dashboardType || "auto",
       updatedAt: now,
     };
 
@@ -133,6 +160,67 @@ export async function POST(request: Request) {
         error: message.includes("UNIQUE")
           ? "Đường dẫn dự án đã được sử dụng."
           : message,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const user = await getCurrentDatabaseUser();
+    if (!user) return unauthorized();
+
+    const payload = (await request.json()) as {
+      id?: string;
+      dashboardType?: unknown;
+    };
+    const id = payload.id?.trim();
+    if (!id || !isDashboardType(payload.dashboardType)) {
+      return Response.json(
+        { error: "Loại quản lý chưa hợp lệ." },
+        { status: 400 }
+      );
+    }
+
+    await ensureDatabase();
+    const db = getDb();
+    const [project] = await db
+      .select({ id: projects.id, data: projects.data })
+      .from(projects)
+      .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)))
+      .limit(1);
+    if (!project) {
+      return Response.json(
+        { error: "Bạn không có quyền cập nhật dự án này." },
+        { status: 403 }
+      );
+    }
+
+    const now = new Date().toISOString();
+    await db
+      .update(projects)
+      .set({
+        dashboardType: payload.dashboardType,
+        updatedAt: now,
+      })
+      .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)));
+
+    return Response.json({
+      dashboardType: payload.dashboardType,
+      resolvedDashboardType:
+        payload.dashboardType === "auto"
+          ? inferDashboardType(JSON.parse(project.data))
+          : payload.dashboardType,
+      updatedAt: now,
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Không thể cập nhật loại quản lý.",
       },
       { status: 500 }
     );
