@@ -1,4 +1,5 @@
-import { getRuntimeEnv } from "../../../db";
+import { ensureDatabase, getD1, getRuntimeEnv } from "../../../db";
+import { getChatGPTUser } from "../../chatgpt-auth";
 import { defaultLanding, type LandingData } from "../../landing-data";
 
 const requiredKeys: Array<keyof LandingData> = [
@@ -11,9 +12,16 @@ const requiredKeys: Array<keyof LandingData> = [
   "primaryCta",
   "secondaryCta",
   "proof",
+  "heroImage",
+  "sectionOrder",
   "stats",
   "features",
+  "pricing",
+  "portfolio",
+  "gallery",
   "testimonial",
+  "faq",
+  "leadForm",
   "palette",
 ];
 
@@ -159,6 +167,53 @@ function applyDemoPrompt(prompt: string, current: LandingData): LandingData {
   return next;
 }
 
+async function enforceUsageLimit(request: Request) {
+  await ensureDatabase();
+  const identity = await getChatGPTUser();
+  const forwardedIp =
+    request.headers.get("cf-connecting-ip") ||
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    "local";
+  const subject = identity?.email || forwardedIp;
+  const digest = await crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(subject)
+  );
+  const key = Array.from(new Uint8Array(digest))
+    .slice(0, 12)
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  const period = new Date().toISOString().slice(0, 10);
+  const limit = identity ? 100 : 10;
+  const db = getD1();
+  const existing = await db
+    .prepare("SELECT period, count FROM ai_usage WHERE key = ?")
+    .bind(key)
+    .first<{ period: string; count: number }>();
+  const currentCount = existing?.period === period ? existing.count : 0;
+  if (currentCount >= limit) {
+    throw new Error(
+      identity
+        ? "Bạn đã dùng hết lượt AI hôm nay. Hãy quay lại vào ngày mai."
+        : "Bạn đã dùng hết 10 lượt thử hôm nay. Đăng nhập để tiếp tục."
+    );
+  }
+  await db
+    .prepare(
+      `INSERT INTO ai_usage (key, period, count, updated_at)
+       VALUES (?, ?, 1, CURRENT_TIMESTAMP)
+       ON CONFLICT(key) DO UPDATE SET
+         period = excluded.period,
+         count = CASE
+           WHEN ai_usage.period = excluded.period THEN ai_usage.count + 1
+           ELSE 1
+         END,
+         updated_at = CURRENT_TIMESTAMP`
+    )
+    .bind(key, period)
+    .run();
+}
+
 export async function POST(request: Request) {
   try {
     const payload = (await request.json()) as {
@@ -173,6 +228,8 @@ export async function POST(request: Request) {
     if (!prompt) {
       return Response.json({ error: "Hãy nhập yêu cầu chỉnh sửa." }, { status: 400 });
     }
+
+    await enforceUsageLimit(request);
 
     const runtime = getRuntimeEnv();
     const apiKey = runtime.AI_API_KEY || runtime.OPENAI_API_KEY;
@@ -192,7 +249,7 @@ export async function POST(request: Request) {
     }
 
     const systemPrompt =
-      "Bạn là chuyên gia conversion copywriting và thiết kế landing page. Cập nhật toàn bộ JSON landing page theo yêu cầu bằng tiếng Việt tự nhiên. Giữ đúng cấu trúc, đủ số lượng 3 stats và 3 features. Màu phải là mã hex hợp lệ. Không thêm khóa mới. Chỉ trả về một JSON object hợp lệ, không markdown, không giải thích.";
+      "Bạn là chuyên gia conversion copywriting và thiết kế landing page. Cập nhật toàn bộ JSON landing page theo yêu cầu bằng tiếng Việt tự nhiên. Giữ nguyên tất cả khóa và kiểu dữ liệu trong JSON. sectionOrder chỉ được dùng stats, features, pricing, portfolio, gallery, testimonial, faq, leadForm. Giữ 3 stats, 3 features, tối đa 3 gói giá, tối đa 6 mục portfolio, tối đa 8 ảnh gallery và tối đa 6 FAQ. Không thay đổi URL ảnh bắt đầu bằng /api/assets/. Màu phải là mã hex hợp lệ. Không thêm khóa mới. Chỉ trả về một JSON object hợp lệ, không markdown, không giải thích.";
 
     const apiResponse = await fetch(`${providerUrl}/chat/completions`, {
       method: "POST",
@@ -238,14 +295,11 @@ export async function POST(request: Request) {
       mode: "ai",
     });
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Không thể xử lý yêu cầu AI.";
     return Response.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : "Không thể xử lý yêu cầu AI.",
-      },
-      { status: 500 }
+      { error: message },
+      { status: message.includes("lượt") ? 429 : 500 }
     );
   }
 }

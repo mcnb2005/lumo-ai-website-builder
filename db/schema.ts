@@ -1,8 +1,17 @@
 import { sql } from "drizzle-orm";
-import { sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  email: text("email").notNull().unique(),
+  name: text("name"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
 
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
+  ownerId: text("owner_id").references(() => users.id),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   data: text("data").notNull(),
@@ -11,4 +20,35 @@ export const projects = sqliteTable("projects", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   publishedAt: text("published_at"),
+});
+
+export const assets = sqliteTable("assets", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  ownerId: text("owner_id")
+    .notNull()
+    .references(() => users.id),
+  objectKey: text("object_key").notNull().unique(),
+  filename: text("filename").notNull(),
+  contentType: text("content_type").notNull(),
+  size: integer("size").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const leads = sqliteTable("leads", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  payload: text("payload").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const aiUsage = sqliteTable("ai_usage", {
+  key: text("key").primaryKey(),
+  period: text("period").notNull(),
+  count: integer("count").notNull().default(0),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

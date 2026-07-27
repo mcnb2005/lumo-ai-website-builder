@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { LandingCanvas } from "./components/LandingCanvas";
-import type { LandingData } from "./landing-data";
+import { normalizeLandingData, type LandingData } from "./landing-data";
 
 export function PublicLanding({ slug }: { slug: string }) {
   const [landing, setLanding] = useState<LandingData | null>(null);
@@ -18,7 +18,7 @@ export function PublicLanding({ slug }: { slug: string }) {
         if (!response.ok || !result.landing) {
           throw new Error(result.error || "Không tìm thấy landing page.");
         }
-        setLanding(result.landing);
+        setLanding(normalizeLandingData(result.landing));
       })
       .catch((cause: Error) => setError(cause.message));
   }, [slug]);
@@ -43,5 +43,5 @@ export function PublicLanding({ slug }: { slug: string }) {
     );
   }
 
-  return <LandingCanvas data={landing} />;
+  return <LandingCanvas data={landing} slug={slug} />;
 }

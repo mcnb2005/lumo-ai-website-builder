@@ -8,6 +8,20 @@
       "when": 1785121293183,
       "tag": "0000_far_loa",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1785124841294,
+      "tag": "0001_rich_shooting_star",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1785125032755,
+      "tag": "0002_tidy_agent_zero",
+      "breakpoints": true
     }
   ]
 }

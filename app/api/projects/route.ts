@@ -1,6 +1,7 @@
-import { eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
 import { projects } from "../../../db/schema";
+import { getCurrentDatabaseUser } from "../../server-user";
 
 type ProjectPayload = {
   id?: string;
@@ -19,22 +20,48 @@ function parseProject(row: typeof projects.$inferSelect) {
   };
 }
 
+function unauthorized() {
+  return Response.json(
+    { error: "Đăng nhập để quản lý dự án của bạn." },
+    { status: 401 }
+  );
+}
+
 export async function GET(request: Request) {
   try {
-    const id = new URL(request.url).searchParams.get("id");
-    if (!id) {
-      return Response.json({ error: "id is required" }, { status: 400 });
-    }
+    const user = await getCurrentDatabaseUser();
+    if (!user) return unauthorized();
+
     await ensureDatabase();
-    const [row] = await getDb()
-      .select()
+    const id = new URL(request.url).searchParams.get("id");
+    if (id) {
+      const [row] = await getDb()
+        .select()
+        .from(projects)
+        .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)))
+        .limit(1);
+      return Response.json({ project: row ? parseProject(row) : null });
+    }
+
+    const rows = await getDb()
+      .select({
+        id: projects.id,
+        name: projects.name,
+        slug: projects.slug,
+        status: projects.status,
+        updatedAt: projects.updatedAt,
+        publishedAt: projects.publishedAt,
+      })
       .from(projects)
-      .where(eq(projects.id, id))
-      .limit(1);
-    return Response.json({ project: row ? parseProject(row) : null });
+      .where(eq(projects.ownerId, user.id))
+      .orderBy(desc(projects.updatedAt));
+    return Response.json({ projects: rows });
   } catch (error) {
     return Response.json(
-      { error: error instanceof Error ? error.message : "Không thể tải dự án." },
+      {
+        error:
+          error instanceof Error ? error.message : "Không thể tải dự án.",
+      },
       { status: 500 }
     );
   }
@@ -42,23 +69,44 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentDatabaseUser();
+    if (!user) return unauthorized();
+
     const payload = (await request.json()) as ProjectPayload;
     const id = payload.id?.trim();
     const name = payload.name?.trim();
-    const slug = payload.slug?.trim();
+    const slug = payload.slug
+      ?.trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9-]/g, "-")
+      .replace(/-+/g, "-")
+      .replace(/^-|-$/g, "");
 
     if (!id || !name || !slug || !payload.data) {
       return Response.json(
-        { error: "id, name, slug and data are required" },
+        { error: "Thiếu thông tin dự án." },
         { status: 400 }
       );
     }
 
     await ensureDatabase();
     const db = getDb();
+    const [existing] = await db
+      .select({ ownerId: projects.ownerId })
+      .from(projects)
+      .where(eq(projects.id, id))
+      .limit(1);
+    if (existing && existing.ownerId !== user.id) {
+      return Response.json(
+        { error: "Bạn không có quyền sửa dự án này." },
+        { status: 403 }
+      );
+    }
+
     const now = new Date().toISOString();
     const values = {
       id,
+      ownerId: user.id,
       name,
       slug,
       data: JSON.stringify(payload.data),
@@ -67,25 +115,49 @@ export async function POST(request: Request) {
       updatedAt: now,
     };
 
-    await db
-      .insert(projects)
-      .values(values)
-      .onConflictDoUpdate({
-        target: projects.id,
-        set: {
-          name: values.name,
-          slug: values.slug,
-          data: values.data,
-          messages: values.messages,
-          status: values.status,
-          updatedAt: values.updatedAt,
-        },
-      });
+    if (existing) {
+      await db
+        .update(projects)
+        .set(values)
+        .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)));
+    } else {
+      await db.insert(projects).values(values);
+    }
 
     return Response.json({ saved: true, updatedAt: now });
   } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Không thể lưu dự án.";
     return Response.json(
-      { error: error instanceof Error ? error.message : "Không thể lưu dự án." },
+      {
+        error: message.includes("UNIQUE")
+          ? "Đường dẫn dự án đã được sử dụng."
+          : message,
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const user = await getCurrentDatabaseUser();
+    if (!user) return unauthorized();
+    const id = new URL(request.url).searchParams.get("id");
+    if (!id) {
+      return Response.json({ error: "Thiếu mã dự án." }, { status: 400 });
+    }
+    await ensureDatabase();
+    await getDb()
+      .delete(projects)
+      .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)));
+    return Response.json({ deleted: true });
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Không thể xóa dự án.",
+      },
       { status: 500 }
     );
   }
