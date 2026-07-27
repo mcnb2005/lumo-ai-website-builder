@@ -7,6 +7,7 @@ export type DatabaseUser = {
   id: string;
   email: string;
   name: string;
+  isLocal?: boolean;
 };
 
 export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
@@ -30,7 +31,12 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
         .set({ name, updatedAt: now })
         .where(eq(users.id, existing.id));
     }
-    return { id: existing.id, email: existing.email, name };
+    return {
+      id: existing.id,
+      email: existing.email,
+      name,
+      isLocal: identity.isLocal,
+    };
   }
 
   const id = crypto.randomUUID();
@@ -40,5 +46,10 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
     name,
     updatedAt: now,
   });
-  return { id, email: identity.email, name };
+  return {
+    id,
+    email: identity.email,
+    name,
+    isLocal: identity.isLocal,
+  };
 }

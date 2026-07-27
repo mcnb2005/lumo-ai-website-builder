@@ -1,10 +1,12 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
+import { getRuntimeEnv } from "../db";
 
 export type ChatGPTUser = {
   displayName: string;
   email: string;
   fullName: string | null;
+  isLocal?: boolean;
 };
 
 const USER_EMAIL_HEADER = "oai-authenticated-user-email";
@@ -19,7 +21,22 @@ const CALLBACK_PATH = "/callback";
 export async function getChatGPTUser(): Promise<ChatGPTUser | null> {
   const requestHeaders = await headers();
   const email = requestHeaders.get(USER_EMAIL_HEADER);
-  if (!email) return null;
+  if (!email) {
+    const runtime = getRuntimeEnv();
+    if (
+      runtime.LOCAL_DEV_AUTH === "true" &&
+      runtime.LOCAL_DEV_USER_EMAIL
+    ) {
+      const localName = runtime.LOCAL_DEV_USER_NAME || "Chủ máy";
+      return {
+        displayName: localName,
+        email: runtime.LOCAL_DEV_USER_EMAIL,
+        fullName: localName,
+        isLocal: true,
+      };
+    }
+    return null;
+  }
 
   const encodedFullName = requestHeaders.get(USER_FULL_NAME_HEADER);
   const fullName =

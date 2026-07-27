@@ -18,7 +18,7 @@ import {
 
 type Device = "desktop" | "tablet" | "mobile";
 type SaveState = "guest" | "saving" | "saved" | "error";
-type UserInfo = { id: string; email: string; name: string };
+type UserInfo = { id: string; email: string; name: string; isLocal?: boolean };
 type ProjectSummary = {
   id: string;
   name: string;
@@ -570,7 +570,9 @@ export function Studio() {
                 <b>{user.name.slice(0, 1).toUpperCase()}</b>
                 <small>{user.name}</small>
               </span>
-              <a className="signout-link" href={SIGN_OUT_URL}>Thoát</a>
+              {!user.isLocal ? (
+                <a className="signout-link" href={SIGN_OUT_URL}>Thoát</a>
+              ) : null}
             </>
           ) : (
             <a className="signin-button" href={SIGN_IN_URL}>Đăng nhập để lưu</a>

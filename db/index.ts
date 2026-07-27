@@ -22,6 +22,9 @@ export type RuntimeEnv = {
   AI_MODEL_NAME?: string;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
+  LOCAL_DEV_AUTH?: string;
+  LOCAL_DEV_USER_EMAIL?: string;
+  LOCAL_DEV_USER_NAME?: string;
 };
 
 export function getRuntimeEnv() {
