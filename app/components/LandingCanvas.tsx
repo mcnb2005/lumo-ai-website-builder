@@ -10,6 +10,7 @@ import type {
   LandingData,
   LandingSectionType,
 } from "../landing-data";
+import { isTrustedImageUrl } from "../landing-data";
 
 type LandingCanvasProps = {
   data: LandingData;
@@ -36,6 +37,13 @@ export function LandingCanvas({
     "idle" | "sending" | "sent" | "error"
   >("idle");
   const [formError, setFormError] = useState("");
+  const heroImage = isTrustedImageUrl(data.heroImage) ? data.heroImage : "";
+  const galleryImages = data.gallery.filter(
+    (image) =>
+      image &&
+      isTrustedImageUrl(image.url) &&
+      typeof image.alt === "string"
+  );
   const style = {
     "--site-ink": data.palette.ink,
     "--site-paper": data.palette.paper,
@@ -173,7 +181,7 @@ export function LandingCanvas({
             <div className="portfolio-grid">
               {data.portfolio.map((item, index) => (
                 <article className="portfolio-card" key={`${item.title}-${index}`}>
-                  {item.imageUrl ? (
+                  {isTrustedImageUrl(item.imageUrl) ? (
                     <img src={item.imageUrl} alt={item.title} loading="lazy" />
                   ) : (
                     <div className="portfolio-placeholder" aria-hidden="true">
@@ -189,7 +197,7 @@ export function LandingCanvas({
           </section>
         );
       case "gallery":
-        if (!data.gallery.length) return null;
+        if (!galleryImages.length) return null;
         return (
           <section className="content-section gallery-section" id="gallery" key={section}>
             <div className="section-heading">
@@ -197,7 +205,7 @@ export function LandingCanvas({
               <h2>Một góc nhìn<br />đáng nhớ.</h2>
             </div>
             <div className="gallery-grid">
-              {data.gallery.map((image, index) => (
+              {galleryImages.map((image, index) => (
                 <figure key={`${image.url}-${index}`}>
                   <img src={image.url} alt={image.alt} loading="lazy" />
                   {image.caption ? <figcaption>{image.caption}</figcaption> : null}
@@ -305,7 +313,7 @@ export function LandingCanvas({
       </header>
 
       <main id="top">
-        <section className={`landing-hero${data.heroImage ? " has-image" : ""}`}>
+        <section className={`landing-hero${heroImage ? " has-image" : ""}`}>
           <div className="hero-orbit" aria-hidden="true"><span /><span /><span /></div>
           <div className="hero-copy">
             <p className="landing-eyebrow"><span />{data.eyebrow}</p>
@@ -327,9 +335,9 @@ export function LandingCanvas({
               <p>{data.proof}</p>
             </div>
           </div>
-          {data.heroImage ? (
+          {heroImage ? (
             <div className="hero-image-wrap">
-              <img src={data.heroImage} alt={`Hình ảnh nổi bật của ${data.brand}`} />
+              <img src={heroImage} alt={`Hình ảnh nổi bật của ${data.brand}`} />
             </div>
           ) : null}
         </section>

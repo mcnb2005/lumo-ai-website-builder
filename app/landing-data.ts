@@ -204,13 +204,55 @@ export const starterMessages: ChatMessage[] = [
   },
 ];
 
+export function isTrustedImageUrl(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  return (
+    /^\/api\/assets\/[0-9a-f]{8}-[0-9a-f-]{27}$/i.test(value) ||
+    /^\/generated\/[a-z0-9][a-z0-9._-]*$/i.test(value)
+  );
+}
+
 export function normalizeLandingData(
   value: Partial<LandingData> | null | undefined
 ): LandingData {
   if (!value) return structuredClone(defaultLanding);
+  const safePortfolio = Array.isArray(value.portfolio)
+    ? value.portfolio
+        .filter(
+          (item) =>
+            item &&
+            typeof item.title === "string" &&
+            typeof item.category === "string" &&
+            typeof item.description === "string"
+        )
+        .slice(0, 6)
+        .map((item) => ({
+          title: item.title,
+          category: item.category,
+          description: item.description,
+          imageUrl: isTrustedImageUrl(item.imageUrl) ? item.imageUrl : "",
+        }))
+    : defaultLanding.portfolio;
+  const safeGallery = Array.isArray(value.gallery)
+    ? value.gallery
+        .filter(
+          (item) =>
+            item &&
+            isTrustedImageUrl(item.url) &&
+            typeof item.alt === "string"
+        )
+        .slice(0, 8)
+        .map((item) => ({
+          url: item.url,
+          alt: item.alt,
+          caption: typeof item.caption === "string" ? item.caption : "",
+        }))
+    : defaultLanding.gallery;
+
   return {
     ...structuredClone(defaultLanding),
     ...value,
+    heroImage: isTrustedImageUrl(value.heroImage) ? value.heroImage : "",
     sectionOrder:
       Array.isArray(value.sectionOrder) && value.sectionOrder.length
         ? value.sectionOrder.filter((section): section is LandingSectionType =>
@@ -224,12 +266,8 @@ export function normalizeLandingData(
     pricing: Array.isArray(value.pricing)
       ? value.pricing
       : defaultLanding.pricing,
-    portfolio: Array.isArray(value.portfolio)
-      ? value.portfolio
-      : defaultLanding.portfolio,
-    gallery: Array.isArray(value.gallery)
-      ? value.gallery
-      : defaultLanding.gallery,
+    portfolio: safePortfolio,
+    gallery: safeGallery,
     faq: Array.isArray(value.faq) ? value.faq : defaultLanding.faq,
     testimonial: {
       ...defaultLanding.testimonial,

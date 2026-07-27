@@ -23,6 +23,7 @@ test("defines the complete multi-project Lumo studio experience", async () => {
   assert.match(landing, /gallery-section/);
   assert.match(landing, /faq-section/);
   assert.match(landing, /lead-section/);
+  assert.match(landing, /isTrustedImageUrl/);
   assert.match(landing, /handlePreviewNavigation/);
   assert.match(landing, /event\.preventDefault\(\)/);
   assert.match(projects, /projects\.ownerId/);
