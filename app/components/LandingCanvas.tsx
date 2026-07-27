@@ -10,12 +10,13 @@ import type {
   LandingData,
   LandingSectionType,
 } from "../landing-data";
-import { isTrustedImageUrl } from "../landing-data";
+import type { ResolvedDashboardType } from "../dashboard-config";
 
 type LandingCanvasProps = {
   data: LandingData;
   compact?: boolean;
   slug?: string;
+  submissionType?: ResolvedDashboardType;
 };
 
 function fieldName(label: string, index: number) {
@@ -32,18 +33,12 @@ export function LandingCanvas({
   data,
   compact = false,
   slug,
+  submissionType = "leads",
 }: LandingCanvasProps) {
   const [formState, setFormState] = useState<
     "idle" | "sending" | "sent" | "error"
   >("idle");
   const [formError, setFormError] = useState("");
-  const heroImage = isTrustedImageUrl(data.heroImage) ? data.heroImage : "";
-  const galleryImages = data.gallery.filter(
-    (image) =>
-      image &&
-      isTrustedImageUrl(image.url) &&
-      typeof image.alt === "string"
-  );
   const style = {
     "--site-ink": data.palette.ink,
     "--site-paper": data.palette.paper,
@@ -91,17 +86,29 @@ export function LandingCanvas({
     );
 
     try {
-      const response = await fetch("/api/leads", {
+      const isOrder = submissionType === "orders";
+      const response = await fetch(isOrder ? "/api/orders" : "/api/leads", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug, values }),
       });
-      const result = (await response.json()) as { error?: string };
+      const result = (await response.json()) as {
+        error?: string;
+        checkoutUrl?: string;
+        message?: string;
+      };
       if (!response.ok) {
         throw new Error(result.error || "Không thể gửi thông tin.");
       }
+      if (result.checkoutUrl) {
+        window.location.assign(result.checkoutUrl);
+        return;
+      }
       formElement.reset();
       setFormState("sent");
+      if (isOrder && result.message) {
+        setFormError(result.message);
+      }
     } catch (error) {
       setFormState("error");
       setFormError(
@@ -182,7 +189,7 @@ export function LandingCanvas({
             <div className="portfolio-grid">
               {data.portfolio.map((item, index) => (
                 <article className="portfolio-card" key={`${item.title}-${index}`}>
-                  {isTrustedImageUrl(item.imageUrl) ? (
+                  {item.imageUrl ? (
                     <img src={item.imageUrl} alt={item.title} loading="lazy" />
                   ) : (
                     <div className="portfolio-placeholder" aria-hidden="true">
@@ -198,7 +205,7 @@ export function LandingCanvas({
           </section>
         );
       case "gallery":
-        if (!galleryImages.length) return null;
+        if (!data.gallery.length) return null;
         return (
           <section className="content-section gallery-section" id="gallery" key={section}>
             <div className="section-heading">
@@ -206,7 +213,7 @@ export function LandingCanvas({
               <h2>Một góc nhìn<br />đáng nhớ.</h2>
             </div>
             <div className="gallery-grid">
-              {galleryImages.map((image, index) => (
+              {data.gallery.map((image, index) => (
                 <figure key={`${image.url}-${index}`}>
                   <img src={image.url} alt={image.alt} loading="lazy" />
                   {image.caption ? <figcaption>{image.caption}</figcaption> : null}
@@ -283,7 +290,9 @@ export function LandingCanvas({
                 <span aria-hidden="true">↗</span>
               </button>
               {formState === "sent" ? (
-                <p className="form-success">{data.leadForm.successMessage}</p>
+                <p className="form-success">
+                  {formError || data.leadForm.successMessage}
+                </p>
               ) : null}
               {formState === "error" ? (
                 <p className="form-error">{formError}</p>
@@ -314,7 +323,7 @@ export function LandingCanvas({
       </header>
 
       <main id="top">
-        <section className={`landing-hero${heroImage ? " has-image" : ""}`}>
+        <section className={`landing-hero${data.heroImage ? " has-image" : ""}`}>
           <div className="hero-orbit" aria-hidden="true"><span /><span /><span /></div>
           <div className="hero-copy">
             <p className="landing-eyebrow"><span />{data.eyebrow}</p>
@@ -336,9 +345,9 @@ export function LandingCanvas({
               <p>{data.proof}</p>
             </div>
           </div>
-          {heroImage ? (
+          {data.heroImage ? (
             <div className="hero-image-wrap">
-              <img src={heroImage} alt={`Hình ảnh nổi bật của ${data.brand}`} />
+              <img src={data.heroImage} alt={`Hình ảnh nổi bật của ${data.brand}`} />
             </div>
           ) : null}
         </section>

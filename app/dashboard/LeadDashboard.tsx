@@ -126,6 +126,9 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
   const [savingLeadId, setSavingLeadId] = useState("");
   const [isSavingDashboardType, setIsSavingDashboardType] = useState(false);
   const [notice, setNotice] = useState("");
+  const selectedDashboardType =
+    projects.find((project) => project.id === projectId)
+      ?.resolvedDashboardType || "leads";
 
   useEffect(() => {
     async function loadProjects() {
@@ -171,8 +174,10 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
       setIsLoadingLeads(true);
       setNotice("");
       try {
+        const resource =
+          selectedDashboardType === "orders" ? "orders" : "leads";
         const response = await fetch(
-          `/api/leads?projectId=${encodeURIComponent(projectId)}`
+          `/api/${resource}?projectId=${encodeURIComponent(projectId)}`
         );
         const result = (await response.json()) as {
           leads?: Lead[];
@@ -200,7 +205,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
     }
 
     void loadLeads();
-  }, [projectId]);
+  }, [projectId, selectedDashboardType]);
 
   const currentProject = projects.find((project) => project.id === projectId);
   const resolvedDashboardType =
@@ -308,7 +313,9 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
     setSavingLeadId(lead.id);
     setNotice("");
     try {
-      const response = await fetch("/api/leads", {
+      const resource =
+        resolvedDashboardType === "orders" ? "orders" : "leads";
+      const response = await fetch(`/api/${resource}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

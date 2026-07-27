@@ -1,10 +1,6 @@
 import { ensureDatabase, getD1, getRuntimeEnv } from "../../../db";
 import { getChatGPTUser } from "../../chatgpt-auth";
-import {
-  defaultLanding,
-  normalizeLandingData,
-  type LandingData,
-} from "../../landing-data";
+import { defaultLanding, type LandingData } from "../../landing-data";
 
 const requiredKeys: Array<keyof LandingData> = [
   "brand",
@@ -291,27 +287,12 @@ export async function POST(request: Request) {
     if (!isLandingData(generated)) {
       throw new Error("AI chưa trả về đủ nội dung landing page.");
     }
-    const currentSafe = normalizeLandingData(current);
-    const generatedSafe = normalizeLandingData(generated);
-    generatedSafe.heroImage = currentSafe.heroImage;
-    generatedSafe.gallery = currentSafe.gallery;
-    generatedSafe.portfolio = generatedSafe.portfolio.map((item, index) => ({
-      ...item,
-      imageUrl: currentSafe.portfolio[index]?.imageUrl || "",
-    }));
-    const asksForImage =
-      /(?:tạo|thêm|chèn|đổi|generate|add).{0,24}(?:ảnh|hình|image|photo)|(?:ảnh|hình|image|photo).{0,24}(?:tạo|thêm|chèn|đổi|generate|add)/i.test(
-        prompt
-      );
 
     return Response.json({
-      landing: generatedSafe,
+      landing: generated,
       message:
-        asksForImage
-          ? "Mình đã cập nhật phần nội dung liên quan. Để dùng ảnh thật và tránh liên kết ảnh hỏng, hãy bấm “＋ Thêm ảnh” rồi chọn tệp JPG, PNG hoặc WebP trên máy."
-          : "Mình đã viết lại nội dung và cập nhật thiết kế theo yêu cầu. Hãy tiếp tục nhắn nếu bạn muốn tinh chỉnh.",
+        "Mình đã viết lại nội dung và cập nhật thiết kế theo yêu cầu. Hãy tiếp tục nhắn nếu bạn muốn tinh chỉnh.",
       mode: "ai",
-      requiresImageUpload: asksForImage,
     });
   } catch (error) {
     const message =

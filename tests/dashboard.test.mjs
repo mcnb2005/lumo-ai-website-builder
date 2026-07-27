@@ -13,6 +13,9 @@ test("ships a durable customer management dashboard", async () => {
     database,
     studio,
     landing,
+    ordersApi,
+    stripeWebhook,
+    googleWorkflow,
   ] = await Promise.all([
     readFile(new URL("../app/dashboard/LeadDashboard.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/dashboard/page.tsx", import.meta.url), "utf8"),
@@ -24,6 +27,15 @@ test("ships a durable customer management dashboard", async () => {
     readFile(new URL("../app/Studio.tsx", import.meta.url), "utf8"),
     readFile(
       new URL("../app/components/LandingCanvas.tsx", import.meta.url),
+      "utf8"
+    ),
+    readFile(new URL("../app/api/orders/route.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/api/stripe/webhook/route.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/google-workflow.ts", import.meta.url),
       "utf8"
     ),
   ]);
@@ -45,9 +57,21 @@ test("ships a durable customer management dashboard", async () => {
   assert.match(schema, /status: text\("status"\)/);
   assert.match(schema, /notes: text\("notes"\)/);
   assert.match(schema, /dashboardType: text\("dashboard_type"\)/);
+  assert.match(schema, /export const orders/);
+  assert.match(schema, /paymentStatus: text\("payment_status"\)/);
   assert.match(database, /ALTER TABLE leads ADD COLUMN status/);
   assert.match(database, /ALTER TABLE projects ADD COLUMN dashboard_type/);
+  assert.match(database, /CREATE TABLE IF NOT EXISTS orders/);
   assert.match(studio, /\/dashboard\?projectId=/);
   assert.match(landing, /const formElement = event\.currentTarget/);
   assert.match(landing, /formElement\.reset\(\)/);
+  assert.match(landing, /submissionType === "orders"/);
+  assert.match(ordersApi, /api\.stripe\.com\/v1\/checkout\/sessions/);
+  assert.match(ordersApi, /Idempotency-Key/);
+  assert.match(ordersApi, /inferDashboardType/);
+  assert.match(stripeWebhook, /verifyStripeSignature/);
+  assert.match(stripeWebhook, /checkout\.session\.completed/);
+  assert.match(stripeWebhook, /runPaidOrderWorkflow/);
+  assert.match(googleWorkflow, /gmail\.googleapis\.com/);
+  assert.match(googleWorkflow, /calendar\/v3\/calendars/);
 });

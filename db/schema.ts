@@ -50,6 +50,25 @@ export const leads = sqliteTable("leads", {
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+export const orders = sqliteTable("orders", {
+  id: text("id").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  payload: text("payload").notNull(),
+  productName: text("product_name").notNull(),
+  amount: integer("amount").notNull(),
+  currency: text("currency").notNull().default("vnd"),
+  status: text("status").notNull().default("new"),
+  paymentStatus: text("payment_status").notNull().default("pending"),
+  stripeSessionId: text("stripe_session_id"),
+  notes: text("notes").notNull().default(""),
+  confirmationEmailSentAt: text("confirmation_email_sent_at"),
+  calendarEventId: text("calendar_event_id"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
 export const aiUsage = sqliteTable("ai_usage", {
   key: text("key").primaryKey(),
   period: text("period").notNull(),

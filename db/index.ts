@@ -25,6 +25,13 @@ export type RuntimeEnv = {
   LOCAL_DEV_AUTH?: string;
   LOCAL_DEV_USER_EMAIL?: string;
   LOCAL_DEV_USER_NAME?: string;
+  STRIPE_SECRET_KEY?: string;
+  STRIPE_WEBHOOK_SECRET?: string;
+  GOOGLE_CLIENT_ID?: string;
+  GOOGLE_CLIENT_SECRET?: string;
+  GOOGLE_REFRESH_TOKEN?: string;
+  GMAIL_SENDER_EMAIL?: string;
+  GOOGLE_CALENDAR_ID?: string;
 };
 
 export function getRuntimeEnv() {
@@ -99,6 +106,24 @@ export async function ensureDatabase() {
       )`
     ),
     binding.prepare(
+      `CREATE TABLE IF NOT EXISTS orders (
+        id TEXT PRIMARY KEY NOT NULL,
+        project_id TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        product_name TEXT NOT NULL,
+        amount INTEGER NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'vnd',
+        status TEXT NOT NULL DEFAULT 'new',
+        payment_status TEXT NOT NULL DEFAULT 'pending',
+        stripe_session_id TEXT,
+        notes TEXT NOT NULL DEFAULT '',
+        confirmation_email_sent_at TEXT,
+        calendar_event_id TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
       `CREATE TABLE IF NOT EXISTS ai_usage (
         key TEXT PRIMARY KEY NOT NULL,
         period TEXT NOT NULL,
@@ -161,6 +186,15 @@ export async function ensureDatabase() {
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS leads_status_idx ON leads (project_id, status)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS orders_project_idx ON orders (project_id)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS orders_status_idx ON orders (project_id, status)"
+    ),
+    binding.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS orders_stripe_session_idx ON orders (stripe_session_id)"
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS ai_usage_period_idx ON ai_usage (period)"
