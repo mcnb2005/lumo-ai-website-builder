@@ -84,7 +84,8 @@ export function LandingCanvas({
 
     setFormState("sending");
     setFormError("");
-    const form = new FormData(event.currentTarget);
+    const formElement = event.currentTarget;
+    const form = new FormData(formElement);
     const values = Object.fromEntries(
       Array.from(form.entries()).map(([key, value]) => [key, String(value)])
     );
@@ -99,7 +100,7 @@ export function LandingCanvas({
       if (!response.ok) {
         throw new Error(result.error || "Không thể gửi thông tin.");
       }
-      event.currentTarget.reset();
+      formElement.reset();
       setFormState("sent");
     } catch (error) {
       setFormState("error");

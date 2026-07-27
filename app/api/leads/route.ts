@@ -1,5 +1,5 @@
 import { and, desc, eq } from "drizzle-orm";
-import { ensureDatabase, getDb } from "../../../db";
+import { ensureDatabase, getD1, getDb } from "../../../db";
 import { leads, projects } from "../../../db/schema";
 import { getCurrentDatabaseUser } from "../../server-user";
 
@@ -203,10 +203,26 @@ export async function POST(request: Request) {
       );
     }
 
+    const serializedPayload = JSON.stringify(safeValues);
+    const duplicate = await getD1()
+      .prepare(
+        `SELECT id
+         FROM leads
+         WHERE project_id = ?
+           AND payload = ?
+           AND created_at >= datetime('now', '-2 minutes')
+         LIMIT 1`
+      )
+      .bind(project.id, serializedPayload)
+      .first<{ id: string }>();
+    if (duplicate) {
+      return Response.json({ submitted: true, duplicate: true });
+    }
+
     await getDb().insert(leads).values({
       id: crypto.randomUUID(),
       projectId: project.id,
-      payload: JSON.stringify(safeValues),
+      payload: serializedPayload,
     });
     return Response.json({ submitted: true });
   } catch (error) {
