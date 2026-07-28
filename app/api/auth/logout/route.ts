@@ -26,7 +26,10 @@ export async function GET(request: Request) {
   const returnTo = safeRelativeReturnPath(
     requestUrl.searchParams.get("returnTo")
   );
-  const response = Response.redirect(new URL(returnTo, request.url), 302);
+  const response = new Response(null, {
+    status: 302,
+    headers: { Location: new URL(returnTo, request.url).toString() },
+  });
   response.headers.append(
     "Set-Cookie",
     serializeCookie(AUTH_SESSION_COOKIE, "", {

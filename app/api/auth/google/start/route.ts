@@ -80,7 +80,10 @@ export async function GET(request: Request) {
       authorizationUrl.searchParams.set("prompt", "consent select_account");
     }
 
-    const response = Response.redirect(authorizationUrl, 302);
+    const response = new Response(null, {
+      status: 302,
+      headers: { Location: authorizationUrl.toString() },
+    });
     response.headers.append(
       "Set-Cookie",
       serializeCookie(GOOGLE_STATE_COOKIE, state, {

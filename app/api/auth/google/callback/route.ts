@@ -148,7 +148,10 @@ export async function GET(request: Request) {
         request.url
       );
       destination.searchParams.set("googleConnected", "1");
-      const response = Response.redirect(destination, 302);
+      const response = new Response(null, {
+        status: 302,
+        headers: { Location: destination.toString() },
+      });
       response.headers.append(
         "Set-Cookie",
         serializeCookie(GOOGLE_STATE_COOKIE, "", {
@@ -235,7 +238,10 @@ export async function GET(request: Request) {
       safeRelativeReturnPath(authState.return_to),
       request.url
     );
-    const response = Response.redirect(destination, 302);
+    const response = new Response(null, {
+      status: 302,
+      headers: { Location: destination.toString() },
+    });
     response.headers.append(
       "Set-Cookie",
       serializeCookie(AUTH_SESSION_COOKIE, sessionToken, {
