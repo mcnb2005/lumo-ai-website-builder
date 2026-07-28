@@ -1,4 +1,5 @@
 export const landingSectionTypes = [
+  "hero",
   "stats",
   "features",
   "pricing",
@@ -7,6 +8,7 @@ export const landingSectionTypes = [
   "testimonial",
   "faq",
   "leadForm",
+  "finalCta",
 ] as const;
 
 export type LandingSectionType = (typeof landingSectionTypes)[number];
@@ -23,6 +25,7 @@ export type LandingData = {
   proof: string;
   heroImage: string;
   sectionOrder: LandingSectionType[];
+  hiddenSections: LandingSectionType[];
   stats: Array<{ value: string; label: string }>;
   features: Array<{ number: string; title: string; text: string }>;
   pricing: Array<{
@@ -77,6 +80,7 @@ export const defaultLanding: LandingData = {
   proof: "Được tin dùng bởi 2.000+ đội ngũ hiện đại",
   heroImage: "",
   sectionOrder: [
+    "hero",
     "stats",
     "features",
     "pricing",
@@ -85,7 +89,9 @@ export const defaultLanding: LandingData = {
     "testimonial",
     "faq",
     "leadForm",
+    "finalCta",
   ],
+  hiddenSections: [],
   stats: [
     { value: "3.4×", label: "Nhanh hơn từ brief đến launch" },
     { value: "42%", label: "Ít vòng phản hồi hơn" },
@@ -211,12 +217,34 @@ export function normalizeLandingData(
   return {
     ...structuredClone(defaultLanding),
     ...value,
-    sectionOrder:
-      Array.isArray(value.sectionOrder) && value.sectionOrder.length
-        ? value.sectionOrder.filter((section): section is LandingSectionType =>
-            landingSectionTypes.includes(section as LandingSectionType)
+    sectionOrder: (() => {
+      const allowed = new Set(landingSectionTypes);
+      const normalized = Array.isArray(value.sectionOrder)
+        ? value.sectionOrder.filter(
+            (section): section is LandingSectionType =>
+              typeof section === "string" && allowed.has(section as LandingSectionType)
           )
-        : defaultLanding.sectionOrder,
+        : [];
+      if (!normalized.length) {
+        return defaultLanding.sectionOrder;
+      }
+      const unique = normalized.filter(
+        (section, index, all) => all.indexOf(section) === index
+      );
+      if (!unique.includes("hero")) unique.unshift("hero");
+      if (!unique.includes("finalCta")) unique.push("finalCta");
+      return unique;
+    })(),
+    hiddenSections: Array.isArray(value.hiddenSections)
+      ? value.hiddenSections.filter(
+          (section, index, all): section is LandingSectionType =>
+            typeof section === "string" &&
+            landingSectionTypes.includes(section as LandingSectionType) &&
+            section !== "hero" &&
+            section !== "finalCta" &&
+            all.indexOf(section) === index
+        )
+      : [],
     stats: Array.isArray(value.stats) ? value.stats : defaultLanding.stats,
     features: Array.isArray(value.features)
       ? value.features

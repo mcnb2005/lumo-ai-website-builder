@@ -6,17 +6,38 @@ import {
   type MouseEvent,
   useState,
 } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import type {
   LandingData,
   LandingSectionType,
 } from "../landing-data";
 import type { ResolvedDashboardType } from "../dashboard-config";
+import { SortableSectionFrame } from "../editor/SortableSectionFrame";
 
 type LandingCanvasProps = {
   data: LandingData;
   compact?: boolean;
   slug?: string;
   submissionType?: ResolvedDashboardType;
+  mode?: "public" | "editor";
+  selectedSection?: LandingSectionType | null;
+  sectionOrder?: LandingSectionType[];
+  onSelectSection?: (section: LandingSectionType) => void;
+  onReorderSections?: (activeId: LandingSectionType, overId: LandingSectionType) => void;
+  isBusy?: boolean;
 };
 
 function fieldName(label: string, index: number) {
@@ -34,11 +55,23 @@ export function LandingCanvas({
   compact = false,
   slug,
   submissionType = "leads",
+  mode = "public",
+  selectedSection = null,
+  sectionOrder,
+  onSelectSection,
+  onReorderSections,
+  isBusy = false,
 }: LandingCanvasProps) {
   const [formState, setFormState] = useState<
     "idle" | "sending" | "sent" | "error"
   >("idle");
   const [formError, setFormError] = useState("");
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
   const style = {
     "--site-ink": data.palette.ink,
     "--site-paper": data.palette.paper,
@@ -70,6 +103,10 @@ export function LandingCanvas({
 
   async function submitLead(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (mode === "editor") {
+      onSelectSection?.("leadForm");
+      return;
+    }
     if (compact) return;
     if (!slug) {
       setFormState("error");
@@ -112,8 +149,46 @@ export function LandingCanvas({
     }
   }
 
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    onReorderSections?.(active.id as LandingSectionType, over.id as LandingSectionType);
+  }
+
   function renderSection(section: LandingSectionType) {
-    switch (section) {
+    const content = (() => {
+      switch (section) {
+      case "hero":
+        return (
+          <section className={`landing-hero${data.heroImage ? " has-image" : ""}`} key={section}>
+            <div className="hero-orbit" aria-hidden="true"><span /><span /><span /></div>
+            <div className="hero-copy">
+              <p className="landing-eyebrow"><span />{data.eyebrow}</p>
+              <h1>{data.headline}<em>{data.accentLine}</em></h1>
+              <p className="landing-description">{data.description}</p>
+              <div className="landing-actions">
+                <a className="button-primary" href="#contact">
+                  {data.primaryCta}<span aria-hidden="true">↗</span>
+                </a>
+                <a className="button-secondary" href="#features">
+                  <span className="play-dot" aria-hidden="true">▶</span>
+                  {data.secondaryCta}
+                </a>
+              </div>
+              <div className="trust-row">
+                <div className="avatar-stack" aria-hidden="true">
+                  <span>MA</span><span>HN</span><span>KT</span>
+                </div>
+                <p>{data.proof}</p>
+              </div>
+            </div>
+            {data.heroImage ? (
+              <div className="hero-image-wrap">
+                <img src={data.heroImage} alt={`Hình ảnh nổi bật của ${data.brand}`} />
+              </div>
+            ) : null}
+          </section>
+        );
       case "stats":
         return (
           <section className="stats-grid" aria-label="Kết quả nổi bật" key={section}>
@@ -295,8 +370,39 @@ export function LandingCanvas({
             </form>
           </section>
         );
+      case "finalCta":
+        return (
+          <section className="final-cta" id="cta" key={section}>
+            <p>Sẵn sàng tạo điều khác biệt?</p>
+            <h2>Biến ý tưởng tiếp theo<br />thành điều lớn lao.</h2>
+            <a href="#contact">{data.primaryCta}<span aria-hidden="true">↗</span></a>
+          </section>
+        );
+      default:
+        return null;
     }
+    })();
+
+    if (mode === "editor") {
+      return (
+        <SortableSectionFrame
+          key={section}
+          id={section}
+          selected={selectedSection === section}
+          disabled={isBusy}
+          onSelect={(value) => onSelectSection?.(value)}
+        >
+          {content}
+        </SortableSectionFrame>
+      );
+    }
+
+    return content;
   }
+
+  const orderedSections = (sectionOrder ?? data.sectionOrder).filter(
+    (section) => !data.hiddenSections.includes(section)
+  );
 
   return (
     <article
@@ -318,42 +424,15 @@ export function LandingCanvas({
       </header>
 
       <main id="top">
-        <section className={`landing-hero${data.heroImage ? " has-image" : ""}`}>
-          <div className="hero-orbit" aria-hidden="true"><span /><span /><span /></div>
-          <div className="hero-copy">
-            <p className="landing-eyebrow"><span />{data.eyebrow}</p>
-            <h1>{data.headline}<em>{data.accentLine}</em></h1>
-            <p className="landing-description">{data.description}</p>
-            <div className="landing-actions">
-              <a className="button-primary" href="#contact">
-                {data.primaryCta}<span aria-hidden="true">↗</span>
-              </a>
-              <a className="button-secondary" href="#features">
-                <span className="play-dot" aria-hidden="true">▶</span>
-                {data.secondaryCta}
-              </a>
-            </div>
-            <div className="trust-row">
-              <div className="avatar-stack" aria-hidden="true">
-                <span>MA</span><span>HN</span><span>KT</span>
-              </div>
-              <p>{data.proof}</p>
-            </div>
-          </div>
-          {data.heroImage ? (
-            <div className="hero-image-wrap">
-              <img src={data.heroImage} alt={`Hình ảnh nổi bật của ${data.brand}`} />
-            </div>
-          ) : null}
-        </section>
-
-        {data.sectionOrder.map(renderSection)}
-
-        <section className="final-cta" id="cta">
-          <p>Sẵn sàng tạo điều khác biệt?</p>
-          <h2>Biến ý tưởng tiếp theo<br />thành điều lớn lao.</h2>
-          <a href="#contact">{data.primaryCta}<span aria-hidden="true">↗</span></a>
-        </section>
+        {mode === "editor" ? (
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext items={orderedSections} strategy={verticalListSortingStrategy}>
+              {orderedSections.map(renderSection)}
+            </SortableContext>
+          </DndContext>
+        ) : (
+          orderedSections.map(renderSection)
+        )}
       </main>
 
       <footer className="landing-footer">

@@ -3,6 +3,7 @@ import {
   landingBuilderSkill,
   parseLandingJson,
 } from "../skills/landing-builder-skill";
+import { resolveRuntimeSkill } from "../skills/runtime-skills";
 import { runAiChatTool } from "../tools/ai-chat-tool";
 
 type WebsiteBuilderAgentInput = {
@@ -22,11 +23,19 @@ export type WebsiteBuilderAgentResult = {
     id: string;
     version: string;
   };
+  runtimeSkill?: {
+    id: string;
+    version: string;
+    name: string;
+    description: string;
+  };
 };
 
 export async function runWebsiteBuilderAgent(
   input: WebsiteBuilderAgentInput
 ): Promise<WebsiteBuilderAgentResult> {
+  const runtimeSkill = resolveRuntimeSkill(input.prompt);
+
   if (!input.apiKey) {
     return {
       landing: input.createDemoLanding(input.prompt, input.current),
@@ -37,6 +46,14 @@ export async function runWebsiteBuilderAgent(
         id: landingBuilderSkill.id,
         version: landingBuilderSkill.version,
       },
+      runtimeSkill: runtimeSkill
+        ? {
+            id: runtimeSkill.id,
+            version: runtimeSkill.version,
+            name: runtimeSkill.name,
+            description: runtimeSkill.description,
+          }
+        : undefined,
     };
   }
 
@@ -52,7 +69,7 @@ export async function runWebsiteBuilderAgent(
   });
 
   return {
-    landing: parseLandingJson(output),
+    landing: parseLandingJson(output, input.current),
     message:
       "Mình đã viết lại nội dung và cập nhật thiết kế theo yêu cầu. Hãy tiếp tục nhắn nếu bạn muốn tinh chỉnh.",
     mode: "ai",
@@ -60,6 +77,13 @@ export async function runWebsiteBuilderAgent(
       id: landingBuilderSkill.id,
       version: landingBuilderSkill.version,
     },
+    runtimeSkill: runtimeSkill
+      ? {
+          id: runtimeSkill.id,
+          version: runtimeSkill.version,
+          name: runtimeSkill.name,
+          description: runtimeSkill.description,
+        }
+      : undefined,
   };
 }
-

@@ -1,4 +1,7 @@
-import type { LandingData } from "../../landing-data";
+import {
+  normalizeLandingData,
+  type LandingData,
+} from "../../landing-data";
 
 const requiredKeys: Array<keyof LandingData> = [
   "brand",
@@ -12,6 +15,7 @@ const requiredKeys: Array<keyof LandingData> = [
   "proof",
   "heroImage",
   "sectionOrder",
+  "hiddenSections",
   "stats",
   "features",
   "pricing",
@@ -29,7 +33,7 @@ export function isLandingData(value: unknown): value is LandingData {
   return requiredKeys.every((key) => key in record);
 }
 
-export function parseLandingJson(text: string) {
+export function parseLandingJson(text: string, current?: LandingData) {
   const cleaned = text
     .replace(/^```(?:json)?/i, "")
     .replace(/```$/i, "")
@@ -41,10 +45,22 @@ export function parseLandingJson(text: string) {
   }
 
   const value = JSON.parse(cleaned.slice(start, end + 1)) as unknown;
-  if (!isLandingData(value)) {
+  if (!value || typeof value !== "object") {
     throw new Error("AI chưa trả về đủ nội dung landing page.");
   }
-  return value;
+  const record = value as Record<string, unknown>;
+  const requiredAiKeys = requiredKeys.filter(
+    (key) => key !== "hiddenSections"
+  );
+  if (!requiredAiKeys.every((key) => key in record)) {
+    throw new Error("AI chưa trả về đủ nội dung landing page.");
+  }
+  return normalizeLandingData({
+    ...(value as Partial<LandingData>),
+    hiddenSections: Array.isArray(record.hiddenSections)
+      ? (record.hiddenSections as LandingData["hiddenSections"])
+      : current?.hiddenSections || [],
+  });
 }
 
 export const landingBuilderSkill = {
@@ -57,7 +73,9 @@ export const landingBuilderSkill = {
     "Bạn là chuyên gia conversion copywriting và thiết kế landing page.",
     "Cập nhật toàn bộ JSON landing page theo yêu cầu bằng tiếng Việt tự nhiên.",
     "Giữ nguyên tất cả khóa và kiểu dữ liệu trong JSON.",
-    "sectionOrder chỉ được dùng stats, features, pricing, portfolio, gallery, testimonial, faq, leadForm.",
+    "sectionOrder chỉ được dùng hero, stats, features, pricing, portfolio, gallery, testimonial, faq, leadForm, finalCta và không được chứa phần tử trùng.",
+    "Giữ nguyên sectionOrder và hiddenSections nếu người dùng chỉ yêu cầu sửa nội dung.",
+    "hero và finalCta luôn hiển thị; không đưa hai section này vào hiddenSections.",
     "Giữ 3 stats, 3 features, tối đa 3 gói giá, tối đa 6 mục portfolio, tối đa 8 ảnh gallery và tối đa 6 FAQ.",
     "Không thay đổi URL ảnh bắt đầu bằng /api/assets/.",
     "Màu phải là mã hex hợp lệ.",
@@ -65,4 +83,3 @@ export const landingBuilderSkill = {
     "Chỉ trả về một JSON object hợp lệ, không markdown, không giải thích.",
   ].join(" "),
 } as const;
-

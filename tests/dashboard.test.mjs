@@ -56,6 +56,8 @@ test("ships a durable customer management dashboard", async () => {
   assert.doesNotMatch(schema, /payment_status|stripe_session/);
   assert.match(database, /ALTER TABLE leads ADD COLUMN status/);
   assert.match(database, /ALTER TABLE projects ADD COLUMN dashboard_type/);
+  assert.match(database, /ALTER TABLE orders ADD COLUMN confirmation_email_sent_at/);
+  assert.match(database, /ALTER TABLE orders ADD COLUMN calendar_event_id/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS orders/);
   assert.match(studio, /\/dashboard\?projectId=/);
   assert.match(landing, /const formElement = event\.currentTarget/);

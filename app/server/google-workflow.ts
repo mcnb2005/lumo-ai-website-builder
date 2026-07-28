@@ -35,8 +35,9 @@ function toBase64Url(value: string) {
 }
 
 function parseDeliveryTime(value: string) {
-  const vietnamese = value.match(
-    /(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?/
+  const trimmed = value.trim();
+  const vietnamese = trimmed.match(
+    /^(\d{1,2})[/-](\d{1,2})[/-](\d{4})(?:\s+(\d{1,2}):(\d{2}))?$/
   );
   if (vietnamese) {
     const [, day, month, year, hour = "9", minute = "0"] = vietnamese;
@@ -49,7 +50,23 @@ function parseDeliveryTime(value: string) {
     );
     return Number.isNaN(date.getTime()) ? null : date;
   }
-  const date = new Date(value);
+
+  const isoLike = trimmed.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s]+(\d{1,2}):(\d{2}))?$/
+  );
+  if (isoLike) {
+    const [, year, month, day, hour = "9", minute = "0"] = isoLike;
+    const date = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day),
+      Number(hour),
+      Number(minute)
+    );
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  const date = new Date(trimmed);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
@@ -145,8 +162,12 @@ async function createDeliveryEvent(
     "ngay_gio",
     "ngay_giao",
     "delivery",
+    "delivery_time",
     "lich_giao",
     "thoi_gian",
+    "thoi_gian_giao",
+    "scheduled_at",
+    "time",
   ]);
   const start = requestedTime ? parseDeliveryTime(requestedTime) : null;
   if (!start) return null;

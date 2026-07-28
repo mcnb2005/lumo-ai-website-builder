@@ -7,13 +7,17 @@ import {
   useRef,
   useState,
 } from "react";
+import { arrayMove } from "@dnd-kit/sortable";
 import { LandingCanvas } from "./components/LandingCanvas";
+import { SectionNavigator } from "./editor/SectionNavigator";
+import { sectionRegistry } from "./editor/section-registry";
 import {
   defaultLanding,
   normalizeLandingData,
   starterMessages,
   type ChatMessage,
   type LandingData,
+  type LandingSectionType,
 } from "./landing-data";
 
 type Device = "desktop" | "tablet" | "mobile";
@@ -72,10 +76,16 @@ export function Studio() {
   const [projectId, setProjectId] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [selectedSection, setSelectedSection] = useState<LandingSectionType | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
   const saveEnabled = useRef(false);
   const conversationEnd = useRef<HTMLDivElement>(null);
   const previewScroll = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setEditorReady(true);
+  }, []);
 
   useEffect(() => {
     if (window.location.hash) {
@@ -278,6 +288,16 @@ export function Studio() {
     [device]
   );
 
+  function updateLanding(updater: (current: LandingData) => LandingData) {
+    const next = normalizeLandingData(updater(landing));
+    if (JSON.stringify(next) === JSON.stringify(landing)) return;
+    setHistory((historyItems) => [...historyItems.slice(-14), landing]);
+    setFuture([]);
+    setLanding(next);
+    setVersion((versionValue) => versionValue + 1);
+    setIsPublished(false);
+  }
+
   function createProject() {
     saveEnabled.current = false;
     const identity = makeProjectIdentity();
@@ -301,6 +321,74 @@ export function Studio() {
     }, 0);
   }
 
+  function selectSection(section: LandingSectionType) {
+    setSelectedSection(section);
+    window.setTimeout(() => {
+      const target = previewScroll.current?.querySelector<HTMLElement>(`[data-section-id="${section}"]`);
+      if (target && previewScroll.current) {
+        const top = target.offsetTop - 24;
+        previewScroll.current.scrollTo({ top, behavior: "smooth" });
+      }
+    }, 0);
+  }
+
+  function reorderSections(activeId: LandingSectionType, overId: LandingSectionType) {
+    if (isGenerating) return;
+    updateLanding((current) => {
+      const oldIndex = current.sectionOrder.indexOf(activeId);
+      const newIndex = current.sectionOrder.indexOf(overId);
+      if (oldIndex < 0 || newIndex < 0) return current;
+      return {
+        ...current,
+        sectionOrder: arrayMove(current.sectionOrder, oldIndex, newIndex),
+      };
+    });
+  }
+
+  function toggleSectionVisibility(section: LandingSectionType) {
+    if (section === "hero" || section === "finalCta") {
+      setNotice("Khối mở đầu và kêu gọi hành động nên luôn hiển thị.");
+      return;
+    }
+
+    const isHidden = landing.hiddenSections.includes(section);
+    updateLanding((current) => ({
+      ...current,
+      hiddenSections: isHidden
+        ? current.hiddenSections.filter((item) => item !== section)
+        : [...current.hiddenSections, section],
+    }));
+    if (!isHidden && selectedSection === section) setSelectedSection(null);
+    setNotice(
+      `${sectionRegistry[section].label} đã ${
+        isHidden ? "được hiển thị lại" : "bị ẩn"
+      }.`
+    );
+  }
+
+  function addSection() {
+    if (isGenerating) return;
+    const availableSections = (Object.keys(sectionRegistry) as LandingSectionType[]).filter(
+      (section) => !landing.sectionOrder.includes(section)
+    );
+    if (!availableSections.length && landing.hiddenSections.length) {
+      const nextSection = landing.hiddenSections[0];
+      toggleSectionVisibility(nextSection);
+      selectSection(nextSection);
+      return;
+    }
+    if (!availableSections.length) {
+      setNotice("Tất cả khối đã có trên trang.");
+      return;
+    }
+    const nextSection = availableSections[0];
+    updateLanding((current) => ({
+      ...current,
+      sectionOrder: [...current.sectionOrder, nextSection],
+    }));
+    setNotice(`${sectionRegistry[nextSection].label} đã được thêm vào trang.`);
+  }
+
   async function sendPrompt(rawPrompt: string) {
     const prompt = rawPrompt.trim();
     if (!prompt || isGenerating) return;
@@ -308,7 +396,7 @@ export function Studio() {
     setMessages((current) => [...current, newMessage("user", prompt)]);
     setInput("");
     setIsGenerating(true);
-    setNotice("");
+    setNotice("AI đang cập nhật trang…");
 
     try {
       const response = await fetch("/api/ai", {
@@ -326,11 +414,7 @@ export function Studio() {
         throw new Error(result.error || "Không thể tạo nội dung lúc này.");
       }
 
-      setHistory((current) => [...current.slice(-14), landing]);
-      setFuture([]);
-      setLanding(normalizeLandingData(result.landing));
-      setVersion((current) => current + 1);
-      setIsPublished(false);
+      updateLanding(() => result.landing as LandingData);
       setMessages((current) => [
         ...current,
         newMessage(
@@ -404,8 +488,7 @@ export function Studio() {
       if (!response.ok || !result.asset) {
         throw new Error(result.error || "Không thể tải ảnh lên.");
       }
-      setHistory((current) => [...current.slice(-14), landing]);
-      setLanding((current) => ({
+      updateLanding((current) => ({
         ...current,
         heroImage: current.heroImage || result.asset!.url,
         gallery: [
@@ -417,8 +500,6 @@ export function Studio() {
           },
         ].slice(-8),
       }));
-      setIsPublished(false);
-      setVersion((current) => current + 1);
       setNotice("Đã thêm ảnh vào Hero và Gallery.");
     } catch (error) {
       setNotice(
@@ -473,10 +554,15 @@ export function Studio() {
     <main className="studio-shell">
       <header className="studio-header">
         <div className="brand-tools">
-          <a className="studio-logo" href="/" aria-label="Lumo — trang chủ">
+          <button
+            className="studio-logo"
+            type="button"
+            onClick={() => window.location.assign("/")}
+            aria-label="Lumo — trang chủ"
+          >
             <span aria-hidden="true">✦</span>
             lumo
-          </a>
+          </button>
           <button className="new-project-button" type="button" onClick={createProject}>
             + Dự án mới
           </button>
@@ -662,6 +748,23 @@ export function Studio() {
           </div>
 
           <div className="preview-stage">
+            {editorReady ? (
+              <SectionNavigator
+                sectionOrder={landing.sectionOrder}
+                selectedSection={selectedSection}
+                onSelect={selectSection}
+                onReorder={reorderSections}
+                onToggleVisibility={toggleSectionVisibility}
+                onAddSection={addSection}
+                hiddenSections={landing.hiddenSections}
+                isBusy={isGenerating}
+              />
+            ) : (
+              <aside
+                className="section-navigator is-loading"
+                aria-label="Đang mở trình bố cục"
+              />
+            )}
             <div className={previewClass}>
               <div className="browser-bar">
                 <div><i /><i /><i /></div>
@@ -669,7 +772,19 @@ export function Studio() {
                 <span aria-hidden="true">↻</span>
               </div>
               <div className="preview-scroll" ref={previewScroll}>
-                <LandingCanvas data={landing} compact slug={projectSlug} />
+                <LandingCanvas
+                  data={landing}
+                  compact
+                  slug={projectSlug}
+                  mode={editorReady ? "editor" : "public"}
+                  selectedSection={selectedSection}
+                  onSelectSection={selectSection}
+                  sectionOrder={landing.sectionOrder.filter(
+                    (section) => !landing.hiddenSections.includes(section)
+                  )}
+                  onReorderSections={reorderSections}
+                  isBusy={isGenerating}
+                />
               </div>
             </div>
           </div>

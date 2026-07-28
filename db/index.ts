@@ -167,6 +167,25 @@ export async function ensureDatabase() {
       .run();
   }
 
+  const orderColumns = await binding
+    .prepare("PRAGMA table_info(orders)")
+    .all<{ name: string }>();
+  const orderColumnNames = new Set(
+    orderColumns.results?.map((column) => column.name) || []
+  );
+  if (!orderColumnNames.has("confirmation_email_sent_at")) {
+    await binding
+      .prepare(
+        "ALTER TABLE orders ADD COLUMN confirmation_email_sent_at TEXT"
+      )
+      .run();
+  }
+  if (!orderColumnNames.has("calendar_event_id")) {
+    await binding
+      .prepare("ALTER TABLE orders ADD COLUMN calendar_event_id TEXT")
+      .run();
+  }
+
   await binding.batch([
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS projects_slug_idx ON projects (slug)"
