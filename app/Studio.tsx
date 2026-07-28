@@ -22,7 +22,13 @@ import {
 
 type Device = "desktop" | "tablet" | "mobile";
 type SaveState = "guest" | "saving" | "saved" | "error";
-type UserInfo = { id: string; email: string; name: string; isLocal?: boolean };
+type UserInfo = {
+  id: string;
+  email: string;
+  name: string;
+  avatarUrl?: string | null;
+  isLocal?: boolean;
+};
 type ProjectSummary = {
   id: string;
   name: string;
@@ -32,8 +38,8 @@ type ProjectSummary = {
   publishedAt: string | null;
 };
 const GUEST_DRAFT_KEY = "lumo-guest-draft-v2";
-const SIGN_IN_URL = "/signin-with-chatgpt?return_to=%2F";
-const SIGN_OUT_URL = "/signout-with-chatgpt?return_to=%2F";
+const SIGN_IN_URL = "/api/auth/google/start?returnTo=%2F";
+const SIGN_OUT_URL = "/api/auth/logout?returnTo=%2F";
 
 const promptSuggestions = [
   "Tạo landing page bán sản phẩm chăm sóc da",
@@ -93,6 +99,17 @@ export function Studio() {
         null,
         "",
         `${window.location.pathname}${window.location.search}`
+      );
+    }
+    const currentUrl = new URL(window.location.href);
+    const authError = currentUrl.searchParams.get("authError");
+    if (authError) {
+      setNotice(authError);
+      currentUrl.searchParams.delete("authError");
+      window.history.replaceState(
+        null,
+        "",
+        `${currentUrl.pathname}${currentUrl.search}`
       );
     }
     previewScroll.current?.scrollTo({ top: 0, behavior: "auto" });
@@ -628,7 +645,9 @@ export function Studio() {
               ) : null}
             </>
           ) : (
-            <a className="signin-button" href={SIGN_IN_URL}>Đăng nhập để lưu</a>
+            <a className="signin-button" href={SIGN_IN_URL}>
+              Đăng nhập bằng Google
+            </a>
           )}
         </div>
       </header>

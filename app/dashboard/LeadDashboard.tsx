@@ -34,6 +34,11 @@ type DashboardUser = {
   name: string;
 };
 
+type GoogleConnection = {
+  connected: boolean;
+  email?: string;
+};
+
 function findLeadValue(
   values: Record<string, string>,
   patterns: string[]
@@ -125,6 +130,9 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
   const [isLoadingLeads, setIsLoadingLeads] = useState(false);
   const [savingLeadId, setSavingLeadId] = useState("");
   const [isSavingDashboardType, setIsSavingDashboardType] = useState(false);
+  const [googleConnection, setGoogleConnection] =
+    useState<GoogleConnection | null>(null);
+  const [isUpdatingGoogle, setIsUpdatingGoogle] = useState(false);
   const [notice, setNotice] = useState("");
   const selectedDashboardType =
     projects.find((project) => project.id === projectId)
@@ -161,6 +169,40 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
     }
 
     void loadProjects();
+  }, []);
+
+  useEffect(() => {
+    async function loadGoogleConnection() {
+      try {
+        const response = await fetch("/api/integrations/google");
+        const result = (await response.json()) as {
+          connection?: GoogleConnection;
+        };
+        if (response.ok) {
+          setGoogleConnection(result.connection || { connected: false });
+        }
+      } catch {
+        setGoogleConnection({ connected: false });
+      }
+    }
+
+    const currentUrl = new URL(window.location.href);
+    if (currentUrl.searchParams.get("googleConnected") === "1") {
+      window.setTimeout(
+        () =>
+          setNotice(
+            "Đã kết nối Gmail và Google Calendar cho tài khoản này."
+          ),
+        0
+      );
+      currentUrl.searchParams.delete("googleConnected");
+      window.history.replaceState(
+        null,
+        "",
+        `${currentUrl.pathname}${currentUrl.search}`
+      );
+    }
+    void loadGoogleConnection();
   }, []);
 
   useEffect(() => {
@@ -392,6 +434,30 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
     setNotice(`Đã xuất ${filteredLeads.length} ${dashboard.recordPlural}.`);
   }
 
+  async function disconnectGoogle() {
+    setIsUpdatingGoogle(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/integrations/google", {
+        method: "DELETE",
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error || "Không thể ngắt kết nối Google.");
+      }
+      setGoogleConnection({ connected: false });
+      setNotice("Đã ngắt kết nối Gmail và Google Calendar.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể ngắt kết nối Google."
+      );
+    } finally {
+      setIsUpdatingGoogle(false);
+    }
+  }
+
   return (
     <main className={`crm-shell crm-type-${resolvedDashboardType}`}>
       <aside className="crm-sidebar">
@@ -410,6 +476,31 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
             {dashboard.navLabel}
           </a>
         </nav>
+        <section className="crm-google-connection" aria-label="Kết nối Google">
+          <span>Google Workspace</span>
+          {googleConnection?.connected ? (
+            <>
+              <strong>Đã kết nối</strong>
+              <small title={googleConnection.email}>
+                {googleConnection.email}
+              </small>
+              <button
+                type="button"
+                onClick={() => void disconnectGoogle()}
+                disabled={isUpdatingGoogle}
+              >
+                {isUpdatingGoogle ? "Đang ngắt…" : "Ngắt kết nối"}
+              </button>
+            </>
+          ) : (
+            <>
+              <small>Gửi Gmail và tạo lịch bằng tài khoản của bạn.</small>
+              <a href="/api/auth/google/start?purpose=workspace&returnTo=%2Fdashboard">
+                Kết nối Gmail & Lịch
+              </a>
+            </>
+          )}
+        </section>
         <div className="crm-sidebar-spacer" />
         <a className="crm-back-link" href="/">
           <span aria-hidden="true">←</span>

@@ -224,6 +224,7 @@ export async function POST(request: Request) {
         status: projects.status,
         data: projects.data,
         dashboardType: projects.dashboardType,
+        ownerId: projects.ownerId,
       })
       .from(projects)
       .where(eq(projects.slug, slug))
@@ -259,13 +260,18 @@ export async function POST(request: Request) {
       updatedAt: now,
     });
 
-    const workflow = await runOrderWorkflow({
-      id,
-      productName: product.name,
-      amount: product.amount,
-      currency: "vnd",
-      values: safeValues,
-    });
+    const workflow = project.ownerId
+      ? await runOrderWorkflow(
+          {
+            id,
+            productName: product.name,
+            amount: product.amount,
+            currency: "vnd",
+            values: safeValues,
+          },
+          project.ownerId
+        )
+      : { confirmationEmailSentAt: null, calendarEventId: null };
     if (workflow.confirmationEmailSentAt || workflow.calendarEventId) {
       await db
         .update(orders)

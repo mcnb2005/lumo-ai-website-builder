@@ -1,4 +1,5 @@
-import { getRuntimeEnv } from "../../db";
+import { ensureDatabase, getD1, getRuntimeEnv } from "../../db";
+import { decryptGoogleRefreshToken } from "../google-auth";
 
 type OrderRecord = {
   id: string;
@@ -70,23 +71,40 @@ function parseDeliveryTime(value: string) {
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-async function getGoogleAccessToken() {
+async function getGoogleAccessToken(ownerId: string) {
   const env = getRuntimeEnv();
-  if (
-    !env.GOOGLE_CLIENT_ID ||
-    !env.GOOGLE_CLIENT_SECRET ||
-    !env.GOOGLE_REFRESH_TOKEN
-  ) {
+  const clientId = env.GOOGLE_OAUTH_CLIENT_ID || env.GOOGLE_CLIENT_ID;
+  const clientSecret =
+    env.GOOGLE_OAUTH_CLIENT_SECRET || env.GOOGLE_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
     return null;
   }
+
+  await ensureDatabase();
+  const connection = await getD1()
+    .prepare(
+      `SELECT encrypted_refresh_token, token_iv, connected_email
+       FROM google_connections WHERE user_id = ? LIMIT 1`
+    )
+    .bind(ownerId)
+    .first<{
+      encrypted_refresh_token: string;
+      token_iv: string;
+      connected_email: string;
+    }>();
+  if (!connection) return null;
+  const refreshToken = await decryptGoogleRefreshToken(
+    connection.encrypted_refresh_token,
+    connection.token_iv
+  );
 
   const response = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
-      client_id: env.GOOGLE_CLIENT_ID,
-      client_secret: env.GOOGLE_CLIENT_SECRET,
-      refresh_token: env.GOOGLE_REFRESH_TOKEN,
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
       grant_type: "refresh_token",
     }),
   });
@@ -97,16 +115,19 @@ async function getGoogleAccessToken() {
   if (!result.access_token) {
     throw new Error("Google không trả về access token.");
   }
-  return result.access_token;
+  return {
+    accessToken: result.access_token,
+    senderEmail: connection.connected_email,
+  };
 }
 
 async function sendConfirmationEmail(
   accessToken: string,
+  senderEmail: string,
   order: OrderRecord
 ) {
-  const env = getRuntimeEnv();
   const recipient = findValue(order.values, ["email", "thu_dien_tu"]);
-  if (!recipient || !env.GMAIL_SENDER_EMAIL) return null;
+  if (!recipient) return null;
 
   const customerName =
     findValue(order.values, ["ho_va_ten", "ho_ten", "full_name", "name"]) ||
@@ -127,7 +148,7 @@ async function sendConfirmationEmail(
     "Chúng tôi sẽ liên hệ nếu cần thêm thông tin giao hàng.",
   ].join("\r\n");
   const raw = [
-    `From: ${env.GMAIL_SENDER_EMAIL}`,
+    `From: ${senderEmail}`,
     `To: ${recipient}`,
     `Subject: =?UTF-8?B?${toBase64(subject)}?=`,
     "MIME-Version: 1.0",
@@ -213,10 +234,11 @@ async function createDeliveryEvent(
 }
 
 export async function runOrderWorkflow(
-  order: OrderRecord
+  order: OrderRecord,
+  ownerId: string
 ): Promise<WorkflowResult> {
-  const accessToken = await getGoogleAccessToken();
-  if (!accessToken) {
+  const googleConnection = await getGoogleAccessToken(ownerId);
+  if (!googleConnection) {
     return {
       confirmationEmailSentAt: null,
       calendarEventId: null,
@@ -224,11 +246,12 @@ export async function runOrderWorkflow(
   }
 
   const confirmationEmailSentAt = await sendConfirmationEmail(
-    accessToken,
+    googleConnection.accessToken,
+    googleConnection.senderEmail,
     order
   ).catch(() => null);
   const calendarEventId = await createDeliveryEvent(
-    accessToken,
+    googleConnection.accessToken,
     order
   ).catch(() => null);
   return { confirmationEmailSentAt, calendarEventId };

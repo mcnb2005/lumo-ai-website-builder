@@ -5,6 +5,38 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
   name: text("name"),
+  googleSub: text("google_sub").unique(),
+  avatarUrl: text("avatar_url"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const authStates = sqliteTable("auth_states", {
+  id: text("id").primaryKey(),
+  returnTo: text("return_to").notNull().default("/"),
+  purpose: text("purpose").notNull().default("login"),
+  userId: text("user_id"),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const authSessions = sqliteTable("auth_sessions", {
+  id: text("id").primaryKey(),
+  userId: text("user_id")
+    .notNull()
+    .references(() => users.id),
+  expiresAt: text("expires_at").notNull(),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const googleConnections = sqliteTable("google_connections", {
+  userId: text("user_id")
+    .primaryKey()
+    .references(() => users.id),
+  encryptedRefreshToken: text("encrypted_refresh_token").notNull(),
+  tokenIv: text("token_iv").notNull(),
+  connectedEmail: text("connected_email").notNull(),
+  scopes: text("scopes").notNull().default(""),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

@@ -35,7 +35,7 @@ test("ships a durable customer management dashboard", async () => {
     ),
   ]);
 
-  assert.match(page, /requireChatGPTUser/);
+  assert.match(page, /requireCurrentDatabaseUser/);
   assert.match(dashboard, /dashboardConfigs/);
   assert.match(dashboard, /updateDashboardType/);
   assert.match(dashboard, /Xuất CSV/);
@@ -53,12 +53,15 @@ test("ships a durable customer management dashboard", async () => {
   assert.match(schema, /notes: text\("notes"\)/);
   assert.match(schema, /dashboardType: text\("dashboard_type"\)/);
   assert.match(schema, /export const orders/);
+  assert.match(schema, /export const authSessions/);
+  assert.match(schema, /googleSub: text\("google_sub"\)/);
   assert.doesNotMatch(schema, /payment_status|stripe_session/);
   assert.match(database, /ALTER TABLE leads ADD COLUMN status/);
   assert.match(database, /ALTER TABLE projects ADD COLUMN dashboard_type/);
   assert.match(database, /ALTER TABLE orders ADD COLUMN confirmation_email_sent_at/);
   assert.match(database, /ALTER TABLE orders ADD COLUMN calendar_event_id/);
   assert.match(database, /CREATE TABLE IF NOT EXISTS orders/);
+  assert.match(database, /CREATE TABLE IF NOT EXISTS auth_sessions/);
   assert.match(studio, /\/dashboard\?projectId=/);
   assert.match(landing, /const formElement = event\.currentTarget/);
   assert.match(landing, /formElement\.reset\(\)/);

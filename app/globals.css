@@ -2845,6 +2845,65 @@ textarea:focus-visible {
   color: #dff58a;
 }
 
+.crm-google-connection {
+  display: grid;
+  gap: 7px;
+  margin-top: 24px;
+  padding: 14px;
+  border: 1px solid rgba(223, 245, 138, 0.18);
+  border-radius: 13px;
+  background: rgba(223, 245, 138, 0.06);
+}
+
+.crm-google-connection > span {
+  color: #dff58a;
+  font-size: 8px;
+  font-weight: 850;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.crm-google-connection strong {
+  color: white;
+  font-size: 11px;
+}
+
+.crm-google-connection small {
+  overflow: hidden;
+  color: #9db2a4;
+  font-size: 8px;
+  line-height: 1.5;
+  text-overflow: ellipsis;
+}
+
+.crm-google-connection a,
+.crm-google-connection button {
+  min-height: 32px;
+  display: grid;
+  place-items: center;
+  margin-top: 3px;
+  padding: 0 10px;
+  border: 1px solid rgba(223, 245, 138, 0.28);
+  border-radius: 9px;
+  background: #dff58a;
+  color: #173524;
+  font: inherit;
+  font-size: 9px;
+  font-weight: 800;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.crm-google-connection button {
+  background: transparent;
+  color: #dce9df;
+}
+
+.crm-google-connection button:disabled {
+  cursor: wait;
+  opacity: 0.6;
+}
+
 .crm-sidebar-spacer {
   flex: 1;
 }
@@ -3589,6 +3648,10 @@ textarea:focus-visible {
   }
 
   .crm-user div {
+    display: none;
+  }
+
+  .crm-google-connection {
     display: none;
   }
 

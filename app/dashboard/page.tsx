@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { requireChatGPTUser } from "../chatgpt-auth";
+import { requireCurrentDatabaseUser } from "../server-user";
 import { LeadDashboard } from "./LeadDashboard";
 
 export const dynamic = "force-dynamic";
@@ -10,13 +10,13 @@ export const metadata: Metadata = {
 };
 
 export default async function DashboardPage() {
-  const user = await requireChatGPTUser("/dashboard");
+  const user = await requireCurrentDatabaseUser("/dashboard");
 
   return (
     <LeadDashboard
       user={{
         email: user.email,
-        name: user.fullName || user.displayName || user.email,
+        name: user.name || user.email,
       }}
     />
   );

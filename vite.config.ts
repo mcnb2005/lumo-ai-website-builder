@@ -21,6 +21,10 @@ export default defineConfig(async ({ mode }) => {
       "LOCAL_DEV_AUTH",
       "LOCAL_DEV_USER_EMAIL",
       "LOCAL_DEV_USER_NAME",
+      "GOOGLE_OAUTH_CLIENT_ID",
+      "GOOGLE_OAUTH_CLIENT_SECRET",
+      "GOOGLE_OAUTH_REDIRECT_URI",
+      "GOOGLE_TOKEN_ENCRYPTION_KEY",
     ]
       .filter((key) => localEnv[key])
       .map((key) => [key, localEnv[key]])

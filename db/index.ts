@@ -28,6 +28,10 @@ export type RuntimeEnv = {
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
   GOOGLE_REFRESH_TOKEN?: string;
+  GOOGLE_OAUTH_CLIENT_ID?: string;
+  GOOGLE_OAUTH_CLIENT_SECRET?: string;
+  GOOGLE_OAUTH_REDIRECT_URI?: string;
+  GOOGLE_TOKEN_ENCRYPTION_KEY?: string;
   GMAIL_SENDER_EMAIL?: string;
   GOOGLE_CALENDAR_ID?: string;
 };
@@ -61,6 +65,37 @@ export async function ensureDatabase() {
         id TEXT PRIMARY KEY NOT NULL,
         email TEXT NOT NULL UNIQUE,
         name TEXT,
+        google_sub TEXT UNIQUE,
+        avatar_url TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
+      `CREATE TABLE IF NOT EXISTS auth_states (
+        id TEXT PRIMARY KEY NOT NULL,
+        return_to TEXT NOT NULL DEFAULT '/',
+        purpose TEXT NOT NULL DEFAULT 'login',
+        user_id TEXT,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
+      `CREATE TABLE IF NOT EXISTS auth_sessions (
+        id TEXT PRIMARY KEY NOT NULL,
+        user_id TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
+      `CREATE TABLE IF NOT EXISTS google_connections (
+        user_id TEXT PRIMARY KEY NOT NULL,
+        encrypted_refresh_token TEXT NOT NULL,
+        token_iv TEXT NOT NULL,
+        connected_email TEXT NOT NULL,
+        scopes TEXT NOT NULL DEFAULT '',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`
@@ -129,6 +164,36 @@ export async function ensureDatabase() {
     ),
   ]);
 
+  const userColumns = await binding
+    .prepare("PRAGMA table_info(users)")
+    .all<{ name: string }>();
+  const userColumnNames = new Set(
+    userColumns.results?.map((column) => column.name) || []
+  );
+  if (!userColumnNames.has("google_sub")) {
+    await binding.prepare("ALTER TABLE users ADD COLUMN google_sub TEXT").run();
+  }
+  if (!userColumnNames.has("avatar_url")) {
+    await binding.prepare("ALTER TABLE users ADD COLUMN avatar_url TEXT").run();
+  }
+
+  const authStateColumns = await binding
+    .prepare("PRAGMA table_info(auth_states)")
+    .all<{ name: string }>();
+  const authStateColumnNames = new Set(
+    authStateColumns.results?.map((column) => column.name) || []
+  );
+  if (!authStateColumnNames.has("purpose")) {
+    await binding
+      .prepare(
+        "ALTER TABLE auth_states ADD COLUMN purpose TEXT NOT NULL DEFAULT 'login'"
+      )
+      .run();
+  }
+  if (!authStateColumnNames.has("user_id")) {
+    await binding.prepare("ALTER TABLE auth_states ADD COLUMN user_id TEXT").run();
+  }
+
   const columns = await binding
     .prepare("PRAGMA table_info(projects)")
     .all<{ name: string }>();
@@ -189,6 +254,18 @@ export async function ensureDatabase() {
   await binding.batch([
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS projects_slug_idx ON projects (slug)"
+    ),
+    binding.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_idx ON users (google_sub)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions (user_id)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS auth_sessions_expiry_idx ON auth_sessions (expires_at)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS auth_states_expiry_idx ON auth_states (expires_at)"
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS projects_owner_idx ON projects (owner_id)"

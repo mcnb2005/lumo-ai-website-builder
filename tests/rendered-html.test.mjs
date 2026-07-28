@@ -15,6 +15,7 @@ test("defines the complete multi-project Lumo studio experience", async () => {
 
   assert.match(studio, /Dự án mới/);
   assert.match(studio, /Đăng nhập để lưu/);
+  assert.match(studio, /Đăng nhập bằng Google/);
   assert.match(studio, /\/api\/ai/);
   assert.match(studio, /\/api\/publish/);
   assert.match(studio, /\/api\/assets/);

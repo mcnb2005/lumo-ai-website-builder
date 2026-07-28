@@ -1,13 +1,13 @@
 import { ensureDatabase, getD1, getRuntimeEnv } from "../../../db";
-import { getChatGPTUser } from "../../chatgpt-auth";
 import { defaultLanding, type LandingData } from "../../landing-data";
+import { getCurrentDatabaseUser } from "../../server-user";
 import { runWebsiteBuilderAgent } from "../../server/agents/website-builder-agent";
 import { isLandingData } from "../../server/skills/landing-builder-skill";
 import { createDemoLanding } from "../../server/tools/demo-landing-tool";
 
 async function enforceUsageLimit(request: Request) {
   await ensureDatabase();
-  const identity = await getChatGPTUser();
+  const identity = await getCurrentDatabaseUser();
   const forwardedIp =
     request.headers.get("cf-connecting-ip") ||
     request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
