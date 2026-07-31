@@ -49,17 +49,7 @@ export function analyzeBuilderIntent(input: {
   const explicitCreate =
     /\b(tao|lam|xay dung|thiet ke)\b/.test(normalized) &&
     /\b(landing|trang web|website|trang ban hang)\b/.test(normalized);
-  const explicitEdit =
-    /\b(sua|doi|thay|viet lai|xoa|bo|an|hien|them|chen|di chuyen)\b/.test(
-      normalized
-    );
-  const hasPreviousUserRequest = (input.history || []).some(
-    (turn) => turn.role === "user"
-  );
-  const mode =
-    explicitCreate && !explicitEdit && !hasPreviousUserRequest
-      ? "create"
-      : "edit";
+  const mode = explicitCreate ? "create" : "edit";
 
   const mentionedSections = input.manifest.sections
     .filter((item) => includesAlias(input.prompt, sectionAliases[item.type]))
@@ -67,10 +57,14 @@ export function analyzeBuilderIntent(input: {
   const refersToSelection =
     /\b(phan nay|muc nay|section nay|doan nay|cho nay)\b/.test(normalized);
   const isWholePageRequest =
-    /\b(toan bo|ca trang|trang nay|landing page|website)\b/.test(normalized);
+    /\b(toan bo|ca trang|trang nay|trang web|landing page|website)\b/.test(
+      normalized
+    );
   const targetSections = Array.from(
     new Set(
-      mentionedSections.length
+      mode === "create"
+        ? []
+        : mentionedSections.length
         ? mentionedSections
         : input.selectedSection && (refersToSelection || !isWholePageRequest)
           ? [input.selectedSection]
