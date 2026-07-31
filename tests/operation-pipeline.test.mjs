@@ -40,9 +40,9 @@ test("chat, inline editing and the properties panel share one operation engine",
   assert.match(propertiesPanel, /onSetPalette/);
 });
 
-test("a request to create a website is never limited to the selected section", async () => {
+test("AI BuilderPlan resolves create, edit and clarification without keyword intent rules", async () => {
   const source = await readFile(
-    new URL("../app/server/agents/intent-analyzer.ts", import.meta.url),
+    new URL("../app/server/agents/builder-plan.ts", import.meta.url),
     "utf8"
   );
   const javascript = ts.transpileModule(source, {
@@ -52,7 +52,7 @@ test("a request to create a website is never limited to the selected section", a
     },
   }).outputText;
   const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
-  const { analyzeBuilderIntent } = await import(moduleUrl);
+  const { parseBuilderPlan } = await import(moduleUrl);
   const manifest = {
     sections: [
       {
@@ -61,7 +61,7 @@ test("a request to create a website is never limited to the selected section", a
         title: "Mở đầu",
         visible: true,
         position: 0,
-        editableFields: [],
+        editableFields: ["brand", "headline"],
       },
       {
         id: "gallery",
@@ -82,41 +82,72 @@ test("a request to create a website is never limited to the selected section", a
     ],
   };
 
-  const intent = analyzeBuilderIntent({
-    prompt: "Hãy tạo trang web bán ô tô giúp tôi",
-    manifest,
-    selectedSection: "gallery",
-    history: [
-      { role: "user", content: "Yêu cầu cũ" },
-      { role: "assistant", content: "Đã cập nhật" },
-    ],
-  });
+  const createPlan = parseBuilderPlan(
+    JSON.stringify({
+      mode: "create",
+      summary: "Tạo landing page bán ô tô",
+      confidence: 0.97,
+      targetSections: ["portfolio"],
+      pagePurpose: "sell_product",
+      businessType: "Ô tô",
+      audience: "Người đang tìm mua ô tô",
+      primaryGoal: "Yêu cầu tư vấn",
+      tone: "Cao cấp và đáng tin cậy",
+      recommendedSections: [
+        "hero",
+        "features",
+        "gallery",
+        "pricing",
+        "leadForm",
+        "finalCta",
+      ],
+    }),
+    manifest
+  );
 
-  assert.equal(intent.mode, "create");
-  assert.deepEqual(intent.targetSections, []);
+  assert.equal(createPlan.mode, "create");
+  assert.deepEqual(createPlan.targetSections, []);
+  assert.equal(createPlan.pagePurpose, "sell_product");
 
-  const projectIntent = analyzeBuilderIntent({
-    prompt: "Tạo dự án bán ô tô",
-    manifest,
-    selectedSection: "portfolio",
-  });
+  const editPlan = parseBuilderPlan(
+    JSON.stringify({
+      mode: "edit",
+      summary: "Đổi tiêu đề phần mở đầu",
+      confidence: 0.95,
+      targetSections: ["hero"],
+      targetField: "headline",
+      pagePurpose: "sell_product",
+      businessType: "Ô tô",
+      audience: "Người mua ô tô",
+      primaryGoal: "Yêu cầu tư vấn",
+      tone: "Mạnh mẽ",
+      recommendedSections: [],
+    }),
+    manifest
+  );
 
-  assert.equal(projectIntent.mode, "create");
-  assert.deepEqual(projectIntent.targetSections, []);
+  assert.equal(editPlan.mode, "edit");
+  assert.deepEqual(editPlan.targetSections, ["hero"]);
+  assert.equal(editPlan.targetField, "headline");
 
-  const correctionIntent = analyzeBuilderIntent({
-    prompt: "Bán ô tô cơ mà",
-    manifest,
-    selectedSection: "portfolio",
-    history: [
-      { role: "user", content: "Tạo dự án bán ô tô" },
-      {
-        role: "assistant",
-        content: "Mình đã cập nhật các phần hiển thị.",
-      },
-    ],
-  });
+  const clarifyPlan = parseBuilderPlan(
+    JSON.stringify({
+      mode: "edit",
+      summary: "Yêu cầu chưa rõ",
+      confidence: 0.4,
+      targetSections: [],
+      pagePurpose: "general",
+      businessType: "Doanh nghiệp",
+      audience: "Khách hàng",
+      primaryGoal: "Liên hệ",
+      tone: "Rõ ràng",
+      recommendedSections: [],
+      clarificationQuestion: "Bạn muốn sửa nội dung hay ẩn phần Dự án?",
+    }),
+    manifest
+  );
 
-  assert.equal(correctionIntent.mode, "create");
-  assert.deepEqual(correctionIntent.targetSections, []);
+  assert.equal(clarifyPlan.mode, "clarify");
+  assert.match(clarifyPlan.clarificationQuestion, /sửa nội dung/);
+  assert.doesNotMatch(source, /isCreateRequest|isCreationCorrection/);
 });

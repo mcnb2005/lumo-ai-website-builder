@@ -612,7 +612,11 @@ export function Studio() {
         }
         if (event.type === "complete") {
           setGenerationStage("completed");
-          setGenerationMessage("Thay đổi đã được kiểm tra và áp dụng.");
+          setGenerationMessage(
+            event.result.intent.mode === "clarify"
+              ? "Lumo cần bạn bổ sung một chi tiết."
+              : "Thay đổi đã được kiểm tra và áp dụng."
+          );
           setGenerationErrors([]);
         }
       });
@@ -626,7 +630,9 @@ export function Studio() {
             "Mình đã cập nhật landing page. Bạn có thể tiếp tục yêu cầu thay đổi nội dung, section, hình ảnh hoặc màu sắc."
         ),
       ]);
-      if (result.mode === "demo") {
+      if (result.intent.mode === "clarify") {
+        setNotice("Lumo cần bạn làm rõ yêu cầu trước khi sửa trang.");
+      } else if (result.mode === "demo") {
         setNotice("AI đang ở chế độ mẫu vì chưa có khóa API.");
       } else {
         setNotice("Đã cập nhật landing page theo yêu cầu.");

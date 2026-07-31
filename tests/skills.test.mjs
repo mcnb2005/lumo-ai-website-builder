@@ -12,6 +12,9 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
     operations,
     generation,
     aiRoute,
+    planner,
+    builderPlan,
+    recipes,
   ] = await Promise.all([
     readFile(new URL("../app/server/skills/runtime-skills.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/server/agents/website-builder-agent.ts", import.meta.url), "utf8"),
@@ -27,6 +30,18 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
     readFile(new URL("../app/landing-operations.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/builder-generation.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/api/ai/route.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/server/agents/planning-agent.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/builder-plan.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/landing-recipes.ts", import.meta.url),
+      "utf8"
+    ),
   ]);
 
   assert.match(skills, /export const runtimeSkills/);
@@ -36,18 +51,23 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(agent, /resolveRuntimeSkill/);
   assert.match(agent, /parseLandingOperations/);
   assert.match(agent, /buildLandingManifest/);
-  assert.match(agent, /analyzeBuilderIntent/);
+  assert.match(agent, /runPlanningAgent/);
+  assert.match(agent, /resolveLandingRecipe/);
+  assert.match(agent, /validateCreationQuality/);
   assert.match(agent, /attempt <= 2/);
   assert.match(agent, /validationErrors/);
   assert.match(agent, /applyLandingOperations/);
   assert.match(agent, /runtimeSkill\.rules/);
   assert.match(agent, /applySectionVisibilityIntent/);
   assert.match(agent, /preserveInternalAssetUrls/);
-  assert.match(agent, /isHeaderBrandRequest/);
-  assert.match(agent, /extractPreviousInsertion/);
-  assert.match(agent, /insertBetweenBrandAnchors/);
-  assert.match(agent, /removeMistakenInsertion/);
-  assert.match(agent, /scope === "brand"/);
+  assert.match(agent, /intent\.targetField/);
+  assert.match(planner, /parseBuilderPlan/);
+  assert.match(planner, /confidence dưới 0\.6/);
+  assert.doesNotMatch(planner, /isCreateRequest|isCreationCorrection/);
+  assert.match(builderPlan, /mode: "create" \| "edit" \| "clarify"/);
+  assert.match(builderPlan, /lowConfidence/);
+  assert.match(recipes, /sell_product/);
+  assert.match(recipes, /primaryGoal/);
   assert.match(landingSkill, /recognizedKeys/);
   assert.match(landingSkill, /parseLandingOperations/);
   assert.match(landingSkill, /operations/);

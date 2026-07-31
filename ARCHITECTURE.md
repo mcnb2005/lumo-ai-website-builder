@@ -10,12 +10,17 @@ Studio / Landing page / Dashboard
                 |
                 v
       Website Builder Agent
-        |       |        |
-        v       v        v
-      Skill   AI Tool  Business workflow
-        |       |        |
-        v       v        v
-     JSON UI  AI API   D1 / R2 / Google
+       |        |         |
+       v        v         v
+  AI Planner  Recipe   Operation engine
+       |        |         |
+       +--------+---------+
+                |
+                v
+          Validate / Apply
+                |
+                v
+             JSON UI
 ```
 
 ## Trách nhiệm từng lớp
@@ -32,9 +37,17 @@ Studio / Landing page / Dashboard
 
 ### Agent
 
-`website-builder-agent.ts` nhận mục tiêu, chọn skill tạo landing page, gọi AI tool,
-kiểm tra kết quả rồi trả dữ liệu cho API. API không còn phải biết chi tiết prompt
-hoặc định dạng phản hồi của nhà cung cấp.
+`planning-agent.ts` đọc yêu cầu, lịch sử, section đang chọn và manifest để tạo
+`BuilderPlan` có schema. Planner quyết định tạo mới, chỉnh sửa hoặc hỏi lại; code
+không dùng danh sách regex để hiểu từng cách nói.
+
+`landing-recipes.ts` chọn cấu trúc chuyển đổi theo mục tiêu bán sản phẩm, dịch vụ,
+thu lead, khóa học, sự kiện hoặc portfolio.
+
+`website-builder-agent.ts` dùng kế hoạch đã kiểm tra để yêu cầu AI tạo
+`LandingOperation`, validate phạm vi, tự sửa tối đa một lần và chỉ sau đó mới áp
+dụng vào `LandingData`. API không cần biết chi tiết prompt hay định dạng phản hồi
+của nhà cung cấp.
 
 ### Skill
 
@@ -56,8 +69,9 @@ thay adapter này bằng MCP client nhưng giữ nguyên Agent và API.
 ## Nguyên tắc mở rộng
 
 1. Mỗi Agent giải quyết một mục tiêu rõ ràng.
-2. Mỗi Skill chứa kiến thức và quy tắc, không tự ghi dữ liệu.
-3. Mỗi Tool chỉ thực hiện một hành động có kiểm soát.
-4. Thao tác bên ngoài phải chạy phía máy chủ và kiểm tra quyền.
-5. Các hành động quan trọng cần lưu trạng thái trước khi gọi dịch vụ bên ngoài.
-
+2. Hiểu ngôn ngữ thuộc trách nhiệm AI Planner; code chỉ validate schema và quyền.
+3. Yêu cầu mơ hồ phải hỏi lại thay vì tự đoán section hoặc field.
+4. Mỗi Skill chứa kiến thức và quy tắc, không tự ghi dữ liệu.
+5. Mỗi Tool chỉ thực hiện một hành động có kiểm soát.
+6. Thao tác bên ngoài phải chạy phía máy chủ và kiểm tra quyền.
+7. Các hành động quan trọng cần lưu trạng thái trước khi gọi dịch vụ bên ngoài.

@@ -4,6 +4,7 @@ export type AiChatToolInput = {
   modelName: string;
   systemPrompt: string;
   userPrompt: string;
+  temperature?: number;
 };
 
 type ChatCompletionPayload = {
@@ -28,6 +29,9 @@ export async function runAiChatTool(input: AiChatToolInput) {
       },
       body: JSON.stringify({
         model: input.modelName,
+        ...(typeof input.temperature === "number"
+          ? { temperature: input.temperature }
+          : {}),
         messages: [
           { role: "system", content: input.systemPrompt },
           { role: "user", content: input.userPrompt },

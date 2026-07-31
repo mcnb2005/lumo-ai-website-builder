@@ -1,6 +1,7 @@
 import type { LandingData, LandingSectionType } from "./landing-data";
 import type { LandingManifest } from "./landing-manifest";
 import type { LandingOperation } from "./landing-operations";
+import type { BuilderPlan } from "./server/agents/builder-plan";
 
 export const generationStages = [
   "understanding",
@@ -14,11 +15,7 @@ export const generationStages = [
 
 export type GenerationStage = (typeof generationStages)[number];
 
-export type BuilderIntent = {
-  mode: "create" | "edit";
-  targetSections: LandingSectionType[];
-  summary: string;
-};
+export type BuilderIntent = BuilderPlan;
 
 export type BuilderAgentResult = {
   landing: LandingData;

@@ -13,6 +13,7 @@ import {
 } from "../../landing-operations";
 import type {
   BuilderAgentResult,
+  BuilderIntent,
   BuilderProgressReporter,
 } from "../../builder-generation";
 import {
@@ -23,7 +24,9 @@ import {
 } from "../skills/landing-builder-skill";
 import { resolveRuntimeSkill } from "../skills/runtime-skills";
 import { runAiChatTool } from "../tools/ai-chat-tool";
-import { analyzeBuilderIntent } from "./intent-analyzer";
+import { createDemoBuilderPlan } from "./builder-plan";
+import { resolveLandingRecipe } from "./landing-recipes";
+import { runPlanningAgent } from "./planning-agent";
 
 type WebsiteBuilderAgentInput = {
   prompt: string;
@@ -40,138 +43,6 @@ type WebsiteBuilderAgentInput = {
   progress?: BuilderProgressReporter;
 };
 
-function normalizeCommand(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replaceAll("đ", "d")
-    .toLowerCase();
-}
-
-function isHeaderBrandRequest(prompt: string) {
-  const normalized = normalizeCommand(prompt);
-  return /\b(tren dau|phia tren|thanh tren|dau trang|header|logo|ten thuong hieu)\b/.test(
-    normalized
-  );
-}
-
-function escapeRegExp(value: string) {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function extractPreviousInsertion(
-  history: WebsiteBuilderAgentInput["history"]
-) {
-  const previousUserMessage = [...(history || [])]
-    .reverse()
-    .find((turn) => turn.role === "user")?.content;
-  if (!previousUserMessage) return null;
-
-  const insertedText = previousUserMessage.match(
-    /(?:thêm|chèn)\s+chữ\s+(.+?)\s+vào\s+giữa/i
-  )?.[1]?.trim();
-  const anchors = previousUserMessage.match(
-    /(?:vào|ở)\s+giữa(?:\s+(?:phần|chữ))?\s+(.+?)\s+và\s+(.+?)(?:\s+(?:ở|phía|trên|đầu)\b|$)/i
-  );
-  if (!insertedText || !anchors?.[1] || !anchors[2]) return null;
-
-  return {
-    insertedText,
-    firstAnchor: anchors[1].trim(),
-    secondAnchor: anchors[2].trim(),
-  };
-}
-
-function insertBetweenBrandAnchors(
-  brand: string,
-  insertedText: string,
-  firstAnchor: string,
-  secondAnchor: string
-) {
-  if (normalizeCommand(brand).includes(normalizeCommand(insertedText))) {
-    return brand;
-  }
-
-  const lowerBrand = brand.toLocaleLowerCase("vi");
-  const firstIndex = lowerBrand.indexOf(firstAnchor.toLocaleLowerCase("vi"));
-  const secondIndex = lowerBrand.indexOf(secondAnchor.toLocaleLowerCase("vi"));
-  if (firstIndex < 0 || secondIndex < 0) return brand;
-
-  const earlier =
-    firstIndex < secondIndex
-      ? { index: firstIndex, length: firstAnchor.length }
-      : { index: secondIndex, length: secondAnchor.length };
-  const laterIndex = firstIndex < secondIndex ? secondIndex : firstIndex;
-  return [
-    brand.slice(0, earlier.index + earlier.length).trimEnd(),
-    insertedText,
-    brand.slice(laterIndex).trimStart(),
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function removeMistakenInsertion(value: string, insertedText: string) {
-  return value
-    .replace(new RegExp(escapeRegExp(insertedText), "i"), "")
-    .replace(/\s{2,}/g, " ")
-    .replace(/^[\s,.:;–—-]+|[\s,.:;–—-]+$/g, "")
-    .trim();
-}
-
-function keepOnlyRequestedScope(
-  prompt: string,
-  current: LandingData,
-  next: LandingData,
-  history: WebsiteBuilderAgentInput["history"]
-) {
-  if (!isHeaderBrandRequest(prompt)) {
-    return { landing: next, scope: null as "brand" | null };
-  }
-
-  const previousInsertion = extractPreviousInsertion(history);
-  const isCorrection =
-    /\b(nham|y toi|khong phai|sai cho)\b/.test(normalizeCommand(prompt));
-  const generatedBrand =
-    typeof next.brand === "string" && next.brand.trim()
-      ? next.brand
-      : current.brand;
-  const brand =
-    previousInsertion &&
-    !normalizeCommand(generatedBrand).includes(
-      normalizeCommand(previousInsertion.insertedText)
-    )
-      ? insertBetweenBrandAnchors(
-          current.brand,
-          previousInsertion.insertedText,
-          previousInsertion.firstAnchor,
-          previousInsertion.secondAnchor
-        )
-      : generatedBrand;
-
-  return {
-    landing: {
-      ...current,
-      brand,
-      headline:
-        previousInsertion && isCorrection
-          ? removeMistakenInsertion(
-              current.headline,
-              previousInsertion.insertedText
-            )
-          : current.headline,
-      accentLine:
-        previousInsertion && isCorrection
-          ? removeMistakenInsertion(
-              current.accentLine,
-              previousInsertion.insertedText
-            )
-          : current.accentLine,
-    },
-    scope: "brand" as const,
-  };
-}
-
 export type WebsiteBuilderAgentResult = BuilderAgentResult;
 
 function operationSection(operation: LandingOperation) {
@@ -185,33 +56,32 @@ function operationSection(operation: LandingOperation) {
 }
 
 function assertSurgicalScope(
-  prompt: string,
   operations: LandingOperation[],
-  targetSections: LandingSectionType[]
+  intent: BuilderIntent
 ) {
-  if (isHeaderBrandRequest(prompt)) {
+  if (intent.targetField) {
     const invalid = operations.filter(
       (operation) =>
         operation.type !== "update_text" ||
-        operation.section !== "hero" ||
-        operation.field !== "brand"
+        operation.section !== intent.targetSections[0] ||
+        operation.field !== intent.targetField
     );
     if (invalid.length) {
       throw new LandingOperationValidationError([
-        "Yêu cầu này chỉ được sửa trường brand trên thanh đầu trang.",
+        `Yêu cầu này chỉ được sửa trường ${intent.targetField} trong section ${intent.targetSections[0]}.`,
       ]);
     }
     return;
   }
 
-  if (!targetSections.length) return;
+  if (!intent.targetSections.length) return;
   const affectedSections = operations
     .map(operationSection)
     .filter(
       (section): section is LandingSectionType => section !== null
     );
   const unrelated = affectedSections.filter(
-    (section) => !targetSections.includes(section)
+    (section) => !intent.targetSections.includes(section)
   );
   if (unrelated.length) {
     throw new LandingOperationValidationError([
@@ -226,6 +96,57 @@ function validationErrors(error: unknown) {
   if (error instanceof LandingOperationValidationError) return error.errors;
   if (error instanceof Error) return [error.message];
   return ["Kết quả AI không hợp lệ."];
+}
+
+function validateCreationQuality(
+  landing: LandingData,
+  recipe: { visibleSections: LandingSectionType[] }
+) {
+  const errors: string[] = [];
+  const mainPromise = `${landing.headline} ${landing.accentLine}`.trim();
+  const visibleSections = landing.sectionOrder.filter(
+    (section) => !landing.hiddenSections.includes(section)
+  );
+  const expectedSections = recipe.visibleSections.filter(
+    (section) => section !== "hero" && section !== "finalCta"
+  );
+  const missingExpected = expectedSections.filter(
+    (section) => !visibleSections.includes(section)
+  );
+
+  if (mainPromise.length < 20) {
+    errors.push("Thông điệp Hero quá ngắn để thể hiện giá trị chính.");
+  }
+  if (landing.description.trim().length < 45) {
+    errors.push("Mô tả Hero chưa đủ rõ về lợi ích hoặc đối tượng.");
+  }
+  if (landing.primaryCta.trim().length < 3) {
+    errors.push("Landing page chưa có CTA chính rõ ràng.");
+  }
+  if (visibleSections.length < 6) {
+    errors.push("Landing page chưa đủ các phần cho hành trình chuyển đổi.");
+  }
+  if (
+    expectedSections.length >= 4 &&
+    missingExpected.length > Math.floor(expectedSections.length / 2)
+  ) {
+    errors.push(
+      `Landing page đang thiếu quá nhiều section theo mục tiêu: ${missingExpected.join(
+        ", "
+      )}.`
+    );
+  }
+  if (
+    [mainPromise, landing.description, landing.primaryCta].some((value) =>
+      /\b(lorem ipsum|placeholder|tiêu đề mẫu|nội dung mẫu)\b/i.test(value)
+    )
+  ) {
+    errors.push("Landing page còn chứa nội dung mẫu.");
+  }
+
+  if (errors.length) {
+    throw new LandingOperationValidationError(errors);
+  }
 }
 
 function operationsFromVisibilityFallback(
@@ -253,21 +174,29 @@ export async function runWebsiteBuilderAgent(
     message: "Đang phân tích yêu cầu và phạm vi cần thay đổi…",
   });
   const currentManifest = buildLandingManifest(input.current);
-  const intent = analyzeBuilderIntent({
-    prompt: input.prompt,
-    manifest: currentManifest,
-    selectedSection: input.selectedSection,
-    history: input.history,
-  });
+  const intent = input.apiKey
+    ? await runPlanningAgent({
+        prompt: input.prompt,
+        manifest: currentManifest,
+        selectedSection: input.selectedSection,
+        history: input.history,
+        providerUrl: input.providerUrl,
+        modelName: input.modelName,
+        apiKey: input.apiKey,
+      })
+    : createDemoBuilderPlan(input.prompt);
   const runtimeSkill = resolveRuntimeSkill(input.prompt);
   input.progress?.({
     type: "status",
     stage: "planning",
-    message: intent.targetSections.length
-      ? `Đã xác định section: ${intent.targetSections.join(", ")}.`
-      : intent.mode === "create"
-        ? "Đang lập cấu trúc landing page mới…"
-        : "Đang lập kế hoạch thay đổi tối thiểu…",
+    message:
+      intent.mode === "clarify"
+        ? "Lumo cần thêm thông tin để xác định đúng phần cần sửa."
+        : intent.targetSections.length
+          ? `Đã xác định section: ${intent.targetSections.join(", ")}.`
+          : intent.mode === "create"
+            ? "Đang lập cấu trúc landing page mới…"
+            : "Đang lập kế hoạch thay đổi tối thiểu…",
   });
 
   if (!input.apiKey) {
@@ -312,6 +241,32 @@ export async function runWebsiteBuilderAgent(
     };
   }
 
+  if (intent.mode === "clarify") {
+    return {
+      landing: input.current,
+      message:
+        intent.clarificationQuestion ||
+        "Bạn có thể mô tả rõ hơn phần cần chỉnh sửa không?",
+      mode: "ai",
+      operations: [],
+      changedSections: [],
+      intent,
+      manifest: currentManifest,
+      skill: {
+        id: landingBuilderSkill.id,
+        version: landingBuilderSkill.version,
+      },
+      runtimeSkill: runtimeSkill
+        ? {
+            id: runtimeSkill.id,
+            version: runtimeSkill.version,
+            name: runtimeSkill.name,
+            description: runtimeSkill.description,
+          }
+        : undefined,
+    };
+  }
+
   const targetSnapshots = Object.fromEntries(
     intent.targetSections.map((section) => [
       section,
@@ -325,6 +280,8 @@ export async function runWebsiteBuilderAgent(
         `Quy tắc bổ sung: ${runtimeSkill.rules.join(" ")}`,
       ].join("\n")
     : "";
+  const creationRecipe =
+    intent.mode === "create" ? resolveLandingRecipe(intent) : null;
   const systemPrompt = [
     landingBuilderSkill.instructions,
     runtimeSkillContext,
@@ -340,6 +297,11 @@ export async function runWebsiteBuilderAgent(
           .join("\n")}`
       : "",
     `Intent:\n${JSON.stringify(intent)}`,
+    creationRecipe
+      ? `Recipe chuyển đổi bắt buộc tham khảo:\n${JSON.stringify(
+          creationRecipe
+        )}`
+      : "",
     `Section manifest:\n${JSON.stringify(currentManifest)}`,
     `Dữ liệu các section mục tiêu:\n${JSON.stringify(targetSnapshots)}`,
     `Tóm tắt landing hiện tại:\n${JSON.stringify({
@@ -407,15 +369,14 @@ export async function runWebsiteBuilderAgent(
         input.current,
         intent.mode
       );
-      assertSurgicalScope(
-        input.prompt,
-        parsed.operations,
-        intent.targetSections
-      );
+      assertSurgicalScope(parsed.operations, intent);
       const applied = applyLandingOperations(
         input.current,
         parsed.operations
       );
+      if (creationRecipe) {
+        validateCreationQuality(applied.landing, creationRecipe);
+      }
       input.progress?.({
         type: "validation",
         stage: "validating",
@@ -465,25 +426,13 @@ export async function runWebsiteBuilderAgent(
     usedVisibilityFallback = true;
   }
 
-  const scopedResult = keepOnlyRequestedScope(
-    input.prompt,
-    input.current,
-    landing,
-    input.history
-  );
-  landing = preserveInternalAssetUrls(
-    input.current,
-    scopedResult.landing
-  );
+  landing = preserveInternalAssetUrls(input.current, landing);
 
   return {
     landing,
-    message:
-      scopedResult.scope === "brand"
-        ? "Mình đã cập nhật tên thương hiệu trên thanh đầu trang và giữ nguyên nội dung Hero."
-        : usedVisibilityFallback
-          ? "Mình đã cập nhật các phần hiển thị trên landing page theo yêu cầu."
-          : `Mình đã áp dụng ${operations.length} thay đổi đúng phạm vi yêu cầu.`,
+    message: usedVisibilityFallback
+      ? "Mình đã cập nhật các phần hiển thị trên landing page theo yêu cầu."
+      : `Mình đã áp dụng ${operations.length} thay đổi đúng phạm vi yêu cầu.`,
     mode: "ai",
     operations,
     changedSections,
