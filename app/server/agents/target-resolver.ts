@@ -70,6 +70,8 @@ export function listLandingTextTargets(
       ),
       textTarget("pricing", "pricing.cta", item.cta, index),
     ]),
+    textTarget("portfolio", "portfolioEyebrow", landing.portfolioEyebrow),
+    textTarget("portfolio", "portfolioHeadline", landing.portfolioHeadline),
     ...landing.portfolio.flatMap((item, index) => [
       textTarget(
         "portfolio",
@@ -85,6 +87,8 @@ export function listLandingTextTargets(
         index
       ),
     ]),
+    textTarget("gallery", "galleryEyebrow", landing.galleryEyebrow),
+    textTarget("gallery", "galleryHeadline", landing.galleryHeadline),
     ...landing.gallery.flatMap((item, index) => [
       textTarget("gallery", "gallery.alt", item.alt, index),
       textTarget("gallery", "gallery.caption", item.caption, index),
@@ -104,6 +108,8 @@ export function listLandingTextTargets(
       "testimonial.role",
       landing.testimonial.role
     ),
+    textTarget("faq", "faqEyebrow", landing.faqEyebrow),
+    textTarget("faq", "faqHeadline", landing.faqHeadline),
     ...landing.faq.flatMap((item, index) => [
       textTarget("faq", "faq.question", item.question, index),
       textTarget("faq", "faq.answer", item.answer, index),
@@ -122,6 +128,8 @@ export function listLandingTextTargets(
       "leadForm.buttonText",
       landing.leadForm.buttonText
     ),
+    textTarget("finalCta", "finalCtaEyebrow", landing.finalCtaEyebrow),
+    textTarget("finalCta", "finalCtaHeadline", landing.finalCtaHeadline),
     textTarget("finalCta", "primaryCta", landing.primaryCta),
   ];
 }

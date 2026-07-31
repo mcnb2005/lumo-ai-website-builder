@@ -284,48 +284,76 @@ export function SectionPropertiesPanel({
           </>
         );
       case "portfolio":
-        return landing.portfolio.map((item, index) => (
-          <fieldset key={`portfolio-${index}`}>
-            <legend>Dự án {index + 1}</legend>
-            {textField("Danh mục", item.category, {
+        return (
+          <>
+            {textField("Nhãn section", landing.portfolioEyebrow, {
               section,
-              field: "portfolio.category",
-              index,
-            })}
-            {textField("Tên dự án", item.title, {
-              section,
-              field: "portfolio.title",
-              index,
+              field: "portfolioEyebrow",
             })}
             {textField(
-              "Mô tả",
-              item.description,
-              { section, field: "portfolio.description", index },
+              "Tiêu đề section",
+              landing.portfolioHeadline,
+              { section, field: "portfolioHeadline" },
               true
             )}
-          </fieldset>
-        ));
+            {landing.portfolio.map((item, index) => (
+              <fieldset key={`portfolio-${index}`}>
+                <legend>Dự án {index + 1}</legend>
+                {textField("Danh mục", item.category, {
+                  section,
+                  field: "portfolio.category",
+                  index,
+                })}
+                {textField("Tên dự án", item.title, {
+                  section,
+                  field: "portfolio.title",
+                  index,
+                })}
+                {textField(
+                  "Mô tả",
+                  item.description,
+                  { section, field: "portfolio.description", index },
+                  true
+                )}
+              </fieldset>
+            ))}
+          </>
+        );
       case "gallery":
-        return landing.gallery.length ? (
-          landing.gallery.map((item, index) => (
-            <fieldset key={`gallery-${index}`}>
-              <legend>Ảnh {index + 1}</legend>
-              {textField("Mô tả ảnh", item.alt, {
-                section,
-                field: "gallery.alt",
-                index,
-              })}
-              {textField("Chú thích", item.caption, {
-                section,
-                field: "gallery.caption",
-                index,
-              })}
-            </fieldset>
-          ))
-        ) : (
-          <p className="properties-empty">
-            Kéo ảnh từ khay ảnh vào section để bắt đầu.
-          </p>
+        return (
+          <>
+            {textField("Nhãn section", landing.galleryEyebrow, {
+              section,
+              field: "galleryEyebrow",
+            })}
+            {textField(
+              "Tiêu đề section",
+              landing.galleryHeadline,
+              { section, field: "galleryHeadline" },
+              true
+            )}
+            {landing.gallery.length ? (
+              landing.gallery.map((item, index) => (
+                <fieldset key={`gallery-${index}`}>
+                  <legend>Ảnh {index + 1}</legend>
+                  {textField("Mô tả ảnh", item.alt, {
+                    section,
+                    field: "gallery.alt",
+                    index,
+                  })}
+                  {textField("Chú thích", item.caption, {
+                    section,
+                    field: "gallery.caption",
+                    index,
+                  })}
+                </fieldset>
+              ))
+            ) : (
+              <p className="properties-empty">
+                Kéo ảnh từ khay ảnh vào section để bắt đầu.
+              </p>
+            )}
+          </>
         );
       case "testimonial":
         return (
@@ -347,22 +375,36 @@ export function SectionPropertiesPanel({
           </>
         );
       case "faq":
-        return landing.faq.map((item, index) => (
-          <fieldset key={`faq-${index}`}>
-            <legend>Câu hỏi {index + 1}</legend>
-            {textField("Câu hỏi", item.question, {
+        return (
+          <>
+            {textField("Nhãn section", landing.faqEyebrow, {
               section,
-              field: "faq.question",
-              index,
+              field: "faqEyebrow",
             })}
             {textField(
-              "Câu trả lời",
-              item.answer,
-              { section, field: "faq.answer", index },
+              "Tiêu đề section",
+              landing.faqHeadline,
+              { section, field: "faqHeadline" },
               true
             )}
-          </fieldset>
-        ));
+            {landing.faq.map((item, index) => (
+              <fieldset key={`faq-${index}`}>
+                <legend>Câu hỏi {index + 1}</legend>
+                {textField("Câu hỏi", item.question, {
+                  section,
+                  field: "faq.question",
+                  index,
+                })}
+                {textField(
+                  "Câu trả lời",
+                  item.answer,
+                  { section, field: "faq.answer", index },
+                  true
+                )}
+              </fieldset>
+            ))}
+          </>
+        );
       case "leadForm":
         return (
           <>
@@ -390,10 +432,24 @@ export function SectionPropertiesPanel({
           </>
         );
       case "finalCta":
-        return textField("Nút kêu gọi hành động", landing.primaryCta, {
-          section,
-          field: "primaryCta",
-        });
+        return (
+          <>
+            {textField("Nhãn section", landing.finalCtaEyebrow, {
+              section,
+              field: "finalCtaEyebrow",
+            })}
+            {textField(
+              "Tiêu đề section",
+              landing.finalCtaHeadline,
+              { section, field: "finalCtaHeadline" },
+              true
+            )}
+            {textField("Nút kêu gọi hành động", landing.primaryCta, {
+              section,
+              field: "primaryCta",
+            })}
+          </>
+        );
     }
   }
 

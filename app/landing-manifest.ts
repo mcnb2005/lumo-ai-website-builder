@@ -14,6 +14,14 @@ export type LandingEditableField =
   | "featuresHeadline"
   | "pricingEyebrow"
   | "pricingHeadline"
+  | "portfolioEyebrow"
+  | "portfolioHeadline"
+  | "galleryEyebrow"
+  | "galleryHeadline"
+  | "faqEyebrow"
+  | "faqHeadline"
+  | "finalCtaEyebrow"
+  | "finalCtaHeadline"
   | "stats.value"
   | "stats.label"
   | "features.number"
@@ -72,24 +80,31 @@ export const editableFieldsBySection: Record<
     "pricing.cta",
   ],
   portfolio: [
+    "portfolioEyebrow",
+    "portfolioHeadline",
     "portfolio.category",
     "portfolio.title",
     "portfolio.description",
   ],
-  gallery: ["gallery.alt", "gallery.caption"],
+  gallery: [
+    "galleryEyebrow",
+    "galleryHeadline",
+    "gallery.alt",
+    "gallery.caption",
+  ],
   testimonial: [
     "testimonial.quote",
     "testimonial.name",
     "testimonial.role",
   ],
-  faq: ["faq.question", "faq.answer"],
+  faq: ["faqEyebrow", "faqHeadline", "faq.question", "faq.answer"],
   leadForm: [
     "leadForm.title",
     "leadForm.description",
     "leadForm.field",
     "leadForm.buttonText",
   ],
-  finalCta: ["primaryCta"],
+  finalCta: ["finalCtaEyebrow", "finalCtaHeadline", "primaryCta"],
 };
 
 const sectionLabels: Record<LandingSectionType, string> = {
@@ -164,16 +179,32 @@ export function getLandingSectionSnapshot(
         items: landing.pricing,
       };
     case "portfolio":
-      return landing.portfolio;
+      return {
+        eyebrow: landing.portfolioEyebrow,
+        headline: landing.portfolioHeadline,
+        items: landing.portfolio,
+      };
     case "gallery":
-      return landing.gallery;
+      return {
+        eyebrow: landing.galleryEyebrow,
+        headline: landing.galleryHeadline,
+        items: landing.gallery,
+      };
     case "testimonial":
       return landing.testimonial;
     case "faq":
-      return landing.faq;
+      return {
+        eyebrow: landing.faqEyebrow,
+        headline: landing.faqHeadline,
+        items: landing.faq,
+      };
     case "leadForm":
       return landing.leadForm;
     case "finalCta":
-      return { primaryCta: landing.primaryCta };
+      return {
+        eyebrow: landing.finalCtaEyebrow,
+        headline: landing.finalCtaHeadline,
+        primaryCta: landing.primaryCta,
+      };
   }
 }

@@ -115,6 +115,14 @@ const landingKeys: Array<keyof LandingData> = [
   "featuresHeadline",
   "pricingEyebrow",
   "pricingHeadline",
+  "portfolioEyebrow",
+  "portfolioHeadline",
+  "galleryEyebrow",
+  "galleryHeadline",
+  "faqEyebrow",
+  "faqHeadline",
+  "finalCtaEyebrow",
+  "finalCtaHeadline",
   "heroImage",
   "sectionOrder",
   "hiddenSections",
@@ -258,6 +266,14 @@ export function validateLandingData(
     "featuresHeadline",
     "pricingEyebrow",
     "pricingHeadline",
+    "portfolioEyebrow",
+    "portfolioHeadline",
+    "galleryEyebrow",
+    "galleryHeadline",
+    "faqEyebrow",
+    "faqHeadline",
+    "finalCtaEyebrow",
+    "finalCtaHeadline",
     "heroImage",
   ];
   stringFields.forEach((field) => {
@@ -730,6 +746,14 @@ function applyTextOperation(
     case "featuresHeadline":
     case "pricingEyebrow":
     case "pricingHeadline":
+    case "portfolioEyebrow":
+    case "portfolioHeadline":
+    case "galleryEyebrow":
+    case "galleryHeadline":
+    case "faqEyebrow":
+    case "faqHeadline":
+    case "finalCtaEyebrow":
+    case "finalCtaHeadline":
       return { ...current, [field]: value };
     case "stats.value":
     case "stats.label": {

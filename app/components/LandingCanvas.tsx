@@ -553,8 +553,23 @@ export function LandingCanvas({
         return (
           <section className="content-section portfolio-section" id="portfolio" key={section}>
             <div className="section-heading">
-              <p>Dự án tiêu biểu</p>
-              <h2>Công việc nói thay<br />mọi lời giới thiệu.</h2>
+              <p>
+                {editableText(
+                  "portfolio",
+                  data.portfolioEyebrow,
+                  "Nhãn section dự án",
+                  { field: "portfolioEyebrow" }
+                )}
+              </p>
+              <h2>
+                {editableText(
+                  "portfolio",
+                  data.portfolioHeadline,
+                  "Tiêu đề section dự án",
+                  { field: "portfolioHeadline" },
+                  true
+                )}
+              </h2>
             </div>
             <div className="portfolio-grid">
               {data.portfolio.map((item, index) => (
@@ -626,8 +641,23 @@ export function LandingCanvas({
         return (
           <section className="content-section gallery-section" id="gallery" key={section}>
             <div className="section-heading">
-              <p>Thư viện hình ảnh</p>
-              <h2>Một góc nhìn<br />đáng nhớ.</h2>
+              <p>
+                {editableText(
+                  "gallery",
+                  data.galleryEyebrow,
+                  "Nhãn section hình ảnh",
+                  { field: "galleryEyebrow" }
+                )}
+              </p>
+              <h2>
+                {editableText(
+                  "gallery",
+                  data.galleryHeadline,
+                  "Tiêu đề section hình ảnh",
+                  { field: "galleryHeadline" },
+                  true
+                )}
+              </h2>
             </div>
             <div className="gallery-grid">
               {data.gallery.map((image, index) => (
@@ -699,8 +729,20 @@ export function LandingCanvas({
         return (
           <section className="content-section faq-section" id="faq" key={section}>
             <div className="section-heading">
-              <p>Câu hỏi thường gặp</p>
-              <h2>Rõ ràng trước khi<br />bạn bắt đầu.</h2>
+              <p>
+                {editableText("faq", data.faqEyebrow, "Nhãn section FAQ", {
+                  field: "faqEyebrow",
+                })}
+              </p>
+              <h2>
+                {editableText(
+                  "faq",
+                  data.faqHeadline,
+                  "Tiêu đề section FAQ",
+                  { field: "faqHeadline" },
+                  true
+                )}
+              </h2>
             </div>
             <div className="faq-list">
               {data.faq.map((item, index) => (
@@ -801,8 +843,23 @@ export function LandingCanvas({
       case "finalCta":
         return (
           <section className="final-cta" id="cta" key={section}>
-            <p>Sẵn sàng tạo điều khác biệt?</p>
-            <h2>Biến ý tưởng tiếp theo<br />thành điều lớn lao.</h2>
+            <p>
+              {editableText(
+                "finalCta",
+                data.finalCtaEyebrow,
+                "Nhãn kêu gọi hành động",
+                { field: "finalCtaEyebrow" }
+              )}
+            </p>
+            <h2>
+              {editableText(
+                "finalCta",
+                data.finalCtaHeadline,
+                "Tiêu đề kêu gọi hành động",
+                { field: "finalCtaHeadline" },
+                true
+              )}
+            </h2>
             <a href="#contact">
               {editableText("finalCta", data.primaryCta, "Nút kêu gọi hành động", {
                 field: "primaryCta",

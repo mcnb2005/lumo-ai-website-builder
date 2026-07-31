@@ -39,6 +39,14 @@ export type LandingData = {
   featuresHeadline: string;
   pricingEyebrow: string;
   pricingHeadline: string;
+  portfolioEyebrow: string;
+  portfolioHeadline: string;
+  galleryEyebrow: string;
+  galleryHeadline: string;
+  faqEyebrow: string;
+  faqHeadline: string;
+  finalCtaEyebrow: string;
+  finalCtaHeadline: string;
   heroImage: string;
   sectionOrder: LandingSectionType[];
   hiddenSections: LandingSectionType[];
@@ -98,6 +106,14 @@ export const defaultLanding: LandingData = {
   featuresHeadline: "Ít hỗn loạn.\nNhiều tác động hơn.",
   pricingEyebrow: "Gói phù hợp",
   pricingHeadline: "Bắt đầu nhỏ.\nLớn lên dễ dàng.",
+  portfolioEyebrow: "Dự án tiêu biểu",
+  portfolioHeadline: "Công việc nói thay\nmọi lời giới thiệu.",
+  galleryEyebrow: "Thư viện hình ảnh",
+  galleryHeadline: "Một góc nhìn\nđáng nhớ.",
+  faqEyebrow: "Câu hỏi thường gặp",
+  faqHeadline: "Rõ ràng trước khi\nbạn bắt đầu.",
+  finalCtaEyebrow: "Sẵn sàng tạo điều khác biệt?",
+  finalCtaHeadline: "Biến ý tưởng tiếp theo\nthành điều lớn lao.",
   heroImage: "",
   sectionOrder: [
     "hero",
@@ -253,6 +269,38 @@ export function normalizeLandingData(
       typeof value.pricingHeadline === "string"
         ? value.pricingHeadline
         : defaultLanding.pricingHeadline,
+    portfolioEyebrow:
+      typeof value.portfolioEyebrow === "string"
+        ? value.portfolioEyebrow
+        : defaultLanding.portfolioEyebrow,
+    portfolioHeadline:
+      typeof value.portfolioHeadline === "string"
+        ? value.portfolioHeadline
+        : defaultLanding.portfolioHeadline,
+    galleryEyebrow:
+      typeof value.galleryEyebrow === "string"
+        ? value.galleryEyebrow
+        : defaultLanding.galleryEyebrow,
+    galleryHeadline:
+      typeof value.galleryHeadline === "string"
+        ? value.galleryHeadline
+        : defaultLanding.galleryHeadline,
+    faqEyebrow:
+      typeof value.faqEyebrow === "string"
+        ? value.faqEyebrow
+        : defaultLanding.faqEyebrow,
+    faqHeadline:
+      typeof value.faqHeadline === "string"
+        ? value.faqHeadline
+        : defaultLanding.faqHeadline,
+    finalCtaEyebrow:
+      typeof value.finalCtaEyebrow === "string"
+        ? value.finalCtaEyebrow
+        : defaultLanding.finalCtaEyebrow,
+    finalCtaHeadline:
+      typeof value.finalCtaHeadline === "string"
+        ? value.finalCtaHeadline
+        : defaultLanding.finalCtaHeadline,
     sectionOrder: (() => {
       const allowed = new Set(landingSectionTypes);
       const normalized = Array.isArray(value.sectionOrder)
