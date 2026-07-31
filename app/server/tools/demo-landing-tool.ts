@@ -17,7 +17,7 @@ export function createDemoLanding(
       description:
         "Cà phê rang mới trong một không gian ấm áp dành cho những cuộc gặp thật lòng.",
       primaryCta: "Khám phá thực đơn",
-      navCta: "Đặt bàn",
+      navCta: "Xem thực đơn",
       palette: {
         ink: "#2b1c16",
         paper: "#f4eadc",
@@ -33,7 +33,7 @@ export function createDemoLanding(
     next.eyebrow = "Chăm sóc sâu, đẹp tự nhiên";
     next.headline = "Trở về với";
     next.accentLine = "phiên bản rạng rỡ.";
-    next.primaryCta = "Đặt lịch soi da";
+    next.primaryCta = "Nhận tư vấn soi da";
   }
 
   if (normalized.includes("khóa học") || normalized.includes("course")) {
@@ -69,4 +69,3 @@ export function createDemoLanding(
 
   return next;
 }
-

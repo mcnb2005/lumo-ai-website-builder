@@ -62,10 +62,15 @@ test("ships account-specific Google OAuth with server-side sessions", async () =
   assert.match(integration, /oauth2\.googleapis\.com\/revoke/);
   assert.match(workflow, /WHERE user_id = \?/);
   assert.match(workflow, /decryptGoogleRefreshToken/);
-  assert.match(dashboard, /Kết nối Gmail & Lịch/);
+  assert.match(workflow, /sendSmtpEmail/);
+  assert.match(workflow, /calendar\/v3\/calendars/);
+  assert.match(dashboard, /Kết nối Google Calendar/);
+  assert.doesNotMatch(start, /gmail\.send/);
   assert.match(serverUser, /AUTH_SESSION_COOKIE/);
   assert.match(projects, /eq\(projects\.ownerId, user\.id\)/);
   assert.match(environment, /GOOGLE_OAUTH_CLIENT_ID=/);
   assert.match(environment, /GOOGLE_OAUTH_CLIENT_SECRET=/);
   assert.match(environment, /GOOGLE_TOKEN_ENCRYPTION_KEY=/);
+  assert.match(environment, /SMTP_HOST=/);
+  assert.match(environment, /SMTP_PASSWORD=/);
 });

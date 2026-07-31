@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
 import { projects } from "../../../db/schema";
 import {
@@ -7,6 +7,13 @@ import {
   type DashboardType,
 } from "../../dashboard-config";
 import { getCurrentDatabaseUser } from "../../server-user";
+import {
+  getAccessibleProject,
+  getAuthenticatedCompanyContext,
+  forbiddenCompanyResponse,
+  unauthorizedCompanyResponse,
+} from "../../company-access";
+import { writeCompanyAudit } from "../../company-data";
 
 type ProjectPayload = {
   id?: string;
@@ -49,7 +56,13 @@ export async function GET(request: Request) {
       const [row] = await getDb()
         .select()
         .from(projects)
-        .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)))
+        .where(
+          and(
+            eq(projects.id, id),
+            eq(projects.ownerId, user.id),
+            isNull(projects.deletedAt)
+          )
+        )
         .limit(1);
       return Response.json({ project: row ? parseProject(row) : null });
     }
@@ -66,7 +79,7 @@ export async function GET(request: Request) {
         publishedAt: projects.publishedAt,
       })
       .from(projects)
-      .where(eq(projects.ownerId, user.id))
+      .where(and(eq(projects.ownerId, user.id), isNull(projects.deletedAt)))
       .orderBy(desc(projects.updatedAt));
     return Response.json({
       projects: rows.map(({ data, ...row }) => ({
@@ -115,12 +128,14 @@ export async function POST(request: Request) {
     const [existing] = await db
       .select({
         ownerId: projects.ownerId,
+        companyId: projects.companyId,
         dashboardType: projects.dashboardType,
+        deletedAt: projects.deletedAt,
       })
       .from(projects)
       .where(eq(projects.id, id))
       .limit(1);
-    if (existing && existing.ownerId !== user.id) {
+    if (existing && (existing.ownerId !== user.id || existing.deletedAt)) {
       return Response.json(
         { error: "Bạn không có quyền sửa dự án này." },
         { status: 403 }
@@ -131,6 +146,8 @@ export async function POST(request: Request) {
     const values = {
       id,
       ownerId: user.id,
+      createdById: user.id,
+      companyId: user.companyId || existing?.companyId || null,
       name,
       slug,
       data: JSON.stringify(payload.data),
@@ -146,7 +163,13 @@ export async function POST(request: Request) {
       await db
         .update(projects)
         .set(values)
-        .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)));
+        .where(
+          and(
+            eq(projects.id, id),
+            eq(projects.ownerId, user.id),
+            isNull(projects.deletedAt)
+          )
+        );
     } else {
       await db.insert(projects).values(values);
     }
@@ -188,7 +211,13 @@ export async function PATCH(request: Request) {
     const [project] = await db
       .select({ id: projects.id, data: projects.data })
       .from(projects)
-      .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)))
+      .where(
+        and(
+          eq(projects.id, id),
+          eq(projects.ownerId, user.id),
+          isNull(projects.deletedAt)
+        )
+      )
       .limit(1);
     if (!project) {
       return Response.json(
@@ -204,7 +233,13 @@ export async function PATCH(request: Request) {
         dashboardType: payload.dashboardType,
         updatedAt: now,
       })
-      .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)));
+      .where(
+        and(
+          eq(projects.id, id),
+          eq(projects.ownerId, user.id),
+          isNull(projects.deletedAt)
+        )
+      );
 
     return Response.json({
       dashboardType: payload.dashboardType,
@@ -229,16 +264,36 @@ export async function PATCH(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
-    const user = await getCurrentDatabaseUser();
-    if (!user) return unauthorized();
+    const auth = await getAuthenticatedCompanyContext();
+    if (!auth) return unauthorizedCompanyResponse();
     const id = new URL(request.url).searchParams.get("id");
     if (!id) {
       return Response.json({ error: "Thiếu mã dự án." }, { status: 400 });
     }
     await ensureDatabase();
+    const project = await getAccessibleProject(auth, id, {
+      companyManager: true,
+    });
+    if (!project) return forbiddenCompanyResponse();
+    const deletedAt = new Date().toISOString();
     await getDb()
-      .delete(projects)
-      .where(and(eq(projects.id, id), eq(projects.ownerId, user.id)));
+      .update(projects)
+      .set({
+        status: "archived",
+        deletedAt,
+        updatedAt: deletedAt,
+      })
+      .where(eq(projects.id, id));
+    await writeCompanyAudit(
+      auth.company,
+      "project.deleted",
+      "project",
+      id,
+      {
+        name: project.name,
+        previousOwnerId: project.owner_id,
+      }
+    );
     return Response.json({ deleted: true });
   } catch (error) {
     return Response.json(

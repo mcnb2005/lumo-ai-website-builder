@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { ensureDatabase, getAssetsBucket, getDb } from "../../../db";
 import { assets, projects } from "../../../db/schema";
 import { getCurrentDatabaseUser } from "../../server-user";
@@ -10,6 +10,63 @@ const IMAGE_TYPES = new Set([
   "image/webp",
   "image/gif",
 ]);
+
+export async function GET(request: Request) {
+  try {
+    const user = await getCurrentDatabaseUser();
+    if (!user) {
+      return Response.json(
+        { error: "Đăng nhập để xem thư viện ảnh." },
+        { status: 401 }
+      );
+    }
+
+    const projectId = new URL(request.url).searchParams.get("projectId");
+    if (!projectId) {
+      return Response.json({ error: "Thiếu mã dự án." }, { status: 400 });
+    }
+
+    await ensureDatabase();
+    const db = getDb();
+    const [project] = await db
+      .select({ id: projects.id })
+      .from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.ownerId, user.id)))
+      .limit(1);
+    if (!project) {
+      return Response.json({ assets: [] });
+    }
+
+    const projectAssets = await db
+      .select({
+        id: assets.id,
+        filename: assets.filename,
+        createdAt: assets.createdAt,
+      })
+      .from(assets)
+      .where(and(eq(assets.projectId, projectId), eq(assets.ownerId, user.id)))
+      .orderBy(desc(assets.createdAt));
+
+    return Response.json({
+      assets: projectAssets.map((asset) => ({
+        id: asset.id,
+        url: `/api/assets/${asset.id}`,
+        alt: asset.filename.replace(/\.[^.]+$/, ""),
+        createdAt: asset.createdAt,
+      })),
+    });
+  } catch (error) {
+    return Response.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "Không thể mở thư viện ảnh.",
+      },
+      { status: 500 }
+    );
+  }
+}
 
 export async function POST(request: Request) {
   try {

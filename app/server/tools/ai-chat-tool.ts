@@ -7,6 +7,11 @@ export type AiChatToolInput = {
 };
 
 type ChatCompletionPayload = {
+  error?: {
+    message?: string;
+    type?: string;
+    code?: string;
+  };
   choices?: Array<{
     message?: { content?: string | null };
   }>;
@@ -23,7 +28,6 @@ export async function runAiChatTool(input: AiChatToolInput) {
       },
       body: JSON.stringify({
         model: input.modelName,
-        reasoning_effort: "low",
         messages: [
           { role: "system", content: input.systemPrompt },
           { role: "user", content: input.userPrompt },
@@ -40,10 +44,19 @@ export async function runAiChatTool(input: AiChatToolInput) {
   }
 
   const payload = (await response.json()) as ChatCompletionPayload;
+  if (payload.error) {
+    throw new Error(
+      `Nhà cung cấp AI báo lỗi: ${
+        payload.error.message ||
+        payload.error.type ||
+        payload.error.code ||
+        "Không xác định"
+      }`
+    );
+  }
   const output = payload.choices?.[0]?.message?.content?.trim();
   if (!output) {
     throw new Error("Nhà cung cấp AI không trả về nội dung.");
   }
   return output;
 }
-

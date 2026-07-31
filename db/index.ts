@@ -34,6 +34,16 @@ export type RuntimeEnv = {
   GOOGLE_TOKEN_ENCRYPTION_KEY?: string;
   GMAIL_SENDER_EMAIL?: string;
   GOOGLE_CALENDAR_ID?: string;
+  SMTP_HOST?: string;
+  SMTP_PORT?: string;
+  SMTP_SECURE?: string;
+  SMTP_STARTTLS?: string;
+  SMTP_USER?: string;
+  SMTP_PASSWORD?: string;
+  SMTP_AUTH_METHOD?: string;
+  SMTP_FROM_EMAIL?: string;
+  SMTP_FROM_NAME?: string;
+  SMTP_HELO_NAME?: string;
 };
 
 export function getRuntimeEnv() {
@@ -82,6 +92,54 @@ export async function ensureDatabase() {
       )`
     ),
     binding.prepare(
+      `CREATE TABLE IF NOT EXISTS companies (
+        id TEXT PRIMARY KEY NOT NULL,
+        name TEXT NOT NULL,
+        slug TEXT NOT NULL UNIQUE,
+        owner_id TEXT NOT NULL,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
+      `CREATE TABLE IF NOT EXISTS company_members (
+        id TEXT PRIMARY KEY NOT NULL,
+        company_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'member',
+        status TEXT NOT NULL DEFAULT 'active',
+        invited_by TEXT,
+        joined_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
+      `CREATE TABLE IF NOT EXISTS company_invitations (
+        id TEXT PRIMARY KEY NOT NULL,
+        company_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'member',
+        invited_by TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        expires_at TEXT NOT NULL,
+        accepted_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
+      `CREATE TABLE IF NOT EXISTS company_audit_logs (
+        id TEXT PRIMARY KEY NOT NULL,
+        company_id TEXT NOT NULL,
+        actor_user_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        entity_type TEXT NOT NULL,
+        entity_id TEXT,
+        metadata TEXT NOT NULL DEFAULT '{}',
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
       `CREATE TABLE IF NOT EXISTS auth_sessions (
         id TEXT PRIMARY KEY NOT NULL,
         user_id TEXT NOT NULL,
@@ -104,6 +162,8 @@ export async function ensureDatabase() {
       `CREATE TABLE IF NOT EXISTS projects (
         id TEXT PRIMARY KEY NOT NULL,
         owner_id TEXT,
+        created_by_id TEXT,
+        company_id TEXT,
         name TEXT NOT NULL,
         slug TEXT NOT NULL UNIQUE,
         data TEXT NOT NULL,
@@ -112,7 +172,8 @@ export async function ensureDatabase() {
         dashboard_type TEXT NOT NULL DEFAULT 'auto',
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        published_at TEXT
+        published_at TEXT,
+        deleted_at TEXT
       )`
     ),
     binding.prepare(
@@ -209,6 +270,27 @@ export async function ensureDatabase() {
       )
       .run();
   }
+  if (!columns.results?.some((column) => column.name === "company_id")) {
+    await binding.prepare("ALTER TABLE projects ADD COLUMN company_id TEXT").run();
+  }
+  if (!columns.results?.some((column) => column.name === "created_by_id")) {
+    await binding
+      .prepare("ALTER TABLE projects ADD COLUMN created_by_id TEXT")
+      .run();
+    await binding
+      .prepare(
+        "UPDATE projects SET created_by_id = owner_id WHERE created_by_id IS NULL"
+      )
+      .run();
+  }
+  if (!columns.results?.some((column) => column.name === "deleted_at")) {
+    await binding.prepare("ALTER TABLE projects ADD COLUMN deleted_at TEXT").run();
+  }
+  await binding
+    .prepare(
+      "UPDATE projects SET dashboard_type = 'leads' WHERE dashboard_type = 'bookings'"
+    )
+    .run();
 
   const leadColumns = await binding
     .prepare("PRAGMA table_info(leads)")
@@ -231,7 +313,6 @@ export async function ensureDatabase() {
       .prepare("ALTER TABLE leads ADD COLUMN updated_at TEXT NOT NULL DEFAULT ''")
       .run();
   }
-
   const orderColumns = await binding
     .prepare("PRAGMA table_info(orders)")
     .all<{ name: string }>();
@@ -269,6 +350,27 @@ export async function ensureDatabase() {
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS projects_owner_idx ON projects (owner_id)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS projects_company_idx ON projects (company_id, deleted_at)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS projects_creator_idx ON projects (created_by_id, deleted_at)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS companies_owner_idx ON companies (owner_id)"
+    ),
+    binding.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS company_members_company_user_idx ON company_members (company_id, user_id)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS company_members_user_idx ON company_members (user_id, status)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS company_invitations_email_idx ON company_invitations (email, accepted_at, expires_at)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS company_audit_company_idx ON company_audit_logs (company_id, created_at)"
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS assets_project_idx ON assets (project_id)"

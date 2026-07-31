@@ -1,5 +1,10 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
@@ -9,6 +14,73 @@ export const users = sqliteTable("users", {
   avatarUrl: text("avatar_url"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const companies = sqliteTable("companies", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  ownerId: text("owner_id")
+    .notNull()
+    .references(() => users.id),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const companyMembers = sqliteTable(
+  "company_members",
+  {
+    id: text("id").primaryKey(),
+    companyId: text("company_id")
+      .notNull()
+      .references(() => companies.id),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    role: text("role").notNull().default("member"),
+    status: text("status").notNull().default("active"),
+    invitedBy: text("invited_by").references(() => users.id),
+    joinedAt: text("joined_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("company_members_company_user_idx").on(
+      table.companyId,
+      table.userId
+    ),
+  ]
+);
+
+export const companyInvitations = sqliteTable("company_invitations", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id")
+    .notNull()
+    .references(() => companies.id),
+  email: text("email").notNull(),
+  role: text("role").notNull().default("member"),
+  invitedBy: text("invited_by")
+    .notNull()
+    .references(() => users.id),
+  tokenHash: text("token_hash").notNull().unique(),
+  expiresAt: text("expires_at").notNull(),
+  acceptedAt: text("accepted_at"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const companyAuditLogs = sqliteTable("company_audit_logs", {
+  id: text("id").primaryKey(),
+  companyId: text("company_id")
+    .notNull()
+    .references(() => companies.id),
+  actorUserId: text("actor_user_id")
+    .notNull()
+    .references(() => users.id),
+  action: text("action").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: text("entity_id"),
+  metadata: text("metadata").notNull().default("{}"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const authStates = sqliteTable("auth_states", {
@@ -44,6 +116,8 @@ export const googleConnections = sqliteTable("google_connections", {
 export const projects = sqliteTable("projects", {
   id: text("id").primaryKey(),
   ownerId: text("owner_id").references(() => users.id),
+  createdById: text("created_by_id").references(() => users.id),
+  companyId: text("company_id").references(() => companies.id),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
   data: text("data").notNull(),
@@ -53,6 +127,7 @@ export const projects = sqliteTable("projects", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   publishedAt: text("published_at"),
+  deletedAt: text("deleted_at"),
 });
 
 export const assets = sqliteTable("assets", {

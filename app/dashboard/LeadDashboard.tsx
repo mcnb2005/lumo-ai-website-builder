@@ -32,6 +32,7 @@ type Project = {
 type DashboardUser = {
   email: string;
   name: string;
+  companyRole?: "owner" | "admin" | "member";
 };
 
 type GoogleConnection = {
@@ -191,7 +192,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
       window.setTimeout(
         () =>
           setNotice(
-            "Đã kết nối Gmail và Google Calendar cho tài khoản này."
+            "Đã kết nối Google Calendar cho tài khoản này."
           ),
         0
       );
@@ -446,7 +447,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
         throw new Error(result.error || "Không thể ngắt kết nối Google.");
       }
       setGoogleConnection({ connected: false });
-      setNotice("Đã ngắt kết nối Gmail và Google Calendar.");
+      setNotice("Đã ngắt kết nối Google Calendar.");
     } catch (error) {
       setNotice(
         error instanceof Error
@@ -475,6 +476,12 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
             <span aria-hidden="true">◎</span>
             {dashboard.navLabel}
           </a>
+          {user.companyRole !== "member" ? (
+            <a href="/company">
+              <span aria-hidden="true">▦</span>
+              Công ty & nhân viên
+            </a>
+          ) : null}
         </nav>
         <section className="crm-google-connection" aria-label="Kết nối Google">
           <span>Google Workspace</span>
@@ -494,9 +501,9 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
             </>
           ) : (
             <>
-              <small>Gửi Gmail và tạo lịch bằng tài khoản của bạn.</small>
+              <small>Tạo lịch giao hàng bằng Google Calendar của bạn.</small>
               <a href="/api/auth/google/start?purpose=workspace&returnTo=%2Fdashboard">
-                Kết nối Gmail & Lịch
+                Kết nối Google Calendar
               </a>
             </>
           )}

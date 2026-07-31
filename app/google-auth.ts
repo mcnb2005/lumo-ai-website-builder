@@ -153,7 +153,7 @@ async function getGoogleTokenEncryptionKey() {
   const secret = getRuntimeEnv().GOOGLE_TOKEN_ENCRYPTION_KEY?.trim();
   if (!secret || secret.length < 32) {
     throw new Error(
-      "GOOGLE_TOKEN_ENCRYPTION_KEY phải có ít nhất 32 ký tự để kết nối Gmail và Calendar."
+      "GOOGLE_TOKEN_ENCRYPTION_KEY phải có ít nhất 32 ký tự để kết nối Google Calendar."
     );
   }
   const keyBytes = await crypto.subtle.digest("SHA-256", encoder.encode(secret));

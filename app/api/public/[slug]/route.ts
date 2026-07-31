@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../../db";
 import { projects } from "../../../../db/schema";
 import { inferDashboardType } from "../../../dashboard-config";
@@ -17,7 +17,13 @@ export async function GET(
         dashboardType: projects.dashboardType,
       })
       .from(projects)
-      .where(and(eq(projects.slug, slug), eq(projects.status, "published")))
+      .where(
+        and(
+          eq(projects.slug, slug),
+          eq(projects.status, "published"),
+          isNull(projects.deletedAt)
+        )
+      )
       .limit(1);
 
     if (!project) {

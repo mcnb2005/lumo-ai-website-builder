@@ -13,6 +13,18 @@ export const landingSectionTypes = [
 
 export type LandingSectionType = (typeof landingSectionTypes)[number];
 
+export type LandingImageTarget =
+  | "hero"
+  | "gallery:add"
+  | `gallery:${number}`
+  | `portfolio:${number}`;
+
+export type LandingImageAsset = {
+  id?: string;
+  url: string;
+  alt: string;
+};
+
 export type LandingData = {
   brand: string;
   navCta: string;

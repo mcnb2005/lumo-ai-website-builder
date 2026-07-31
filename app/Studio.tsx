@@ -9,14 +9,28 @@ import {
 } from "react";
 import { arrayMove } from "@dnd-kit/sortable";
 import { LandingCanvas } from "./components/LandingCanvas";
+import { GenerationProgress } from "./editor/GenerationProgress";
+import { SectionPropertiesPanel } from "./editor/SectionPropertiesPanel";
 import { SectionNavigator } from "./editor/SectionNavigator";
 import { sectionRegistry } from "./editor/section-registry";
+import {
+  applyLandingTextEdit,
+  type LandingTextEdit,
+} from "./editor/inline-editing";
+import type {
+  BuilderAgentResult,
+  BuilderStreamEvent,
+  GenerationStage,
+} from "./builder-generation";
+import { applyLandingOperations } from "./landing-operations";
 import {
   defaultLanding,
   normalizeLandingData,
   starterMessages,
   type ChatMessage,
   type LandingData,
+  type LandingImageAsset,
+  type LandingImageTarget,
   type LandingSectionType,
 } from "./landing-data";
 
@@ -28,6 +42,7 @@ type UserInfo = {
   name: string;
   avatarUrl?: string | null;
   isLocal?: boolean;
+  companyRole?: "owner" | "admin" | "member";
 };
 type ProjectSummary = {
   id: string;
@@ -63,6 +78,78 @@ function makeProjectIdentity() {
   return { id, slug: `lumo-${id.slice(0, 8)}` };
 }
 
+async function readBuilderResponse(
+  response: Response,
+  onEvent: (event: BuilderStreamEvent) => void
+) {
+  const contentType = response.headers.get("content-type") || "";
+  if (!contentType.includes("text/event-stream")) {
+    const result = (await response.json()) as BuilderAgentResult & {
+      error?: string;
+    };
+    if (!response.ok || !result.landing) {
+      throw new Error(result.error || "Không thể tạo nội dung lúc này.");
+    }
+    return result;
+  }
+
+  if (!response.ok || !response.body) {
+    throw new Error("Không thể mở luồng cập nhật từ AI.");
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let result: BuilderAgentResult | null = null;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    const blocks = buffer.split(/\r?\n\r?\n/);
+    buffer = blocks.pop() || "";
+
+    for (const block of blocks) {
+      const data = block
+        .split(/\r?\n/)
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trim())
+        .join("\n");
+      if (!data) continue;
+      const event = JSON.parse(data) as BuilderStreamEvent;
+      onEvent(event);
+      if (event.type === "complete") result = event.result;
+      if (event.type === "error") throw new Error(event.message);
+    }
+
+    if (done) break;
+  }
+
+  if (!result) {
+    throw new Error("Luồng AI kết thúc trước khi trả về landing page.");
+  }
+  return result;
+}
+
+function ensureSectionVisible(
+  landing: LandingData,
+  section: LandingSectionType
+) {
+  const sectionOrder = landing.sectionOrder.includes(section)
+    ? landing.sectionOrder
+    : landing.sectionOrder.includes("finalCta")
+      ? [
+          ...landing.sectionOrder.filter((item) => item !== "finalCta"),
+          section,
+          "finalCta" as const,
+        ]
+      : [...landing.sectionOrder, section];
+  return {
+    ...landing,
+    sectionOrder,
+    hiddenSections: landing.hiddenSections.filter((item) => item !== section),
+  };
+}
+
 export function Studio() {
   const [landing, setLanding] = useState<LandingData>(defaultLanding);
   const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
@@ -82,7 +169,12 @@ export function Studio() {
   const [projectId, setProjectId] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [uploadedAssets, setUploadedAssets] = useState<LandingImageAsset[]>([]);
   const [selectedSection, setSelectedSection] = useState<LandingSectionType | null>(null);
+  const [generationStage, setGenerationStage] =
+    useState<GenerationStage | null>(null);
+  const [generationMessage, setGenerationMessage] = useState("");
+  const [generationErrors, setGenerationErrors] = useState<string[]>([]);
   const [editorReady, setEditorReady] = useState(false);
   const saveEnabled = useRef(false);
   const conversationEnd = useRef<HTMLDivElement>(null);
@@ -300,6 +392,29 @@ export function Studio() {
     conversationEnd.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isGenerating]);
 
+  useEffect(() => {
+    if (!user || !projectId) {
+      return;
+    }
+
+    let cancelled = false;
+    void fetch(`/api/assets?projectId=${encodeURIComponent(projectId)}`)
+      .then(async (response) => {
+        if (!response.ok) return { assets: [] };
+        return (await response.json()) as { assets?: LandingImageAsset[] };
+      })
+      .then((result) => {
+        if (!cancelled) setUploadedAssets(result.assets || []);
+      })
+      .catch(() => {
+        if (!cancelled) setUploadedAssets([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId, user]);
+
   const previewClass = useMemo(
     () => `preview-frame preview-${device}`,
     [device]
@@ -315,6 +430,26 @@ export function Studio() {
     setIsPublished(false);
   }
 
+  function editLandingText(edit: LandingTextEdit) {
+    if (isGenerating) return;
+    updateLanding((current) => applyLandingTextEdit(current, edit));
+    setNotice("Đã cập nhật nội dung trực tiếp trên bản xem trước.");
+  }
+
+  function setLandingPalette(
+    token: keyof LandingData["palette"],
+    value: string
+  ) {
+    if (isGenerating) return;
+    updateLanding(
+      (current) =>
+        applyLandingOperations(current, [
+          { type: "set_palette", token, value },
+        ]).landing
+    );
+    setNotice("Đã cập nhật bảng màu của landing page.");
+  }
+
   function createProject() {
     saveEnabled.current = false;
     const identity = makeProjectIdentity();
@@ -324,6 +459,10 @@ export function Studio() {
     setMessages(starterMessages);
     setIsPublished(false);
     setPublicUrl("");
+    setUploadedAssets([]);
+    setGenerationStage(null);
+    setGenerationMessage("");
+    setGenerationErrors([]);
     setHistory([]);
     setFuture([]);
     setVersion(1);
@@ -352,13 +491,11 @@ export function Studio() {
   function reorderSections(activeId: LandingSectionType, overId: LandingSectionType) {
     if (isGenerating) return;
     updateLanding((current) => {
-      const oldIndex = current.sectionOrder.indexOf(activeId);
       const newIndex = current.sectionOrder.indexOf(overId);
-      if (oldIndex < 0 || newIndex < 0) return current;
-      return {
-        ...current,
-        sectionOrder: arrayMove(current.sectionOrder, oldIndex, newIndex),
-      };
+      if (newIndex < 0) return current;
+      return applyLandingOperations(current, [
+        { type: "move_section", section: activeId, toIndex: newIndex },
+      ]).landing;
     });
   }
 
@@ -369,12 +506,20 @@ export function Studio() {
     }
 
     const isHidden = landing.hiddenSections.includes(section);
-    updateLanding((current) => ({
-      ...current,
-      hiddenSections: isHidden
-        ? current.hiddenSections.filter((item) => item !== section)
-        : [...current.hiddenSections, section],
-    }));
+    updateLanding(
+      (current) =>
+        applyLandingOperations(current, [
+          isHidden
+            ? { type: "show_section", section }
+            : {
+                type: "hide_section",
+                section: section as Exclude<
+                  LandingSectionType,
+                  "hero" | "finalCta"
+                >,
+              },
+        ]).landing
+    );
     if (!isHidden && selectedSection === section) setSelectedSection(null);
     setNotice(
       `${sectionRegistry[section].label} đã ${
@@ -399,10 +544,12 @@ export function Studio() {
       return;
     }
     const nextSection = availableSections[0];
-    updateLanding((current) => ({
-      ...current,
-      sectionOrder: [...current.sectionOrder, nextSection],
-    }));
+    updateLanding(
+      (current) =>
+        applyLandingOperations(current, [
+          { type: "add_section", section: nextSection },
+        ]).landing
+    );
     setNotice(`${sectionRegistry[nextSection].label} đã được thêm vào trang.`);
   }
 
@@ -413,25 +560,64 @@ export function Studio() {
     setMessages((current) => [...current, newMessage("user", prompt)]);
     setInput("");
     setIsGenerating(true);
-    setNotice("AI đang cập nhật trang…");
+    setGenerationStage("understanding");
+    setGenerationMessage("Đang đọc yêu cầu của bạn…");
+    setGenerationErrors([]);
+    setNotice("AI đang phân tích yêu cầu…");
 
     try {
       const response = await fetch("/api/ai", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt, current: landing }),
+        headers: {
+          Accept: "text/event-stream",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          prompt,
+          current: landing,
+          selectedSection,
+          history: messages.slice(-8).map(({ role, content }) => ({
+            role,
+            content,
+          })),
+        }),
       });
-      const result = (await response.json()) as {
-        landing?: LandingData;
-        message?: string;
-        mode?: string;
-        error?: string;
-      };
-      if (!response.ok || !result.landing) {
-        throw new Error(result.error || "Không thể tạo nội dung lúc này.");
+      if (!response.ok) {
+        const payload = (await response.json().catch(() => null)) as {
+          error?: string;
+        } | null;
+        throw new Error(payload?.error || "Không thể tạo nội dung lúc này.");
       }
+      const result = await readBuilderResponse(response, (event) => {
+        if (event.type === "status") {
+          setGenerationStage(event.stage);
+          setGenerationMessage(event.message);
+          if (event.stage !== "validating") setGenerationErrors([]);
+          setNotice(event.message);
+        }
+        if (event.type === "validation") {
+          setGenerationStage("validating");
+          setGenerationErrors(event.valid ? [] : event.errors || []);
+          setGenerationMessage(
+            event.valid
+              ? "Dữ liệu hợp lệ, sẵn sàng áp dụng."
+              : event.attempt < 2
+                ? "Phản hồi chưa hợp lệ, Lumo đang tự sửa…"
+                : "Phản hồi chưa vượt qua kiểm tra."
+          );
+        }
+        if (event.type === "error") {
+          setGenerationStage("failed");
+          setGenerationMessage(event.message);
+        }
+        if (event.type === "complete") {
+          setGenerationStage("completed");
+          setGenerationMessage("Thay đổi đã được kiểm tra và áp dụng.");
+          setGenerationErrors([]);
+        }
+      });
 
-      updateLanding(() => result.landing as LandingData);
+      updateLanding(() => result.landing);
       setMessages((current) => [
         ...current,
         newMessage(
@@ -442,17 +628,27 @@ export function Studio() {
       ]);
       if (result.mode === "demo") {
         setNotice("AI đang ở chế độ mẫu vì chưa có khóa API.");
+      } else {
+        setNotice("Đã cập nhật landing page theo yêu cầu.");
+      }
+      if (result.changedSections.length === 1) {
+        window.setTimeout(
+          () => selectSection(result.changedSections[0]),
+          0
+        );
       }
     } catch (error) {
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Có lỗi xảy ra. Hãy thử lại với một yêu cầu ngắn hơn.";
+      setGenerationStage("failed");
+      setGenerationMessage(errorMessage);
       setMessages((current) => [
         ...current,
-        newMessage(
-          "assistant",
-          error instanceof Error
-            ? error.message
-            : "Có lỗi xảy ra. Hãy thử lại với một yêu cầu ngắn hơn."
-        ),
+        newMessage("assistant", errorMessage),
       ]);
+      setNotice(errorMessage);
     } finally {
       setIsGenerating(false);
     }
@@ -483,41 +679,202 @@ export function Studio() {
     setIsPublished(false);
   }
 
-  async function uploadImage(file: File) {
+  function placeUploadedImages(
+    assets: LandingImageAsset[],
+    target: LandingImageTarget
+  ) {
+    if (!assets.length) return;
+    let targetSection: LandingSectionType = "hero";
+    let successMessage = "Đã đặt ảnh vào phần mở đầu.";
+    const [primaryAsset, ...remainingAssets] = assets;
+    const remainingGalleryItems = remainingAssets.map((asset) => ({
+      url: asset.url,
+      alt: asset.alt,
+      caption: "",
+    }));
+
+    updateLanding((current) => {
+      if (target === "hero") {
+        const next = { ...current, heroImage: primaryAsset.url };
+        if (!remainingGalleryItems.length) return next;
+        targetSection = "gallery";
+        successMessage = `Đã đặt 1 ảnh vào Hero và thêm ${remainingGalleryItems.length} ảnh vào thư viện.`;
+        return {
+          ...ensureSectionVisible(next, "gallery"),
+          gallery: [...current.gallery, ...remainingGalleryItems],
+        };
+      }
+
+      if (target === "gallery:add") {
+        targetSection = "gallery";
+        successMessage = `Đã thêm ${assets.length} ảnh vào thư viện hình ảnh.`;
+        const visibleLanding = ensureSectionVisible(current, "gallery");
+        return {
+          ...visibleLanding,
+          gallery: [
+            ...current.gallery,
+            ...assets.map((asset) => ({
+              url: asset.url,
+              alt: asset.alt,
+              caption: "",
+            })),
+          ],
+        };
+      }
+
+      if (target.startsWith("gallery:")) {
+        const imageIndex = Number(target.split(":")[1]);
+        targetSection = "gallery";
+        successMessage = `Đã thay ảnh thư viện số ${imageIndex + 1}.`;
+        const visibleLanding = ensureSectionVisible(current, "gallery");
+        return {
+          ...visibleLanding,
+          gallery: [
+            ...current.gallery.map((image, index) =>
+              index === imageIndex
+                ? {
+                    ...image,
+                    url: primaryAsset.url,
+                    alt: primaryAsset.alt,
+                  }
+                : image
+            ),
+            ...remainingGalleryItems,
+          ],
+        };
+      }
+
+      const portfolioIndex = Number(target.split(":")[1]);
+      targetSection = "portfolio";
+      successMessage = `Đã đặt ảnh vào dự án số ${portfolioIndex + 1}.`;
+      const visibleLanding = ensureSectionVisible(current, "portfolio");
+      const next = {
+        ...visibleLanding,
+        portfolio: current.portfolio.map((item, index) =>
+          index === portfolioIndex
+            ? { ...item, imageUrl: primaryAsset.url }
+            : item
+        ),
+      };
+      if (!remainingGalleryItems.length) return next;
+      successMessage += ` ${remainingGalleryItems.length} ảnh còn lại đã được thêm vào thư viện.`;
+      targetSection = "gallery";
+      return {
+        ...ensureSectionVisible(next, "gallery"),
+        gallery: [...current.gallery, ...remainingGalleryItems],
+      };
+    });
+
+    setNotice(successMessage);
+    window.setTimeout(() => selectSection(targetSection), 0);
+  }
+
+  function removePlacedImage(target: LandingImageTarget) {
+    updateLanding((current) => {
+      if (target === "hero") return { ...current, heroImage: "" };
+      if (target.startsWith("gallery:") && target !== "gallery:add") {
+        const imageIndex = Number(target.split(":")[1]);
+        return {
+          ...current,
+          gallery: current.gallery.filter((_, index) => index !== imageIndex),
+        };
+      }
+      if (target.startsWith("portfolio:")) {
+        const portfolioIndex = Number(target.split(":")[1]);
+        return {
+          ...current,
+          portfolio: current.portfolio.map((item, index) =>
+            index === portfolioIndex ? { ...item, imageUrl: "" } : item
+          ),
+        };
+      }
+      return current;
+    });
+    setNotice("Đã xóa ảnh khỏi vị trí đã chọn.");
+  }
+
+  function reorderGalleryImage(
+    source: LandingImageTarget,
+    target: LandingImageTarget
+  ) {
+    if (!source.startsWith("gallery:") || source === "gallery:add") return false;
+    if (!target.startsWith("gallery:")) return false;
+
+    const sourceIndex = Number(source.split(":")[1]);
+    updateLanding((current) => {
+      const targetIndex =
+        target === "gallery:add"
+          ? Math.max(0, current.gallery.length - 1)
+          : Number(target.split(":")[1]);
+      if (
+        !Number.isInteger(sourceIndex) ||
+        !Number.isInteger(targetIndex) ||
+        sourceIndex < 0 ||
+        targetIndex < 0 ||
+        sourceIndex >= current.gallery.length ||
+        targetIndex >= current.gallery.length ||
+        sourceIndex === targetIndex
+      ) {
+        return current;
+      }
+      return {
+        ...current,
+        gallery: arrayMove(current.gallery, sourceIndex, targetIndex),
+      };
+    });
+    setNotice("Đã thay đổi thứ tự ảnh trong thư viện.");
+    window.setTimeout(() => selectSection("gallery"), 0);
+    return true;
+  }
+
+  async function uploadImages(
+    files: File[],
+    target?: LandingImageTarget
+  ) {
+    if (!files.length) return;
     if (!user) {
       setNotice("Đăng nhập để tải và lưu ảnh cho dự án.");
       return;
     }
     setIsUploading(true);
-    setNotice("Đang tải ảnh lên…");
+    setNotice(`Đang tải ${files.length} ảnh lên…`);
     try {
       if (saveState === "saving") {
         await new Promise((resolve) => window.setTimeout(resolve, 900));
       }
-      const form = new FormData();
-      form.set("file", file);
-      form.set("projectId", projectId);
-      const response = await fetch("/api/assets", { method: "POST", body: form });
-      const result = (await response.json()) as {
-        asset?: { url: string; alt: string };
-        error?: string;
-      };
-      if (!response.ok || !result.asset) {
-        throw new Error(result.error || "Không thể tải ảnh lên.");
+
+      const newAssets: LandingImageAsset[] = [];
+      for (const file of files) {
+        const form = new FormData();
+        form.set("file", file);
+        form.set("projectId", projectId);
+        const response = await fetch("/api/assets", {
+          method: "POST",
+          body: form,
+        });
+        const result = (await response.json()) as {
+          asset?: LandingImageAsset;
+          error?: string;
+        };
+        if (!response.ok || !result.asset) {
+          throw new Error(result.error || `Không thể tải ảnh ${file.name}.`);
+        }
+        newAssets.push(result.asset);
       }
-      updateLanding((current) => ({
-        ...current,
-        heroImage: current.heroImage || result.asset!.url,
-        gallery: [
-          ...current.gallery,
-          {
-            url: result.asset!.url,
-            alt: result.asset!.alt,
-            caption: "",
-          },
-        ].slice(-8),
-      }));
-      setNotice("Đã thêm ảnh vào Hero và Gallery.");
+
+      setUploadedAssets((current) => [
+        ...newAssets,
+        ...current.filter(
+          (asset) => !newAssets.some((newAsset) => newAsset.url === asset.url)
+        ),
+      ]);
+      if (target) {
+        placeUploadedImages(newAssets, target);
+      } else {
+        setNotice(
+          `Đã tải ${newAssets.length} ảnh vào thư viện. Kéo từng ảnh vào đúng vị trí trên bản xem trước.`
+        );
+      }
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Không thể tải ảnh lên."
@@ -636,9 +993,17 @@ export function Studio() {
               >
                 Khách hàng
               </a>
+              {user.companyRole !== "member" ? (
+                <a className="leads-button" href="/company">
+                  Công ty
+                </a>
+              ) : null}
               <span className="account-chip" title={user.email}>
                 <b>{user.name.slice(0, 1).toUpperCase()}</b>
-                <small>{user.name}</small>
+                <small>
+                  {user.name}
+                  {user.companyRole === "member" ? " · Nhân viên" : ""}
+                </small>
               </span>
               {!user.isLocal ? (
                 <a className="signout-link" href={SIGN_OUT_URL}>Thoát</a>
@@ -675,10 +1040,14 @@ export function Studio() {
                 <p>{message.content}</p>
               </div>
             ))}
-            {isGenerating ? (
+            {generationStage ? (
               <div className="message message-assistant">
                 <span className="message-avatar" aria-hidden="true">✦</span>
-                <p className="typing"><span /><span /><span /></p>
+                <GenerationProgress
+                  stage={generationStage}
+                  message={generationMessage}
+                  validationErrors={generationErrors}
+                />
               </div>
             ) : null}
             <div ref={conversationEnd} />
@@ -703,20 +1072,53 @@ export function Studio() {
               ref={fileInput}
               type="file"
               accept="image/png,image/jpeg,image/webp,image/gif"
+              multiple
               hidden
               onChange={(event) => {
-                const file = event.target.files?.[0];
-                if (file) void uploadImage(file);
+                const files = Array.from(event.target.files || []);
+                if (files.length) void uploadImages(files);
               }}
             />
-            <button
-              type="button"
-              onClick={() => fileInput.current?.click()}
-              disabled={isUploading}
-            >
-              {isUploading ? "Đang tải ảnh…" : "＋ Thêm ảnh"}
-            </button>
-            <span>JPG, PNG, WebP · tối đa 5 MB</span>
+            <div className="image-upload-row">
+              <button
+                type="button"
+                onClick={() => fileInput.current?.click()}
+                disabled={isUploading}
+              >
+                {isUploading ? "Đang tải ảnh…" : "＋ Chọn ảnh và tải lên"}
+              </button>
+              <span>JPG, PNG, WebP, GIF · tối đa 5 MB</span>
+            </div>
+            {uploadedAssets.length ? (
+              <div className="asset-library">
+                <div className="asset-library-heading">
+                  <strong>Ảnh đã tải</strong>
+                  <span>Ảnh chưa được chèn · kéo vào vị trí trên bản xem trước</span>
+                </div>
+                <div className="asset-library-list">
+                  {uploadedAssets.map((asset) => (
+                    <div
+                      className="asset-library-item"
+                      draggable
+                      role="img"
+                      tabIndex={0}
+                      aria-label={`Kéo ảnh ${asset.alt} vào trang`}
+                      title={`Kéo ${asset.alt} vào trang`}
+                      key={asset.id || asset.url}
+                      onDragStart={(event) => {
+                        event.dataTransfer.effectAllowed = "copy";
+                        event.dataTransfer.setData(
+                          "application/x-lumo-asset",
+                          JSON.stringify(asset)
+                        );
+                      }}
+                    >
+                      <img src={asset.url} alt={asset.alt} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </div>
 
           <form className="chat-composer" onSubmit={onSubmit}>
@@ -768,21 +1170,33 @@ export function Studio() {
 
           <div className="preview-stage">
             {editorReady ? (
-              <SectionNavigator
-                sectionOrder={landing.sectionOrder}
-                selectedSection={selectedSection}
-                onSelect={selectSection}
-                onReorder={reorderSections}
-                onToggleVisibility={toggleSectionVisibility}
-                onAddSection={addSection}
-                hiddenSections={landing.hiddenSections}
-                isBusy={isGenerating}
-              />
+              <div className="editor-sidebar">
+                <SectionNavigator
+                  sectionOrder={landing.sectionOrder}
+                  selectedSection={selectedSection}
+                  onSelect={selectSection}
+                  onReorder={reorderSections}
+                  onToggleVisibility={toggleSectionVisibility}
+                  onAddSection={addSection}
+                  hiddenSections={landing.hiddenSections}
+                  isBusy={isGenerating}
+                />
+                <SectionPropertiesPanel
+                  landing={landing}
+                  selectedSection={selectedSection}
+                  isBusy={isGenerating}
+                  onEditText={editLandingText}
+                  onSetPalette={setLandingPalette}
+                  onToggleVisibility={toggleSectionVisibility}
+                />
+              </div>
             ) : (
-              <aside
-                className="section-navigator is-loading"
-                aria-label="Đang mở trình bố cục"
-              />
+              <div className="editor-sidebar">
+                <aside
+                  className="section-navigator is-loading"
+                  aria-label="Đang mở trình bố cục"
+                />
+              </div>
             )}
             <div className={previewClass}>
               <div className="browser-bar">
@@ -802,6 +1216,21 @@ export function Studio() {
                     (section) => !landing.hiddenSections.includes(section)
                   )}
                   onReorderSections={reorderSections}
+                  onDropImage={(target, payload) => {
+                    if (payload.files?.length) {
+                      void uploadImages(payload.files, target);
+                    } else if (
+                      payload.asset &&
+                      payload.source &&
+                      reorderGalleryImage(payload.source, target)
+                    ) {
+                      return;
+                    } else if (payload.asset) {
+                      placeUploadedImages([payload.asset], target);
+                    }
+                  }}
+                  onRemoveImage={removePlacedImage}
+                  onEditText={editLandingText}
                   isBusy={isGenerating}
                 />
               </div>

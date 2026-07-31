@@ -9,6 +9,10 @@ import {
 } from "../db";
 import { users } from "../db/schema";
 import {
+  getExistingCompanyForUser,
+  type CompanyRole,
+} from "./company-data";
+import {
   AUTH_SESSION_COOKIE,
   googleSignInPath,
   hashOpaqueToken,
@@ -21,7 +25,21 @@ export type DatabaseUser = {
   name: string;
   avatarUrl?: string | null;
   isLocal?: boolean;
+  companyId?: string;
+  companyName?: string;
+  companyRole?: CompanyRole;
 };
+
+async function withCompany(user: DatabaseUser): Promise<DatabaseUser> {
+  const company = await getExistingCompanyForUser(user);
+  if (!company) return user;
+  return {
+    ...user,
+    companyId: company.companyId,
+    companyName: company.companyName,
+    companyRole: company.role,
+  };
+}
 
 export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
   await ensureDatabase();
@@ -48,12 +66,12 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
         .where(eq(users.id, session.user_id))
         .limit(1);
       if (user) {
-        return {
+        return withCompany({
           id: user.id,
           email: user.email,
           name: user.name || user.email,
           avatarUrl: user.avatarUrl,
-        };
+        });
       }
     } else if (session) {
       await getD1()
@@ -81,13 +99,13 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
           .set({ name, updatedAt: now })
           .where(eq(users.id, existing.id));
       }
-      return {
+      return withCompany({
         id: existing.id,
         email,
         name,
         avatarUrl: existing.avatarUrl,
         isLocal: true,
-      };
+      });
     }
 
     const id = crypto.randomUUID();
@@ -97,7 +115,7 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
       name,
       updatedAt: now,
     });
-    return { id, email, name, isLocal: true };
+    return withCompany({ id, email, name, isLocal: true });
   }
 
   return null;
