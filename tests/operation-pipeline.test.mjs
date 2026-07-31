@@ -71,6 +71,14 @@ test("a request to create a website is never limited to the selected section", a
         position: 1,
         editableFields: [],
       },
+      {
+        id: "portfolio",
+        type: "portfolio",
+        title: "Dự án",
+        visible: true,
+        position: 2,
+        editableFields: [],
+      },
     ],
   };
 
@@ -86,4 +94,29 @@ test("a request to create a website is never limited to the selected section", a
 
   assert.equal(intent.mode, "create");
   assert.deepEqual(intent.targetSections, []);
+
+  const projectIntent = analyzeBuilderIntent({
+    prompt: "Tạo dự án bán ô tô",
+    manifest,
+    selectedSection: "portfolio",
+  });
+
+  assert.equal(projectIntent.mode, "create");
+  assert.deepEqual(projectIntent.targetSections, []);
+
+  const correctionIntent = analyzeBuilderIntent({
+    prompt: "Bán ô tô cơ mà",
+    manifest,
+    selectedSection: "portfolio",
+    history: [
+      { role: "user", content: "Tạo dự án bán ô tô" },
+      {
+        role: "assistant",
+        content: "Mình đã cập nhật các phần hiển thị.",
+      },
+    ],
+  });
+
+  assert.equal(correctionIntent.mode, "create");
+  assert.deepEqual(correctionIntent.targetSections, []);
 });

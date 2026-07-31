@@ -39,6 +39,26 @@ function includesAlias(prompt: string, aliases: string[]) {
   );
 }
 
+function isCreateRequest(prompt: string) {
+  const normalized = normalizeCommand(prompt);
+  const createsWebsite =
+    /\b(tao|lam|xay dung|thiet ke)\b/.test(normalized) &&
+    /\b(landing|trang web|website|trang ban hang)\b/.test(normalized);
+  const createsProject =
+    /\b(tao|mo|bat dau)\s+(?:mot\s+)?(?:du an|project)(?:\s+moi)?\b/.test(
+      normalized
+    );
+
+  return createsWebsite || createsProject;
+}
+
+function isCreationCorrection(prompt: string) {
+  const normalized = normalizeCommand(prompt);
+  return /\b(co ma|y toi|toi bao|ban nham|nham roi|khong phai|sai roi|lam lai)\b/.test(
+    normalized
+  );
+}
+
 export function analyzeBuilderIntent(input: {
   prompt: string;
   manifest: LandingManifest;
@@ -46,10 +66,14 @@ export function analyzeBuilderIntent(input: {
   history?: Array<{ role: "user" | "assistant"; content: string }>;
 }): BuilderIntent {
   const normalized = normalizeCommand(input.prompt);
-  const explicitCreate =
-    /\b(tao|lam|xay dung|thiet ke)\b/.test(normalized) &&
-    /\b(landing|trang web|website|trang ban hang)\b/.test(normalized);
-  const mode = explicitCreate ? "create" : "edit";
+  const previousUserPrompt = [...(input.history ?? [])]
+    .reverse()
+    .find((item) => item.role === "user")?.content;
+  const explicitCreate = isCreateRequest(input.prompt);
+  const continuesCreate =
+    isCreationCorrection(input.prompt) &&
+    Boolean(previousUserPrompt && isCreateRequest(previousUserPrompt));
+  const mode = explicitCreate || continuesCreate ? "create" : "edit";
 
   const mentionedSections = input.manifest.sections
     .filter((item) => includesAlias(input.prompt, sectionAliases[item.type]))
