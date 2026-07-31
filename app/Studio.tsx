@@ -55,6 +55,37 @@ type ProjectSummary = {
 const GUEST_DRAFT_KEY = "lumo-guest-draft-v2";
 const SIGN_IN_URL = "/api/auth/google/start?returnTo=%2F";
 const SIGN_OUT_URL = "/api/auth/logout?returnTo=%2F";
+const IMAGE_MIME_EXTENSIONS: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/gif": "gif",
+};
+
+function supportedImageFiles(files: Iterable<File>) {
+  return Array.from(files).filter((file) => file.type in IMAGE_MIME_EXTENSIONS);
+}
+
+function clipboardImageFiles(data: DataTransfer) {
+  const timestamp = Date.now();
+  return Array.from(data.items)
+    .filter(
+      (item) =>
+        item.kind === "file" && item.type in IMAGE_MIME_EXTENSIONS
+    )
+    .flatMap((item, index) => {
+      const image = item.getAsFile();
+      if (!image) return [];
+      const extension = IMAGE_MIME_EXTENSIONS[image.type];
+      return [
+        new File(
+          [image],
+          `anh-dan-${timestamp}-${index + 1}.${extension}`,
+          { type: image.type, lastModified: timestamp }
+        ),
+      ];
+    });
+}
 
 const promptSuggestions = [
   "Tạo landing page bán sản phẩm chăm sóc da",
@@ -169,6 +200,7 @@ export function Studio() {
   const [projectId, setProjectId] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [isAssetDragActive, setIsAssetDragActive] = useState(false);
   const [uploadedAssets, setUploadedAssets] = useState<LandingImageAsset[]>([]);
   const [selectedSection, setSelectedSection] = useState<LandingSectionType | null>(null);
   const [generationStage, setGenerationStage] =
@@ -180,6 +212,9 @@ export function Studio() {
   const conversationEnd = useRef<HTMLDivElement>(null);
   const previewScroll = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const uploadImagesRef = useRef<
+    (files: File[], target?: LandingImageTarget) => Promise<void>
+  >(async () => {});
 
   useEffect(() => {
     setEditorReady(true);
@@ -840,6 +875,10 @@ export function Studio() {
     target?: LandingImageTarget
   ) {
     if (!files.length) return;
+    if (isUploading) {
+      setNotice("Ảnh đang được tải lên. Vui lòng chờ một chút.");
+      return;
+    }
     if (!user) {
       setNotice("Đăng nhập để tải và lưu ảnh cho dự án.");
       return;
@@ -892,6 +931,21 @@ export function Studio() {
       if (fileInput.current) fileInput.current.value = "";
     }
   }
+
+  uploadImagesRef.current = uploadImages;
+
+  useEffect(() => {
+    function handlePaste(event: ClipboardEvent) {
+      if (!event.clipboardData) return;
+      const images = clipboardImageFiles(event.clipboardData);
+      if (!images.length) return;
+      event.preventDefault();
+      void uploadImagesRef.current(images);
+    }
+
+    window.addEventListener("paste", handlePaste);
+    return () => window.removeEventListener("paste", handlePaste);
+  }, []);
 
   async function publish() {
     if (!user) {
@@ -1087,46 +1141,99 @@ export function Studio() {
                 if (files.length) void uploadImages(files);
               }}
             />
-            <div className="image-upload-row">
-              <button
-                type="button"
-                onClick={() => fileInput.current?.click()}
-                disabled={isUploading}
-              >
-                {isUploading ? "Đang tải ảnh…" : "＋ Chọn ảnh và tải lên"}
-              </button>
-              <span>JPG, PNG, WebP, GIF · tối đa 5 MB</span>
-            </div>
-            {uploadedAssets.length ? (
+            <div
+              className={`asset-upload-zone${
+                isAssetDragActive ? " is-drag-active" : ""
+              }${isUploading ? " is-uploading" : ""}`}
+              role="region"
+              aria-label="Thư viện ảnh tải lên"
+              onDragEnter={(event) => {
+                if (!Array.from(event.dataTransfer.types).includes("Files")) {
+                  return;
+                }
+                event.preventDefault();
+                setIsAssetDragActive(true);
+              }}
+              onDragOver={(event) => {
+                if (!Array.from(event.dataTransfer.types).includes("Files")) {
+                  return;
+                }
+                event.preventDefault();
+                event.dataTransfer.dropEffect = "copy";
+                setIsAssetDragActive(true);
+              }}
+              onDragLeave={(event) => {
+                const nextTarget = event.relatedTarget;
+                if (
+                  nextTarget instanceof Node &&
+                  event.currentTarget.contains(nextTarget)
+                ) {
+                  return;
+                }
+                setIsAssetDragActive(false);
+              }}
+              onDrop={(event) => {
+                if (!event.dataTransfer.files.length) return;
+                event.preventDefault();
+                setIsAssetDragActive(false);
+                const images = supportedImageFiles(event.dataTransfer.files);
+                if (!images.length) {
+                  setNotice("Chỉ hỗ trợ ảnh JPG, PNG, WebP hoặc GIF.");
+                  return;
+                }
+                void uploadImages(images);
+              }}
+            >
+              <div className="image-upload-row">
+                <button
+                  type="button"
+                  onClick={() => fileInput.current?.click()}
+                  disabled={isUploading}
+                >
+                  {isUploading ? "Đang tải ảnh…" : "＋ Chọn ảnh và tải lên"}
+                </button>
+                <span>JPG, PNG, WebP, GIF · tối đa 5 MB</span>
+              </div>
               <div className="asset-library">
                 <div className="asset-library-heading">
                   <strong>Ảnh đã tải</strong>
-                  <span>Ảnh chưa được chèn · kéo vào vị trí trên bản xem trước</span>
+                  <span>Ctrl + V hoặc thả file vào đây</span>
                 </div>
-                <div className="asset-library-list">
-                  {uploadedAssets.map((asset) => (
-                    <div
-                      className="asset-library-item"
-                      draggable
-                      role="img"
-                      tabIndex={0}
-                      aria-label={`Kéo ảnh ${asset.alt} vào trang`}
-                      title={`Kéo ${asset.alt} vào trang`}
-                      key={asset.id || asset.url}
-                      onDragStart={(event) => {
-                        event.dataTransfer.effectAllowed = "copy";
-                        event.dataTransfer.setData(
-                          "application/x-lumo-asset",
-                          JSON.stringify(asset)
-                        );
-                      }}
-                    >
-                      <img src={asset.url} alt={asset.alt} />
-                    </div>
-                  ))}
-                </div>
+                {uploadedAssets.length ? (
+                  <div className="asset-library-list">
+                    {uploadedAssets.map((asset) => (
+                      <div
+                        className="asset-library-item"
+                        draggable
+                        role="img"
+                        tabIndex={0}
+                        aria-label={`Kéo ảnh ${asset.alt} vào trang`}
+                        title={`Kéo ${asset.alt} vào trang`}
+                        key={asset.id || asset.url}
+                        onDragStart={(event) => {
+                          event.dataTransfer.effectAllowed = "copy";
+                          event.dataTransfer.setData(
+                            "application/x-lumo-asset",
+                            JSON.stringify(asset)
+                          );
+                        }}
+                      >
+                        <img src={asset.url} alt={asset.alt} />
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="asset-library-empty">
+                    <strong>
+                      {isAssetDragActive
+                        ? "Thả ảnh để lưu vào thư viện"
+                        : "Dán hoặc kéo ảnh vào đây"}
+                    </strong>
+                    <span>Sau đó kéo ảnh từ thư viện đến đúng vị trí trên trang.</span>
+                  </div>
+                )}
               </div>
-            ) : null}
+            </div>
           </div>
 
           <form className="chat-composer" onSubmit={onSubmit}>

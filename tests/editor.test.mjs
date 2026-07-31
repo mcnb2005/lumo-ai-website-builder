@@ -51,8 +51,13 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(studio, /ensureSectionVisible/);
   assert.match(studio, /multiple/);
   assert.match(studio, /application\/x-lumo-asset/);
+  assert.match(studio, /window\.addEventListener\("paste", handlePaste\)/);
+  assert.match(studio, /clipboardImageFiles/);
+  assert.match(studio, /event\.dataTransfer\.files/);
+  assert.match(studio, /asset-upload-zone/);
+  assert.match(studio, /Ctrl \+ V hoặc thả file vào đây/);
   assert.match(studio, /if \(target\) \{\s*placeUploadedImages\(newAssets, target\)/);
-  assert.match(studio, /Ảnh chưa được chèn · kéo vào vị trí trên bản xem trước/);
+  assert.match(studio, /Sau đó kéo ảnh từ thư viện đến đúng vị trí trên trang\./);
   assert.doesNotMatch(studio, /onClick=\{\(\) =>\s*placeUploadedImages/);
   assert.match(canvas, /function ImageDropZone/);
   assert.match(canvas, /onDropImage/);

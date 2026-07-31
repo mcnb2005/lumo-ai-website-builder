@@ -3194,6 +3194,30 @@ textarea:focus-visible {
   gap: 8px;
 }
 
+.asset-upload-zone {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+  padding: 8px;
+  border: 1px dashed #ccd5cf;
+  border-radius: 12px;
+  background: #fbfcfb;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.asset-upload-zone.is-drag-active {
+  border-color: var(--studio-green);
+  background: #f1f7ef;
+  box-shadow: inset 0 0 0 2px rgba(31, 72, 51, 0.1);
+}
+
+.asset-upload-zone.is-uploading {
+  cursor: wait;
+}
+
 .image-upload-row button {
   min-height: 30px;
   padding: 0 12px;
@@ -3222,6 +3246,28 @@ textarea:focus-visible {
   min-width: 0;
   padding-top: 7px;
   border-top: 1px solid #edf0ed;
+}
+
+.asset-library-empty {
+  min-height: 48px;
+  display: grid;
+  place-content: center;
+  gap: 3px;
+  padding: 8px;
+  border: 1px dashed #d9dfda;
+  border-radius: 9px;
+  color: #66716a;
+  text-align: center;
+}
+
+.asset-library-empty strong {
+  color: var(--studio-green);
+  font-size: 9px;
+}
+
+.asset-library-empty span {
+  font-size: 8px;
+  line-height: 1.35;
 }
 
 .asset-library-heading {
