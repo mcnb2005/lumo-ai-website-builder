@@ -207,54 +207,82 @@ export function SectionPropertiesPanel({
           </fieldset>
         ));
       case "features":
-        return landing.features.map((item, index) => (
-          <fieldset key={`feature-${index}`}>
-            <legend>Lợi ích {index + 1}</legend>
-            {textField("Số thứ tự", item.number, {
+        return (
+          <>
+            {textField("Nhãn section", landing.featuresEyebrow, {
               section,
-              field: "features.number",
-              index,
-            })}
-            {textField("Tiêu đề", item.title, {
-              section,
-              field: "features.title",
-              index,
+              field: "featuresEyebrow",
             })}
             {textField(
-              "Mô tả",
-              item.text,
-              { section, field: "features.text", index },
+              "Tiêu đề section",
+              landing.featuresHeadline,
+              { section, field: "featuresHeadline" },
               true
             )}
-          </fieldset>
-        ));
+            {landing.features.map((item, index) => (
+              <fieldset key={`feature-${index}`}>
+                <legend>Lợi ích {index + 1}</legend>
+                {textField("Số thứ tự", item.number, {
+                  section,
+                  field: "features.number",
+                  index,
+                })}
+                {textField("Tiêu đề", item.title, {
+                  section,
+                  field: "features.title",
+                  index,
+                })}
+                {textField(
+                  "Mô tả",
+                  item.text,
+                  { section, field: "features.text", index },
+                  true
+                )}
+              </fieldset>
+            ))}
+          </>
+        );
       case "pricing":
-        return landing.pricing.map((item, index) => (
-          <fieldset key={`pricing-${index}`}>
-            <legend>Gói {index + 1}</legend>
-            {textField("Tên gói", item.name, {
+        return (
+          <>
+            {textField("Nhãn section", landing.pricingEyebrow, {
               section,
-              field: "pricing.name",
-              index,
-            })}
-            {textField("Giá", item.price, {
-              section,
-              field: "pricing.price",
-              index,
+              field: "pricingEyebrow",
             })}
             {textField(
-              "Mô tả",
-              item.description,
-              { section, field: "pricing.description", index },
+              "Tiêu đề section",
+              landing.pricingHeadline,
+              { section, field: "pricingHeadline" },
               true
             )}
-            {textField("Nút", item.cta, {
-              section,
-              field: "pricing.cta",
-              index,
-            })}
-          </fieldset>
-        ));
+            {landing.pricing.map((item, index) => (
+              <fieldset key={`pricing-${index}`}>
+                <legend>Gói {index + 1}</legend>
+                {textField("Tên gói", item.name, {
+                  section,
+                  field: "pricing.name",
+                  index,
+                })}
+                {textField("Giá", item.price, {
+                  section,
+                  field: "pricing.price",
+                  index,
+                })}
+                {textField(
+                  "Mô tả",
+                  item.description,
+                  { section, field: "pricing.description", index },
+                  true
+                )}
+                {textField("Nút", item.cta, {
+                  section,
+                  field: "pricing.cta",
+                  index,
+                })}
+              </fieldset>
+            ))}
+          </>
+        );
       case "portfolio":
         return landing.portfolio.map((item, index) => (
           <fieldset key={`portfolio-${index}`}>

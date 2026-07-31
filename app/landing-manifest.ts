@@ -10,6 +10,10 @@ export type LandingEditableField =
   | "primaryCta"
   | "secondaryCta"
   | "proof"
+  | "featuresEyebrow"
+  | "featuresHeadline"
+  | "pricingEyebrow"
+  | "pricingHeadline"
   | "stats.value"
   | "stats.label"
   | "features.number"
@@ -51,8 +55,16 @@ export const editableFieldsBySection: Record<
     "proof",
   ],
   stats: ["stats.value", "stats.label"],
-  features: ["features.number", "features.title", "features.text"],
+  features: [
+    "featuresEyebrow",
+    "featuresHeadline",
+    "features.number",
+    "features.title",
+    "features.text",
+  ],
   pricing: [
+    "pricingEyebrow",
+    "pricingHeadline",
     "pricing.name",
     "pricing.price",
     "pricing.description",
@@ -140,9 +152,17 @@ export function getLandingSectionSnapshot(
     case "stats":
       return landing.stats;
     case "features":
-      return landing.features;
+      return {
+        eyebrow: landing.featuresEyebrow,
+        headline: landing.featuresHeadline,
+        items: landing.features,
+      };
     case "pricing":
-      return landing.pricing;
+      return {
+        eyebrow: landing.pricingEyebrow,
+        headline: landing.pricingHeadline,
+        items: landing.pricing,
+      };
     case "portfolio":
       return landing.portfolio;
     case "gallery":

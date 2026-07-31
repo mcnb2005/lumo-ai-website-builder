@@ -74,8 +74,18 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(inlineEditing, /operationForTextEdit/);
   assert.match(operations, /case "pricing\.feature"/);
   assert.match(operations, /case "leadForm\.field"/);
+  assert.match(operations, /case "featuresHeadline"/);
+  assert.match(operations, /case "pricingHeadline"/);
   assert.match(manifest, /buildLandingManifest/);
+  assert.match(manifest, /"featuresHeadline"/);
+  assert.match(manifest, /"pricingHeadline"/);
+  assert.match(canvas, /data\.featuresHeadline/);
+  assert.match(canvas, /data\.pricingHeadline/);
+  assert.doesNotMatch(canvas, /<h2>Ít hỗn loạn\.<br \/>Nhiều tác động hơn\.<\/h2>/);
+  assert.doesNotMatch(canvas, /<h2>Bắt đầu nhỏ\.<br \/>Lớn lên dễ dàng\.<\/h2>/);
   assert.match(propertiesPanel, /section-properties__header/);
+  assert.match(propertiesPanel, /landing\.featuresHeadline/);
+  assert.match(propertiesPanel, /landing\.pricingHeadline/);
   assert.match(propertiesPanel, /onSetPalette/);
   assert.match(generationProgress, /GenerationStage/);
   assert.match(navigator, /sortableKeyboardCoordinates/);

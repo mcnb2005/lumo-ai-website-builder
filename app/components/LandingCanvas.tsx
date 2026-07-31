@@ -427,8 +427,23 @@ export function LandingCanvas({
         return (
           <section className="feature-section" id="features" key={section}>
             <div className="section-heading">
-              <p>Tại sao chọn {data.brand}</p>
-              <h2>Ít hỗn loạn.<br />Nhiều tác động hơn.</h2>
+              <p>
+                {editableText(
+                  "features",
+                  data.featuresEyebrow,
+                  "Nhãn section lợi ích",
+                  { field: "featuresEyebrow" }
+                )}
+              </p>
+              <h2>
+                {editableText(
+                  "features",
+                  data.featuresHeadline,
+                  "Tiêu đề section lợi ích",
+                  { field: "featuresHeadline" },
+                  true
+                )}
+              </h2>
             </div>
             <div className="feature-list">
               {data.features.map((feature, index) => (
@@ -462,8 +477,23 @@ export function LandingCanvas({
         return (
           <section className="content-section pricing-section" id="pricing" key={section}>
             <div className="section-heading">
-              <p>Gói phù hợp</p>
-              <h2>Bắt đầu nhỏ.<br />Lớn lên dễ dàng.</h2>
+              <p>
+                {editableText(
+                  "pricing",
+                  data.pricingEyebrow,
+                  "Nhãn section bảng giá",
+                  { field: "pricingEyebrow" }
+                )}
+              </p>
+              <h2>
+                {editableText(
+                  "pricing",
+                  data.pricingHeadline,
+                  "Tiêu đề section bảng giá",
+                  { field: "pricingHeadline" },
+                  true
+                )}
+              </h2>
             </div>
             <div className="pricing-grid">
               {data.pricing.map((plan, index) => (

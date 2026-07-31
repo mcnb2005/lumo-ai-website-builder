@@ -35,6 +35,10 @@ export type LandingData = {
   primaryCta: string;
   secondaryCta: string;
   proof: string;
+  featuresEyebrow: string;
+  featuresHeadline: string;
+  pricingEyebrow: string;
+  pricingHeadline: string;
   heroImage: string;
   sectionOrder: LandingSectionType[];
   hiddenSections: LandingSectionType[];
@@ -90,6 +94,10 @@ export const defaultLanding: LandingData = {
   primaryCta: "Bắt đầu miễn phí",
   secondaryCta: "Xem cách hoạt động",
   proof: "Được tin dùng bởi 2.000+ đội ngũ hiện đại",
+  featuresEyebrow: "Tại sao chọn Morrow",
+  featuresHeadline: "Ít hỗn loạn.\nNhiều tác động hơn.",
+  pricingEyebrow: "Gói phù hợp",
+  pricingHeadline: "Bắt đầu nhỏ.\nLớn lên dễ dàng.",
   heroImage: "",
   sectionOrder: [
     "hero",
@@ -229,6 +237,22 @@ export function normalizeLandingData(
   return {
     ...structuredClone(defaultLanding),
     ...value,
+    featuresEyebrow:
+      typeof value.featuresEyebrow === "string"
+        ? value.featuresEyebrow
+        : `Tại sao chọn ${value.brand || defaultLanding.brand}`,
+    featuresHeadline:
+      typeof value.featuresHeadline === "string"
+        ? value.featuresHeadline
+        : defaultLanding.featuresHeadline,
+    pricingEyebrow:
+      typeof value.pricingEyebrow === "string"
+        ? value.pricingEyebrow
+        : defaultLanding.pricingEyebrow,
+    pricingHeadline:
+      typeof value.pricingHeadline === "string"
+        ? value.pricingHeadline
+        : defaultLanding.pricingHeadline,
     sectionOrder: (() => {
       const allowed = new Set(landingSectionTypes);
       const normalized = Array.isArray(value.sectionOrder)

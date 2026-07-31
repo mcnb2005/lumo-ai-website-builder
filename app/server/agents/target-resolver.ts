@@ -46,6 +46,10 @@ export function listLandingTextTargets(
       textTarget("features", "features.title", item.title, index),
       textTarget("features", "features.text", item.text, index),
     ]),
+    textTarget("features", "featuresEyebrow", landing.featuresEyebrow),
+    textTarget("features", "featuresHeadline", landing.featuresHeadline),
+    textTarget("pricing", "pricingEyebrow", landing.pricingEyebrow),
+    textTarget("pricing", "pricingHeadline", landing.pricingHeadline),
     ...landing.pricing.flatMap((item, index) => [
       textTarget("pricing", "pricing.name", item.name, index),
       textTarget("pricing", "pricing.price", item.price, index),
