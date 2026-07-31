@@ -252,7 +252,6 @@ export function normalizeLandingData(
           (section, index, all): section is LandingSectionType =>
             typeof section === "string" &&
             landingSectionTypes.includes(section as LandingSectionType) &&
-            section !== "hero" &&
             section !== "finalCta" &&
             all.indexOf(section) === index
         )

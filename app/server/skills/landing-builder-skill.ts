@@ -95,7 +95,7 @@ export function parseLandingOperations(
 }
 
 const sectionAliases: Array<{
-  section: Exclude<LandingSectionType, "hero" | "finalCta">;
+  section: Exclude<LandingSectionType, "finalCta">;
   aliases: string[];
 }> = [
   { section: "stats", aliases: ["số liệu", "thống kê", "con số"] },
@@ -221,7 +221,7 @@ export const landingBuilderSkill = {
     "update_text có dạng {type, section, field, value, index?, nestedIndex?}. Chỉ dùng field có trong manifest; field của mảng phải có index, pricing.feature phải có cả index và nestedIndex.",
     "replace_section chỉ dùng khi người dùng yêu cầu viết lại toàn bộ một section.",
     "set_palette có token ink, paper, accent, soft hoặc line và value là mã hex 6 ký tự.",
-    "hide_section không được dùng cho hero hoặc finalCta.",
+    "hide_section được dùng cho hero và các section nội dung; không được dùng cho finalCta.",
     "assign_image chỉ được dùng với URL ảnh đã có trong context; không tự tạo URL ảnh.",
     "replace_landing chỉ được dùng khi intent.mode là create và value phải là LandingData hoàn chỉnh.",
     "sectionOrder chỉ được dùng hero, stats, features, pricing, portfolio, gallery, testimonial, faq, leadForm, finalCta và không được chứa phần tử trùng.",
@@ -229,7 +229,7 @@ export const landingBuilderSkill = {
     "Chỉ sửa đúng trường hoặc section người dùng yêu cầu; không tự viết lại các phần không liên quan.",
     "Nếu người dùng nói trên đầu, đầu trang, header, logo hoặc tên thương hiệu thì đó là trường brand trên thanh điều hướng, không phải headline hay accentLine của Hero.",
     "Dùng lịch sử hội thoại để hiểu các câu sửa lại như 'bạn nhầm rồi', nhưng ưu tiên yêu cầu mới nhất.",
-    "hero và finalCta luôn hiển thị; không đưa hai section này vào hiddenSections.",
+    "hero có thể nằm trong hiddenSections; finalCta luôn hiển thị và không được đưa vào hiddenSections.",
     "Giữ 3 stats, 3 features, tối đa 3 gói giá, tối đa 6 mục portfolio và tối đa 6 FAQ; không tự xóa hoặc giới hạn số ảnh gallery người dùng đã tải.",
     "Không thay đổi URL ảnh bắt đầu bằng /api/assets/.",
     "Màu phải là mã hex hợp lệ.",

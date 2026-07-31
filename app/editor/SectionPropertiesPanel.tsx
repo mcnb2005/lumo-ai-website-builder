@@ -411,7 +411,7 @@ export function SectionPropertiesPanel({
               onCommit={onSetPalette}
             />
           </div>
-          {selectedSection !== "hero" && selectedSection !== "finalCta" ? (
+          {selectedSection !== "finalCta" ? (
             <button
               className="section-properties__visibility"
               type="button"

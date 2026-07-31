@@ -500,8 +500,8 @@ export function Studio() {
   }
 
   function toggleSectionVisibility(section: LandingSectionType) {
-    if (section === "hero" || section === "finalCta") {
-      setNotice("Khối mở đầu và kêu gọi hành động nên luôn hiển thị.");
+    if (section === "finalCta") {
+      setNotice("Khối kêu gọi hành động cuối trang nên luôn hiển thị.");
       return;
     }
 
@@ -515,7 +515,7 @@ export function Studio() {
                 type: "hide_section",
                 section: section as Exclude<
                   LandingSectionType,
-                  "hero" | "finalCta"
+                  "finalCta"
                 >,
               },
         ]).landing
@@ -638,10 +638,12 @@ export function Studio() {
         setNotice("Đã cập nhật landing page theo yêu cầu.");
       }
       if (result.changedSections.length === 1) {
-        window.setTimeout(
-          () => selectSection(result.changedSections[0]),
-          0
-        );
+        const changedSection = result.changedSections[0];
+        if (result.landing.hiddenSections.includes(changedSection)) {
+          setSelectedSection(null);
+        } else {
+          window.setTimeout(() => selectSection(changedSection), 0);
+        }
       }
     } catch (error) {
       const errorMessage =

@@ -2,14 +2,18 @@ import type { LandingManifest } from "../../landing-manifest";
 import type { LandingSectionType } from "../../landing-data";
 import { runAiChatTool } from "../tools/ai-chat-tool";
 import {
+  builderActions,
   parseBuilderPlan,
   pagePurposes,
   type BuilderPlan,
 } from "./builder-plan";
+import type { LandingTextTarget } from "./target-resolver";
 
 type PlanningAgentInput = {
   prompt: string;
   manifest: LandingManifest;
+  textTargets: LandingTextTarget[];
+  availableAssets: string[];
   selectedSection?: LandingSectionType | null;
   history?: Array<{
     role: "user" | "assistant";
@@ -22,17 +26,20 @@ type PlanningAgentInput = {
 
 const plannerInstructions = [
   "Bạn là AI Planner cho trình tạo landing page.",
-  "Nhiệm vụ duy nhất là hiểu ý định, phạm vi và mục tiêu kinh doanh; không viết nội dung landing page và không tạo operation.",
-  "Phân tích toàn bộ câu, lịch sử gần nhất, section đang chọn và manifest. Không quyết định dựa trên một từ khóa đơn lẻ.",
-  "mode=create khi người dùng muốn bắt đầu, tạo mới hoặc làm lại toàn bộ website/project/landing page.",
+  "Nhiệm vụ là hiểu ý định và trả BuilderPlan có action và target chính xác; không tạo operation và không trả LandingData.",
+  "Phân tích toàn bộ câu, lịch sử gần nhất, section đang chọn, manifest và danh sách text target. Không quyết định dựa trên một từ khóa đơn lẻ.",
+  "mode=create và action=create_landing khi người dùng muốn tạo mới hoặc làm lại toàn bộ landing page.",
   "mode=edit khi người dùng muốn thay đổi trang hiện tại.",
-  "mode=clarify khi có từ hai cách hiểu hợp lý trở lên hoặc chưa đủ thông tin để xác định phần cần sửa.",
-  "Section đang chọn chỉ là tín hiệu hỗ trợ. Không giới hạn vào section đang chọn nếu yêu cầu rõ ràng là tạo trang mới hoặc sửa toàn trang.",
-  "Dùng lịch sử để hiểu câu đính chính, nhưng yêu cầu mới nhất luôn được ưu tiên.",
-  "targetSections là [] khi tạo mới hoặc chỉnh sửa toàn trang; khi chỉnh sửa cục bộ chỉ chứa section thực sự cần sửa.",
-  "targetField chỉ được đặt khi người dùng chỉ rõ đúng một trường trong một section.",
+  "mode=clarify và action=clarify khi có nhiều target phù hợp hoặc thiếu thông tin quan trọng.",
+  `action chỉ được là: ${builderActions.join(", ")}.`,
+  "Dùng update_text khi người dùng cho biết nội dung mới chính xác. Đặt value là nội dung mới, matchText là nội dung cũ nếu có.",
+  "Dùng generate_content khi cần AI viết nội dung sáng tạo hoặc sửa nhiều trường, và đặt section/field rõ nhất có thể.",
+  "Dùng hide_section/show_section/move_section/add_section cho thao tác bố cục. Hero được phép ẩn và hiện lại; finalCta không được ẩn.",
+  "Dùng assign_image chỉ khi value đúng bằng một URL trong availableAssets và đặt target.imageTarget là hero, gallery:add, gallery:n hoặc portfolio:n.",
+  "Nếu cùng một chữ xuất hiện ở nhiều text target mà người dùng không chỉ rõ vị trí, hãy hỏi lại thay vì tự chọn.",
+  "Section đang chọn chỉ là tín hiệu hỗ trợ. Yêu cầu mới nhất luôn được ưu tiên.",
   `pagePurpose chỉ được là: ${pagePurposes.join(", ")}.`,
-  "confidence nằm trong khoảng 0 đến 1. Nếu confidence dưới 0.6, chọn clarify và đặt clarificationQuestion ngắn, cụ thể.",
+  "confidence nằm trong khoảng 0 đến 1. Nếu confidence dưới 0.6, chọn clarify.",
   "recommendedSections dùng cho trang mới, được sắp theo hành trình chuyển đổi.",
   "Chỉ trả một JSON object, không markdown và không giải thích bên ngoài JSON.",
 ].join(" ");
@@ -48,14 +55,26 @@ export async function runPlanningAgent(
       : "",
     `Section đang chọn: ${input.selectedSection || "không có"}`,
     `Manifest:\n${JSON.stringify(input.manifest)}`,
+    `Các text target hiện có:\n${JSON.stringify(input.textTargets)}`,
+    `URL ảnh có thể dùng:\n${JSON.stringify(input.availableAssets)}`,
     `Yêu cầu mới:\n${input.prompt}`,
     `Schema đầu ra:
 {
   "mode": "create | edit | clarify",
+  "action": "một action hợp lệ",
+  "target": {
+    "section": "tùy chọn",
+    "field": "tùy chọn",
+    "index": 0,
+    "nestedIndex": 0,
+    "imageTarget": "tùy chọn",
+    "paletteToken": "tùy chọn"
+  },
+  "value": "giá trị mới hoặc URL ảnh, tùy chọn",
+  "matchText": "nội dung cũ cần tìm, tùy chọn",
+  "toIndex": 0,
   "summary": "Tóm tắt chính xác yêu cầu",
   "confidence": 0.0,
-  "targetSections": [],
-  "targetField": "tùy chọn",
   "pagePurpose": "general",
   "businessType": "Ngành/sản phẩm",
   "audience": "Đối tượng chính",

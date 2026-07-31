@@ -31,7 +31,7 @@ export type LandingOperation =
     }
   | {
       type: "hide_section";
-      section: Exclude<LandingSectionType, "hero" | "finalCta">;
+      section: Exclude<LandingSectionType, "finalCta">;
     }
   | {
       type: "show_section";
@@ -277,7 +277,7 @@ export function validateLandingData(
     !Array.isArray(value.hiddenSections) ||
     value.hiddenSections.some(
       (section) =>
-        !isSection(section) || section === "hero" || section === "finalCta"
+        !isSection(section) || section === "finalCta"
     )
   ) {
     errors.push("hiddenSections chứa section không hợp lệ.");
@@ -568,7 +568,6 @@ export function parseLandingOperationEnvelope(
       case "hide_section": {
         if (
           !isSection(rawOperation.section) ||
-          rawOperation.section === "hero" ||
           rawOperation.section === "finalCta"
         ) {
           errors.push(`${path}.section không thể ẩn.`);

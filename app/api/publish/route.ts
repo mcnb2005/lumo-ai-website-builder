@@ -1,6 +1,10 @@
 import { and, eq } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
 import { projects } from "../../../db/schema";
+import {
+  normalizeLandingData,
+  type LandingData,
+} from "../../landing-data";
 import { getCurrentDatabaseUser } from "../../server-user";
 
 export async function POST(request: Request) {
@@ -56,7 +60,9 @@ export async function POST(request: Request) {
       ownerId: user.id,
       name,
       slug,
-      data: JSON.stringify(payload.data),
+      data: JSON.stringify(
+        normalizeLandingData(payload.data as Partial<LandingData>)
+      ),
       messages: JSON.stringify(payload.messages || []),
       status: "published",
       updatedAt: now,

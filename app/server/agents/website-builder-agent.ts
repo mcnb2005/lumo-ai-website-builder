@@ -17,7 +17,6 @@ import type {
   BuilderProgressReporter,
 } from "../../builder-generation";
 import {
-  applySectionVisibilityIntent,
   landingBuilderSkill,
   parseLandingOperations,
   preserveInternalAssetUrls,
@@ -27,6 +26,15 @@ import { runAiChatTool } from "../tools/ai-chat-tool";
 import { createDemoBuilderPlan } from "./builder-plan";
 import { resolveLandingRecipe } from "./landing-recipes";
 import { runPlanningAgent } from "./planning-agent";
+import {
+  buildSimpleActionOperations,
+  describeSimpleAction,
+} from "./simple-action-executor";
+import {
+  listLandingAssetUrls,
+  listLandingTextTargets,
+  resolveBuilderPlanTarget,
+} from "./target-resolver";
 
 type WebsiteBuilderAgentInput = {
   prompt: string;
@@ -149,22 +157,6 @@ function validateCreationQuality(
   }
 }
 
-function operationsFromVisibilityFallback(
-  prompt: string,
-  current: LandingData
-) {
-  const result = applySectionVisibilityIntent(prompt, current);
-  const operations: LandingOperation[] = result.changedSections.map(
-    (section) => ({
-      type: result.landing.hiddenSections.includes(section)
-        ? "hide_section"
-        : "show_section",
-      section,
-    }) as LandingOperation
-  );
-  return { ...result, operations };
-}
-
 export async function runWebsiteBuilderAgent(
   input: WebsiteBuilderAgentInput
 ): Promise<WebsiteBuilderAgentResult> {
@@ -174,10 +166,12 @@ export async function runWebsiteBuilderAgent(
     message: "Đang phân tích yêu cầu và phạm vi cần thay đổi…",
   });
   const currentManifest = buildLandingManifest(input.current);
-  const intent = input.apiKey
+  let intent = input.apiKey
     ? await runPlanningAgent({
         prompt: input.prompt,
         manifest: currentManifest,
+        textTargets: listLandingTextTargets(input.current),
+        availableAssets: listLandingAssetUrls(input.current),
         selectedSection: input.selectedSection,
         history: input.history,
         providerUrl: input.providerUrl,
@@ -185,6 +179,22 @@ export async function runWebsiteBuilderAgent(
         apiKey: input.apiKey,
       })
     : createDemoBuilderPlan(input.prompt);
+  if (input.apiKey) {
+    const resolution = resolveBuilderPlanTarget(intent, input.current);
+    if (resolution.status === "clarify") {
+      intent = {
+        ...intent,
+        mode: "clarify",
+        action: "clarify",
+        target: {},
+        targetSections: [],
+        targetField: undefined,
+        clarificationQuestion: resolution.question,
+      };
+    } else {
+      intent = resolution.plan;
+    }
+  }
   const runtimeSkill = resolveRuntimeSkill(input.prompt);
   input.progress?.({
     type: "status",
@@ -267,6 +277,52 @@ export async function runWebsiteBuilderAgent(
     };
   }
 
+  const simpleOperations = buildSimpleActionOperations(intent);
+  if (simpleOperations) {
+    input.progress?.({
+      type: "status",
+      stage: "validating",
+      message: "Đang kiểm tra action và đúng vị trí cần thay đổi…",
+    });
+    assertSurgicalScope(simpleOperations, intent);
+    const applied = applyLandingOperations(
+      input.current,
+      simpleOperations
+    );
+    input.progress?.({
+      type: "validation",
+      stage: "validating",
+      valid: true,
+      attempt: 1,
+    });
+    input.progress?.({
+      type: "status",
+      stage: "applying",
+      message: "Đang áp dụng thay đổi trực tiếp vào landing page…",
+    });
+    return {
+      landing: applied.landing,
+      message: describeSimpleAction(intent),
+      mode: "ai",
+      operations: simpleOperations,
+      changedSections: applied.changedSections,
+      intent,
+      manifest: buildLandingManifest(applied.landing),
+      skill: {
+        id: landingBuilderSkill.id,
+        version: landingBuilderSkill.version,
+      },
+      runtimeSkill: runtimeSkill
+        ? {
+            id: runtimeSkill.id,
+            version: runtimeSkill.version,
+            name: runtimeSkill.name,
+            description: runtimeSkill.description,
+          }
+        : undefined,
+    };
+  }
+
   const targetSnapshots = Object.fromEntries(
     intent.targetSections.map((section) => [
       section,
@@ -332,7 +388,6 @@ export async function runWebsiteBuilderAgent(
   let landing: LandingData | null = null;
   let operations: LandingOperation[] = [];
   let changedSections: LandingSectionType[] = [];
-  let usedVisibilityFallback = false;
   let repairContext = "";
   let lastError: unknown = null;
 
@@ -410,29 +465,16 @@ export async function runWebsiteBuilderAgent(
   }
 
   if (!landing) {
-    const deterministic = operationsFromVisibilityFallback(
-      input.prompt,
-      input.current
-    );
-    if (!deterministic.changedSections.length) throw lastError;
-    input.progress?.({
-      type: "status",
-      stage: "applying",
-      message: "Đang áp dụng thay đổi hiển thị bằng quy tắc an toàn…",
-    });
-    landing = deterministic.landing;
-    operations = deterministic.operations;
-    changedSections = deterministic.changedSections;
-    usedVisibilityFallback = true;
+    throw lastError instanceof Error
+      ? lastError
+      : new Error("Agent chưa tạo được thay đổi hợp lệ.");
   }
 
   landing = preserveInternalAssetUrls(input.current, landing);
 
   return {
     landing,
-    message: usedVisibilityFallback
-      ? "Mình đã cập nhật các phần hiển thị trên landing page theo yêu cầu."
-      : `Mình đã áp dụng ${operations.length} thay đổi đúng phạm vi yêu cầu.`,
+    message: `Mình đã áp dụng ${operations.length} thay đổi đúng phạm vi yêu cầu.`,
     mode: "ai",
     operations,
     changedSections,

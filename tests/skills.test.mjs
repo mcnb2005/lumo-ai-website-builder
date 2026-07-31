@@ -58,13 +58,16 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(agent, /validationErrors/);
   assert.match(agent, /applyLandingOperations/);
   assert.match(agent, /runtimeSkill\.rules/);
-  assert.match(agent, /applySectionVisibilityIntent/);
+  assert.match(agent, /resolveBuilderPlanTarget/);
+  assert.match(agent, /buildSimpleActionOperations/);
   assert.match(agent, /preserveInternalAssetUrls/);
   assert.match(agent, /intent\.targetField/);
   assert.match(planner, /parseBuilderPlan/);
   assert.match(planner, /confidence dưới 0\.6/);
   assert.doesNotMatch(planner, /isCreateRequest|isCreationCorrection/);
   assert.match(builderPlan, /mode: "create" \| "edit" \| "clarify"/);
+  assert.match(builderPlan, /action: BuilderAction/);
+  assert.match(builderPlan, /target: BuilderTarget/);
   assert.match(builderPlan, /lowConfidence/);
   assert.match(recipes, /sell_product/);
   assert.match(recipes, /primaryGoal/);

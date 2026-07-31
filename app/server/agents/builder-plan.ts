@@ -2,7 +2,10 @@ import type {
   LandingEditableField,
   LandingManifest,
 } from "../../landing-manifest";
-import type { LandingSectionType } from "../../landing-data";
+import type {
+  LandingImageTarget,
+  LandingSectionType,
+} from "../../landing-data";
 
 export const pagePurposes = [
   "sell_product",
@@ -19,8 +22,38 @@ export const pagePurposes = [
 
 export type PagePurpose = (typeof pagePurposes)[number];
 
+export const builderActions = [
+  "create_landing",
+  "generate_content",
+  "update_text",
+  "replace_section",
+  "hide_section",
+  "show_section",
+  "move_section",
+  "add_section",
+  "assign_image",
+  "set_palette",
+  "clarify",
+] as const;
+
+export type BuilderAction = (typeof builderActions)[number];
+
+export type BuilderTarget = {
+  section?: LandingSectionType;
+  field?: LandingEditableField;
+  index?: number;
+  nestedIndex?: number;
+  imageTarget?: LandingImageTarget;
+  paletteToken?: "ink" | "paper" | "accent" | "soft" | "line";
+};
+
 export type BuilderPlan = {
   mode: "create" | "edit" | "clarify";
+  action: BuilderAction;
+  target: BuilderTarget;
+  value?: string;
+  matchText?: string;
+  toIndex?: number;
   summary: string;
   confidence: number;
   targetSections: LandingSectionType[];
@@ -42,6 +75,21 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function asText(value: unknown, fallback = "", maxLength = 500) {
   if (typeof value !== "string") return fallback;
   return value.trim().slice(0, maxLength);
+}
+
+function asIndex(value: unknown) {
+  return Number.isInteger(value) && Number(value) >= 0
+    ? Number(value)
+    : undefined;
+}
+
+function isImageTarget(value: unknown): value is LandingImageTarget {
+  return (
+    value === "hero" ||
+    value === "gallery:add" ||
+    (typeof value === "string" &&
+      /^(?:gallery|portfolio):\d+$/.test(value))
+  );
 }
 
 function extractJson(text: string) {
@@ -75,6 +123,11 @@ export function parseBuilderPlan(
     throw new Error("BuilderPlan.mode không hợp lệ.");
   }
 
+  if (!builderActions.includes(value.action as BuilderAction)) {
+    throw new Error("BuilderPlan.action không hợp lệ.");
+  }
+  const rawAction = value.action as BuilderAction;
+
   const confidence =
     typeof value.confidence === "number" &&
     Number.isFinite(value.confidence) &&
@@ -85,20 +138,67 @@ export function parseBuilderPlan(
   const availableSections = new Set(
     manifest.sections.map((section) => section.type)
   );
-  const rawTargets = Array.isArray(value.targetSections)
-    ? value.targetSections
-    : [];
-  const unknownTargets = rawTargets.filter(
-    (section) =>
-      typeof section !== "string" ||
-      !availableSections.has(section as LandingSectionType)
-  );
-  if (unknownTargets.length) {
-    throw new Error("BuilderPlan chứa section không tồn tại.");
+
+  const rawTarget = isRecord(value.target) ? value.target : {};
+  const rawSection = asText(rawTarget.section) as LandingSectionType | "";
+  if (rawSection && !availableSections.has(rawSection)) {
+    throw new Error("BuilderPlan.target.section không tồn tại.");
   }
-  const targetSections = Array.from(
-    new Set(rawTargets as LandingSectionType[])
-  );
+  const rawField = asText(rawTarget.field) as LandingEditableField | "";
+  if (rawField) {
+    if (!rawSection) {
+      throw new Error("BuilderPlan.target.field cần target.section.");
+    }
+    const section = manifest.sections.find(
+      (item) => item.type === rawSection
+    );
+    if (!section?.editableFields.includes(rawField)) {
+      throw new Error("BuilderPlan.target.field không thuộc section mục tiêu.");
+    }
+  }
+
+  const imageTarget = isImageTarget(rawTarget.imageTarget)
+    ? rawTarget.imageTarget
+    : undefined;
+  const paletteToken =
+    rawTarget.paletteToken === "ink" ||
+    rawTarget.paletteToken === "paper" ||
+    rawTarget.paletteToken === "accent" ||
+    rawTarget.paletteToken === "soft" ||
+    rawTarget.paletteToken === "line"
+      ? rawTarget.paletteToken
+      : undefined;
+  const target: BuilderTarget = {
+    section: rawSection || undefined,
+    field: rawField || undefined,
+    index: asIndex(rawTarget.index),
+    nestedIndex: asIndex(rawTarget.nestedIndex),
+    imageTarget,
+    paletteToken,
+  };
+
+  if (
+    (rawAction === "hide_section" ||
+      rawAction === "show_section" ||
+      rawAction === "move_section" ||
+      rawAction === "add_section" ||
+      rawAction === "replace_section") &&
+    !target.section
+  ) {
+    throw new Error(`BuilderPlan.action ${rawAction} cần target.section.`);
+  }
+  if (rawAction === "hide_section" && target.section === "finalCta") {
+    throw new Error("finalCta không thể bị ẩn.");
+  }
+  if (rawAction === "move_section" && asIndex(value.toIndex) === undefined) {
+    throw new Error("BuilderPlan.move_section cần toIndex.");
+  }
+  if (rawAction === "assign_image" && !target.imageTarget) {
+    throw new Error("BuilderPlan.assign_image cần target.imageTarget.");
+  }
+  if (rawAction === "set_palette" && !target.paletteToken) {
+    throw new Error("BuilderPlan.set_palette cần target.paletteToken.");
+  }
 
   const purpose = pagePurposes.includes(value.pagePurpose as PagePurpose)
     ? (value.pagePurpose as PagePurpose)
@@ -115,26 +215,11 @@ export function parseBuilderPlan(
       )
     )
   );
-  const targetField = asText(value.targetField) as
-    | LandingEditableField
-    | "";
-
-  if (targetField) {
-    if (rawMode !== "edit" || targetSections.length !== 1) {
-      throw new Error(
-        "targetField chỉ dùng khi chỉnh sửa đúng một section."
-      );
-    }
-    const section = manifest.sections.find(
-      (item) => item.type === targetSections[0]
-    );
-    if (!section?.editableFields.includes(targetField)) {
-      throw new Error("targetField không thuộc section mục tiêu.");
-    }
-  }
 
   const lowConfidence = confidence < 0.6;
   const mode = lowConfidence ? "clarify" : rawMode;
+  const action: BuilderAction =
+    mode === "clarify" ? "clarify" : rawAction;
   const clarificationQuestion =
     mode === "clarify"
       ? asText(
@@ -142,9 +227,16 @@ export function parseBuilderPlan(
           "Bạn có thể nói rõ phần nào của landing page cần thay đổi không?"
         )
       : undefined;
+  const targetSections =
+    mode === "create" || !target.section ? [] : [target.section];
 
   return {
     mode,
+    action,
+    target,
+    value: asText(value.value) || undefined,
+    matchText: asText(value.matchText) || undefined,
+    toIndex: asIndex(value.toIndex),
     summary: asText(
       value.summary,
       mode === "create"
@@ -154,8 +246,8 @@ export function parseBuilderPlan(
           : "Cần làm rõ yêu cầu."
     ),
     confidence,
-    targetSections: mode === "create" ? [] : targetSections,
-    targetField: targetField || undefined,
+    targetSections,
+    targetField: target.field,
     pagePurpose: purpose,
     businessType: asText(value.businessType, "Doanh nghiệp"),
     audience: asText(value.audience, "Khách hàng mục tiêu"),
@@ -170,6 +262,8 @@ export function parseBuilderPlan(
 export function createDemoBuilderPlan(prompt: string): BuilderPlan {
   return {
     mode: "create",
+    action: "create_landing",
+    target: {},
     summary: `Tạo landing page mẫu theo yêu cầu: ${prompt.slice(0, 180)}`,
     confidence: 1,
     targetSections: [],
