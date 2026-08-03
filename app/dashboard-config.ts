@@ -8,7 +8,6 @@ export type DashboardType =
   | "downloads"
   | "campaigns"
   | "launches"
-  | "bookings"
   | "profiles";
 
 export type ResolvedDashboardType = Exclude<DashboardType, "auto">;
@@ -63,7 +62,6 @@ export const dashboardTypeOptions: Array<{
   { value: "campaigns", label: "Quảng cáo / Khuyến mãi" },
   { value: "launches", label: "Ra mắt / Danh sách chờ" },
   { value: "profiles", label: "Giới thiệu / Portfolio" },
-  { value: "bookings", label: "Đặt lịch / Đặt bàn" },
 ];
 
 const sharedStatusKeys: WorkflowStatus[] = [
@@ -364,41 +362,6 @@ export const dashboardConfigs: Record<
       "Đã hủy",
     ]),
   },
-  bookings: {
-    label: "Đặt lịch / Nhận tư vấn",
-    centerLabel: "Trung tâm lịch hẹn",
-    title: "Quản lý lịch hẹn",
-    navLabel: "Lịch hẹn",
-    recordSingular: "lịch hẹn",
-    recordPlural: "lịch hẹn",
-    actorLabel: "Người đặt lịch",
-    needLabel: "Nội dung cuộc hẹn",
-    detailLabel: "Chi tiết lịch hẹn",
-    notesLabel: "Ghi chú cuộc hẹn",
-    notesPlaceholder: "Ví dụ: Đã xác nhận lịch 14:00 thứ Ba, khách đến trực tiếp…",
-    searchPlaceholder: "Tìm người đặt lịch, điện thoại, thời gian…",
-    emptyTitle: "Chưa có lịch hẹn",
-    emptyDescription:
-      "Yêu cầu đặt lịch khám, tư vấn, chụp ảnh hoặc đặt bàn sẽ xuất hiện tại đây.",
-    csvPrefix: "lich-hen",
-    metrics: {
-      total: "Tổng lịch hẹn",
-      totalHint: "Tất cả yêu cầu đặt lịch",
-      fresh: "Lịch mới",
-      freshHint: "Đang chờ xác nhận",
-      active: "Sắp diễn ra",
-      activeHint: "Đã xác nhận hoặc nhắc lịch",
-      won: "Hoàn thành",
-      wonHint: "Cuộc hẹn đã diễn ra",
-    },
-    statuses: statuses([
-      "Yêu cầu mới",
-      "Đã xác nhận",
-      "Sắp diễn ra",
-      "Hoàn thành",
-      "Đã hủy",
-    ]),
-  },
   profiles: {
     label: "Giới thiệu / Portfolio",
     centerLabel: "Trung tâm liên hệ",
@@ -451,18 +414,6 @@ export function inferDashboardType(value: unknown): ResolvedDashboardType {
   const includesAny = (patterns: string[]) =>
     patterns.some((pattern) => text.includes(pattern));
 
-  if (
-    includesAny([
-      "dat lich",
-      "lich hen",
-      "dat ban",
-      "chon ngay gio",
-      "hoc thu",
-      "lich kham",
-    ])
-  ) {
-    return "bookings";
-  }
   if (
     includesAny([
       "hoi thao",

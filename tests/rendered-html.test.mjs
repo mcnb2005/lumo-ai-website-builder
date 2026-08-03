@@ -14,9 +14,12 @@ test("defines the complete multi-project Lumo studio experience", async () => {
   ]);
 
   assert.match(studio, /Dự án mới/);
+  assert.match(studio, /user\.companyRole !== "member"/);
   assert.match(studio, /Đăng nhập để lưu/);
   assert.match(studio, /Đăng nhập bằng Google/);
   assert.match(studio, /\/api\/ai/);
+  assert.match(studio, /history: sourceMessages\.slice\(-8\)/);
+  assert.match(studio, /selectedSection/);
   assert.match(studio, /\/api\/publish/);
   assert.match(studio, /\/api\/assets/);
   assert.match(landing, /pricing-section/);
@@ -26,6 +29,12 @@ test("defines the complete multi-project Lumo studio experience", async () => {
   assert.match(landing, /lead-section/);
   assert.match(landing, /handlePreviewNavigation/);
   assert.match(landing, /event\.preventDefault\(\)/);
+  assert.match(landing, /visibleSections\.has\(item\.section\)/);
+  assert.match(landing, /navigationItems\.map/);
+  assert.doesNotMatch(
+    landing,
+    /<a href="#features">Giáº£i phÃ¡p<\/a>/
+  );
   assert.match(projects, /projects\.ownerId/);
   assert.match(publish, /projects\.ownerId/);
   assert.doesNotMatch(studio, /codex-preview|react-loading-skeleton/i);

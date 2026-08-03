@@ -89,7 +89,7 @@ export const runtimeSkills: RuntimeSkillDefinition[] = [
     whenToUse: ["Khi cần rà soát bố cục, màu sắc, nút bấm và tiêu đề."],
     input: ["Landing page hiện tại"],
     output: ["Danh sách vấn đề", "Đề xuất sửa"],
-    rules: ["Đảm bảo contrast và heading logic."],
+    rules: ["Đảm bảo contrast và heading logic."],  
     testCases: ["Kiểm tra CTA và nút", "Đánh giá cấu trúc heading"],
   },
   {

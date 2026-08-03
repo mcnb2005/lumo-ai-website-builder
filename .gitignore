@@ -43,3 +43,8 @@ next-env.d.ts
 /outputs/
 /work/
 /.npm-cache/
+/.pnpm-store/
+/.idea/
+/.codegraph/
+__pycache__/
+*.py[cod]

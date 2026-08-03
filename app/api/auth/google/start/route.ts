@@ -67,7 +67,6 @@ export async function GET(request: Request) {
             "openid",
             "email",
             "profile",
-            "https://www.googleapis.com/auth/gmail.send",
             "https://www.googleapis.com/auth/calendar.events",
           ].join(" ")
         : "openid email profile"

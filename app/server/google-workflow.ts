@@ -1,5 +1,6 @@
 import { ensureDatabase, getD1, getRuntimeEnv } from "../../db";
 import { decryptGoogleRefreshToken } from "../google-auth";
+import { sendSmtpEmail } from "./smtp-email";
 
 type OrderRecord = {
   id: string;
@@ -19,20 +20,6 @@ function findValue(values: Record<string, string>, patterns: string[]) {
     patterns.some((pattern) => key.toLowerCase().includes(pattern))
   );
   return entry?.[1]?.trim() || "";
-}
-
-function toBase64(value: string) {
-  const bytes = new TextEncoder().encode(value);
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary);
-}
-
-function toBase64Url(value: string) {
-  return toBase64(value)
-    .replaceAll("+", "-")
-    .replaceAll("/", "_")
-    .replace(/=+$/g, "");
 }
 
 function parseDeliveryTime(value: string) {
@@ -117,15 +104,10 @@ async function getGoogleAccessToken(ownerId: string) {
   }
   return {
     accessToken: result.access_token,
-    senderEmail: connection.connected_email,
   };
 }
 
-async function sendConfirmationEmail(
-  accessToken: string,
-  senderEmail: string,
-  order: OrderRecord
-) {
+async function sendConfirmationEmail(order: OrderRecord) {
   const recipient = findValue(order.values, ["email", "thu_dien_tu"]);
   if (!recipient) return null;
 
@@ -147,31 +129,7 @@ async function sendConfirmationEmail(
     "",
     "Chúng tôi sẽ liên hệ nếu cần thêm thông tin giao hàng.",
   ].join("\r\n");
-  const raw = [
-    `From: ${senderEmail}`,
-    `To: ${recipient}`,
-    `Subject: =?UTF-8?B?${toBase64(subject)}?=`,
-    "MIME-Version: 1.0",
-    'Content-Type: text/plain; charset="UTF-8"',
-    "",
-    body,
-  ].join("\r\n");
-
-  const response = await fetch(
-    "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ raw: toBase64Url(raw) }),
-    }
-  );
-  if (!response.ok) {
-    throw new Error("Không thể gửi email xác nhận.");
-  }
-  return new Date().toISOString();
+  return sendSmtpEmail({ to: recipient, subject, text: body });
 }
 
 async function createDeliveryEvent(
@@ -237,22 +195,14 @@ export async function runOrderWorkflow(
   order: OrderRecord,
   ownerId: string
 ): Promise<WorkflowResult> {
-  const googleConnection = await getGoogleAccessToken(ownerId);
-  if (!googleConnection) {
-    return {
-      confirmationEmailSentAt: null,
-      calendarEventId: null,
-    };
-  }
-
-  const confirmationEmailSentAt = await sendConfirmationEmail(
-    googleConnection.accessToken,
-    googleConnection.senderEmail,
-    order
-  ).catch(() => null);
-  const calendarEventId = await createDeliveryEvent(
-    googleConnection.accessToken,
-    order
-  ).catch(() => null);
+  const confirmationEmailSentAt = await sendConfirmationEmail(order).catch(
+    () => null
+  );
+  const googleConnection = await getGoogleAccessToken(ownerId).catch(() => null);
+  const calendarEventId = googleConnection
+    ? await createDeliveryEvent(googleConnection.accessToken, order).catch(
+        () => null
+      )
+    : null;
   return { confirmationEmailSentAt, calendarEventId };
 }

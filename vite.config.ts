@@ -25,6 +25,16 @@ export default defineConfig(async ({ mode }) => {
       "GOOGLE_OAUTH_CLIENT_SECRET",
       "GOOGLE_OAUTH_REDIRECT_URI",
       "GOOGLE_TOKEN_ENCRYPTION_KEY",
+      "SMTP_HOST",
+      "SMTP_PORT",
+      "SMTP_SECURE",
+      "SMTP_STARTTLS",
+      "SMTP_USER",
+      "SMTP_PASSWORD",
+      "SMTP_AUTH_METHOD",
+      "SMTP_FROM_EMAIL",
+      "SMTP_FROM_NAME",
+      "SMTP_HELO_NAME",
     ]
       .filter((key) => localEnv[key])
       .map((key) => [key, localEnv[key]])

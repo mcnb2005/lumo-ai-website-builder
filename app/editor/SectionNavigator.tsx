@@ -95,7 +95,7 @@ function SortableNavigatorItem({
         onClick={() => onToggleVisibility(section)}
         aria-label={`${hidden ? "Hiện" : "Ẩn"} ${label}`}
         aria-pressed={!hidden}
-        disabled={disabled || section === "hero" || section === "finalCta"}
+        disabled={disabled || section === "finalCta"}
       >
         {hidden ? "Hiện" : "Ẩn"}
       </button>

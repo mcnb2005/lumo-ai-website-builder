@@ -1,9 +1,25 @@
 import { ensureDatabase, getD1, getRuntimeEnv } from "../../../db";
-import { defaultLanding, type LandingData } from "../../landing-data";
+import {
+  defaultLanding,
+  landingSectionTypes,
+  type LandingData,
+  type LandingSectionType,
+} from "../../landing-data";
 import { getCurrentDatabaseUser } from "../../server-user";
 import { runWebsiteBuilderAgent } from "../../server/agents/website-builder-agent";
 import { isLandingData } from "../../server/skills/landing-builder-skill";
 import { createDemoLanding } from "../../server/tools/demo-landing-tool";
+import type { BuilderStreamEvent } from "../../builder-generation";
+
+function streamEvent(event: BuilderStreamEvent) {
+  return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error
+    ? error.message
+    : "Không thể xử lý yêu cầu AI.";
+}
 
 async function enforceUsageLimit(request: Request) {
   await ensureDatabase();
@@ -56,14 +72,47 @@ async function enforceUsageLimit(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    const user = await getCurrentDatabaseUser();
+    if (!user) {
+      return Response.json(
+        { error: "Đăng nhập để sử dụng AI tạo landing page." },
+        { status: 401 }
+      );
+    }
+
     const payload = (await request.json()) as {
       prompt?: string;
       current?: LandingData;
+      selectedSection?: LandingSectionType | null;
+      history?: Array<{
+        role?: "user" | "assistant";
+        content?: string;
+      }>;
     };
     const prompt = payload.prompt?.trim();
     const current = isLandingData(payload.current)
       ? payload.current
       : defaultLanding;
+    const selectedSection =
+      typeof payload.selectedSection === "string" &&
+      landingSectionTypes.includes(payload.selectedSection)
+        ? payload.selectedSection
+        : null;
+    const history = Array.isArray(payload.history)
+      ? payload.history
+          .filter(
+            (
+              turn
+            ): turn is {
+              role: "user" | "assistant";
+              content: string;
+            } =>
+              (turn?.role === "user" || turn?.role === "assistant") &&
+              typeof turn.content === "string" &&
+              Boolean(turn.content.trim())
+          )
+          .slice(-8)
+      : [];
 
     if (!prompt) {
       return Response.json(
@@ -75,23 +124,63 @@ export async function POST(request: Request) {
     await enforceUsageLimit(request);
 
     const runtime = getRuntimeEnv();
-    const result = await runWebsiteBuilderAgent({
+    const agentInput = {
       prompt,
       current,
+      selectedSection,
+      history,
       providerUrl:
         runtime.AI_PROVIDER_URL || "https://api.openai.com/v1",
       modelName:
         runtime.AI_MODEL_NAME || runtime.OPENAI_MODEL || "gpt-5.6-terra",
       apiKey: runtime.AI_API_KEY || runtime.OPENAI_API_KEY,
       createDemoLanding,
-    });
+    };
+
+    if (request.headers.get("accept")?.includes("text/event-stream")) {
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          const send = (event: BuilderStreamEvent) => {
+            controller.enqueue(encoder.encode(streamEvent(event)));
+          };
+
+          void runWebsiteBuilderAgent({
+            ...agentInput,
+            progress: send,
+          })
+            .then((result) => {
+              send({
+                type: "status",
+                stage: "completed",
+                message: "Landing page đã được cập nhật.",
+              });
+              send({ type: "complete", stage: "completed", result });
+            })
+            .catch((error) => {
+              send({
+                type: "error",
+                stage: "failed",
+                message: errorMessage(error),
+              });
+            })
+            .finally(() => controller.close());
+        },
+      });
+
+      return new Response(stream, {
+        headers: {
+          "Content-Type": "text/event-stream; charset=utf-8",
+          "Cache-Control": "no-cache, no-transform",
+        },
+      });
+    }
+
+    const result = await runWebsiteBuilderAgent(agentInput);
 
     return Response.json(result);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : "Không thể xử lý yêu cầu AI.";
+    const message = errorMessage(error);
     return Response.json(
       { error: message },
       { status: message.includes("lượt") ? 429 : 500 }

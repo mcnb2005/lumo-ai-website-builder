@@ -1,0 +1,7 @@
+interface:
+  display_name: "Lumo UI/UX Pro"
+  short_description: "Thiết kế UI/UX chuyên nghiệp cho Lumo"
+  default_prompt: "Use $lumo-ui-ux-pro to improve this Lumo interface with a coherent design system and verified responsive UX."
+
+policy:
+  allow_implicit_invocation: true

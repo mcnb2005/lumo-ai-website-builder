@@ -17,6 +17,7 @@ export default async function DashboardPage() {
       user={{
         email: user.email,
         name: user.name || user.email,
+        companyRole: user.companyRole,
       }}
     />
   );
