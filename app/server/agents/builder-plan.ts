@@ -196,10 +196,6 @@ export function parseBuilderPlan(
   if (rawAction === "assign_image" && !target.imageTarget) {
     throw new Error("BuilderPlan.assign_image cần target.imageTarget.");
   }
-  if (rawAction === "set_palette" && !target.paletteToken) {
-    throw new Error("BuilderPlan.set_palette cần target.paletteToken.");
-  }
-
   const purpose = pagePurposes.includes(value.pagePurpose as PagePurpose)
     ? (value.pagePurpose as PagePurpose)
     : "general";

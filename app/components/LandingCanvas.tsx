@@ -25,10 +25,17 @@ import {
 import type {
   LandingData,
   LandingImageAsset,
+  LandingImageFit,
+  LandingImagePosition,
   LandingImageTarget,
   LandingSectionType,
 } from "../landing-data";
 import type { ResolvedDashboardType } from "../dashboard-config";
+import {
+  createLandingImageDragPayload,
+  LUMO_ASSET_DRAG_TYPE,
+  parseLandingImageDragPayload,
+} from "../image-drag-payload";
 import { InlineEditableText } from "../editor/InlineEditableText";
 import { SortableSectionFrame } from "../editor/SortableSectionFrame";
 import type { LandingTextEdit } from "../editor/inline-editing";
@@ -90,20 +97,11 @@ function ImageDropZone({
       return;
     }
 
-    const rawAsset = event.dataTransfer.getData("application/x-lumo-asset");
-    if (!rawAsset) return;
-    try {
-      const parsed = JSON.parse(rawAsset) as
-        | LandingImageAsset
-        | { asset: LandingImageAsset; source?: LandingImageTarget };
-      const draggedAsset = "asset" in parsed ? parsed.asset : parsed;
-      const source = "asset" in parsed ? parsed.source : undefined;
-      if (draggedAsset.url && draggedAsset.alt) {
-        onDropImage?.(target, { asset: draggedAsset, source });
-      }
-    } catch {
-      // Ignore drag data that did not originate from the image library.
-    }
+    const payload = parseLandingImageDragPayload(
+      event.dataTransfer.getData(LUMO_ASSET_DRAG_TYPE),
+      event.dataTransfer.getData("text/plain")
+    );
+    if (payload) onDropImage?.(target, payload);
   }
 
   return (
@@ -116,10 +114,9 @@ function ImageDropZone({
         if (!asset) return;
         event.stopPropagation();
         event.dataTransfer.effectAllowed = "copyMove";
-        event.dataTransfer.setData(
-          "application/x-lumo-asset",
-          JSON.stringify({ asset, source: target })
-        );
+        const payload = createLandingImageDragPayload(asset, target);
+        event.dataTransfer.setData(LUMO_ASSET_DRAG_TYPE, payload.custom);
+        event.dataTransfer.setData("text/plain", payload.text);
       }}
       onDragEnter={(event) => {
         event.preventDefault();
@@ -129,7 +126,8 @@ function ImageDropZone({
       onDragOver={(event) => {
         event.preventDefault();
         event.stopPropagation();
-        event.dataTransfer.dropEffect = "copy";
+        event.dataTransfer.dropEffect = asset ? "move" : "copy";
+        setIsDragActive(true);
       }}
       onDragLeave={(event) => {
         event.preventDefault();
@@ -172,6 +170,67 @@ function normalizedFieldLabel(label: string) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .toLowerCase();
+}
+
+function imagePresentationStyle(
+  fit: LandingImageFit | undefined,
+  position: LandingImagePosition | undefined,
+  fallbackFit: LandingImageFit = "cover"
+): CSSProperties {
+  const resolvedFit = fit || fallbackFit;
+  return {
+    objectFit: resolvedFit === "smart" ? "contain" : resolvedFit,
+    objectPosition: position || "center",
+  };
+}
+
+function PresentedImage({
+  src,
+  alt,
+  fit,
+  position,
+  fallbackFit = "cover",
+  loading,
+}: {
+  src: string;
+  alt: string;
+  fit: LandingImageFit | undefined;
+  position: LandingImagePosition | undefined;
+  fallbackFit?: LandingImageFit;
+  loading?: "eager" | "lazy";
+}) {
+  if (fit === "smart") {
+    return (
+      <span className="smart-image-frame">
+        <img
+          className="smart-image-background"
+          src={src}
+          alt=""
+          aria-hidden="true"
+          draggable={false}
+          style={{ objectPosition: position || "center" }}
+        />
+        <img
+          className="smart-image-foreground"
+          src={src}
+          alt={alt}
+          loading={loading}
+          draggable={false}
+          style={imagePresentationStyle("contain", position)}
+        />
+      </span>
+    );
+  }
+
+  return (
+    <img
+      src={src}
+      alt={alt}
+      loading={loading}
+      draggable={false}
+      style={imagePresentationStyle(fit, position, fallbackFit)}
+    />
+  );
 }
 
 export function LandingCanvas({
@@ -304,13 +363,20 @@ export function LandingCanvas({
     );
   }
 
+  function variantClass(section: LandingSectionType) {
+    const variant = data.design?.sectionVariants[section];
+    return variant && /^[a-z0-9-]+$/.test(variant)
+      ? ` variant-${variant}`
+      : "";
+  }
+
   function renderSection(section: LandingSectionType) {
     const content = (() => {
       switch (section) {
       case "hero":
         return (
           <section
-            className={`landing-hero${
+            className={`landing-hero${variantClass("hero")}${
               data.heroImage || mode === "editor" ? " has-image" : ""
             }`}
             key={section}
@@ -385,18 +451,24 @@ export function LandingCanvas({
                   onRemoveImage={onRemoveImage}
                 >
                   {data.heroImage ? (
-                    <img
+                    <PresentedImage
                       src={data.heroImage}
                       alt={`Hình ảnh nổi bật của ${data.brand}`}
+                      fit={data.heroImageFit}
+                      position={data.heroImagePosition}
+                      fallbackFit="contain"
                     />
                   ) : null}
                 </ImageDropZone>
               </div>
             ) : data.heroImage ? (
               <div className="hero-image-wrap">
-                <img
+                <PresentedImage
                   src={data.heroImage}
                   alt={`Hình ảnh nổi bật của ${data.brand}`}
+                  fit={data.heroImageFit}
+                  position={data.heroImagePosition}
+                  fallbackFit="contain"
                 />
               </div>
             ) : null}
@@ -404,7 +476,11 @@ export function LandingCanvas({
         );
       case "stats":
         return (
-          <section className="stats-grid" aria-label="Kết quả nổi bật" key={section}>
+          <section
+            className={`stats-grid ${variantClass("stats")}`}
+            aria-label="Kết quả nổi bật"
+            key={section}
+          >
             {data.stats.map((stat, index) => (
               <div className="stat-card" key={`${stat.label}-${index}`}>
                 <strong>
@@ -425,7 +501,7 @@ export function LandingCanvas({
         );
       case "features":
         return (
-          <section className="feature-section" id="features" key={section}>
+          <section className={`feature-section${variantClass("features")}`} id="features" key={section}>
             <div className="section-heading">
               <p>
                 {editableText(
@@ -475,7 +551,7 @@ export function LandingCanvas({
       case "pricing":
         if (!data.pricing.length) return null;
         return (
-          <section className="content-section pricing-section" id="pricing" key={section}>
+          <section className={`content-section pricing-section${variantClass("pricing")}`} id="pricing" key={section}>
             <div className="section-heading">
               <p>
                 {editableText(
@@ -551,7 +627,7 @@ export function LandingCanvas({
       case "portfolio":
         if (!data.portfolio.length) return null;
         return (
-          <section className="content-section portfolio-section" id="portfolio" key={section}>
+          <section className={`content-section portfolio-section${variantClass("portfolio")}`} id="portfolio" key={section}>
             <div className="section-heading">
               <p>
                 {editableText(
@@ -592,10 +668,12 @@ export function LandingCanvas({
                       onRemoveImage={onRemoveImage}
                     >
                       {item.imageUrl ? (
-                        <img
+                        <PresentedImage
                           src={item.imageUrl}
                           alt={item.title}
                           loading="lazy"
+                          fit={item.imageFit}
+                          position={item.imagePosition}
                         />
                       ) : (
                         <div className="portfolio-placeholder" aria-hidden="true">
@@ -604,7 +682,13 @@ export function LandingCanvas({
                       )}
                     </ImageDropZone>
                   ) : item.imageUrl ? (
-                    <img src={item.imageUrl} alt={item.title} loading="lazy" />
+                    <PresentedImage
+                      src={item.imageUrl}
+                      alt={item.title}
+                      loading="lazy"
+                      fit={item.imageFit}
+                      position={item.imagePosition}
+                    />
                   ) : (
                     <div className="portfolio-placeholder" aria-hidden="true">
                       <span>{String(index + 1).padStart(2, "0")}</span>
@@ -639,7 +723,7 @@ export function LandingCanvas({
       case "gallery":
         if (!data.gallery.length && mode !== "editor") return null;
         return (
-          <section className="content-section gallery-section" id="gallery" key={section}>
+          <section className={`content-section gallery-section${variantClass("gallery")}`} id="gallery" key={section}>
             <div className="section-heading">
               <p>
                 {editableText(
@@ -671,10 +755,22 @@ export function LandingCanvas({
                       onDropImage={onDropImage}
                       onRemoveImage={onRemoveImage}
                     >
-                      <img src={image.url} alt={image.alt} loading="lazy" />
+                      <PresentedImage
+                        src={image.url}
+                        alt={image.alt}
+                        loading="lazy"
+                        fit={image.imageFit}
+                        position={image.imagePosition}
+                      />
                     </ImageDropZone>
                   ) : (
-                    <img src={image.url} alt={image.alt} loading="lazy" />
+                    <PresentedImage
+                      src={image.url}
+                      alt={image.alt}
+                      loading="lazy"
+                      fit={image.imageFit}
+                      position={image.imagePosition}
+                    />
                   )}
                   {image.caption || mode === "editor" ? (
                     <figcaption>
@@ -700,7 +796,7 @@ export function LandingCanvas({
         );
       case "testimonial":
         return (
-          <section className="quote-section" id="proof" key={section}>
+          <section className={`quote-section${variantClass("testimonial")}`} id="proof" key={section}>
             <p className="quote-mark" aria-hidden="true">“</p>
             <blockquote>
               {editableText("testimonial", data.testimonial.quote, "Nội dung đánh giá", {
@@ -727,7 +823,7 @@ export function LandingCanvas({
       case "faq":
         if (!data.faq.length) return null;
         return (
-          <section className="content-section faq-section" id="faq" key={section}>
+          <section className={`content-section faq-section${variantClass("faq")}`} id="faq" key={section}>
             <div className="section-heading">
               <p>
                 {editableText("faq", data.faqEyebrow, "Nhãn section FAQ", {
@@ -767,7 +863,7 @@ export function LandingCanvas({
         );
       case "leadForm":
         return (
-          <section className="lead-section" id="contact" key={section}>
+          <section className={`lead-section${variantClass("leadForm")}`} id="contact" key={section}>
             <div className="lead-copy">
               <p>Kết nối với {data.brand}</p>
               <h2>
@@ -842,7 +938,7 @@ export function LandingCanvas({
         );
       case "finalCta":
         return (
-          <section className="final-cta" id="cta" key={section}>
+          <section className={`final-cta${variantClass("finalCta")}`} id="cta" key={section}>
             <p>
               {editableText(
                 "finalCta",
@@ -906,10 +1002,13 @@ export function LandingCanvas({
   const navigationItems = navigationCandidates.filter((item) =>
     visibleSections.has(item.section)
   );
+  const templateClass = data.design?.templateId?.replace(/[^a-z0-9-]/gi, "-") || "default";
+  const headingClass = data.design?.typography.heading || "editorial";
+  const bodyClass = data.design?.typography.body || "sans";
 
   return (
     <article
-      className={`landing-canvas${compact ? " is-compact" : ""}`}
+      className={`landing-canvas template-${templateClass} heading-${headingClass} body-${bodyClass}${compact ? " is-compact" : ""}`}
       style={style}
       onClick={handlePreviewNavigation}
     >

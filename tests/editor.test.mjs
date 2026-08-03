@@ -15,6 +15,7 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
     manifest,
     propertiesPanel,
     generationProgress,
+    imageDragPayload,
   ] = await Promise.all([
     readFile(new URL("../app/landing-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/editor/section-registry.ts", import.meta.url), "utf8"),
@@ -33,11 +34,15 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
       new URL("../app/editor/GenerationProgress.tsx", import.meta.url),
       "utf8"
     ),
+    readFile(new URL("../app/image-drag-payload.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(landingData, /"hero"/);
   assert.match(landingData, /"finalCta"/);
   assert.match(landingData, /hiddenSections/);
+  assert.match(landingData, /heroImageFit/);
+  assert.match(landingData, /heroImagePosition/);
+  assert.match(landingData, /"cover" \| "contain" \| "smart"/);
   assert.match(registry, /hero:/);
   assert.match(registry, /finalCta:/);
   assert.match(studio, /function updateLanding/);
@@ -49,8 +54,12 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(studio, /target === "gallery:add"/);
   assert.match(studio, /portfolioIndex/);
   assert.match(studio, /ensureSectionVisible/);
+  assert.match(studio, /function setImagePresentation/);
+  assert.match(studio, /onSetImagePresentation=\{setImagePresentation\}/);
   assert.match(studio, /multiple/);
-  assert.match(studio, /application\/x-lumo-asset/);
+  assert.match(studio, /LUMO_ASSET_DRAG_TYPE/);
+  assert.match(studio, /createLandingImageDragPayload/);
+  assert.match(studio, /draggable=\{false\}/);
   assert.match(studio, /window\.addEventListener\("paste", handlePaste\)/);
   assert.match(studio, /clipboardImageFiles/);
   assert.match(studio, /event\.dataTransfer\.files/);
@@ -63,8 +72,19 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(canvas, /onDropImage/);
   assert.match(canvas, /gallery:add/);
   assert.match(canvas, /onRemoveImage/);
+  assert.match(canvas, /function imagePresentationStyle/);
+  assert.match(canvas, /function PresentedImage/);
+  assert.match(canvas, /smart-image-frame/);
+  assert.match(canvas, /smart-image-background/);
+  assert.match(canvas, /objectFit/);
+  assert.match(canvas, /objectPosition/);
   assert.match(studio, /reorderGalleryImage/);
   assert.match(canvas, /copyMove/);
+  assert.match(canvas, /parseLandingImageDragPayload/);
+  assert.match(canvas, /getData\("text\/plain"\)/);
+  assert.match(imageDragPayload, /application\/x-lumo-asset/);
+  assert.match(imageDragPayload, /lumo-asset:/);
+  assert.match(imageDragPayload, /Ảnh tải lên/);
   assert.match(canvas, /SortableSectionFrame/);
   assert.match(canvas, /mode === "editor"/);
   assert.match(canvas, /function editableText/);
@@ -112,6 +132,10 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(propertiesPanel, /landing\.faqHeadline/);
   assert.match(propertiesPanel, /landing\.finalCtaHeadline/);
   assert.match(propertiesPanel, /onSetPalette/);
+  assert.match(propertiesPanel, /ImagePresentationFields/);
+  assert.match(propertiesPanel, /value="smart"/);
+  assert.match(propertiesPanel, /Hiện đầy đủ/);
+  assert.match(propertiesPanel, /Lấp đầy khung/);
   assert.match(generationProgress, /GenerationStage/);
   assert.match(navigator, /sortableKeyboardCoordinates/);
   assert.match(navigator, /onReorder/);

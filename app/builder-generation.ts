@@ -2,6 +2,7 @@ import type { LandingData, LandingSectionType } from "./landing-data";
 import type { LandingManifest } from "./landing-manifest";
 import type { LandingOperation } from "./landing-operations";
 import type { BuilderPlan } from "./server/agents/builder-plan";
+import type { TemplateSelection } from "./templates/registry";
 
 export const generationStages = [
   "understanding",
@@ -35,6 +36,7 @@ export type BuilderAgentResult = {
     name: string;
     description: string;
   };
+  templateSelection?: TemplateSelection;
 };
 
 export type BuilderStreamEvent =

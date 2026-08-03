@@ -25,7 +25,47 @@ export type LandingImageAsset = {
   alt: string;
 };
 
+export type LandingImageFit = "cover" | "contain" | "smart";
+export type LandingImagePosition =
+  | "center"
+  | "top"
+  | "bottom"
+  | "left"
+  | "right";
+
+export type LandingImagePresentation = {
+  imageFit?: LandingImageFit;
+  imagePosition?: LandingImagePosition;
+};
+
+export const landingSectionVariantOptions: Record<
+  LandingSectionType,
+  readonly string[]
+> = {
+  hero: ["split", "centered", "product-showcase", "image-background"],
+  stats: ["row", "cards"],
+  features: ["numbered", "grid", "bento"],
+  pricing: ["cards", "minimal", "comparison"],
+  portfolio: ["grid", "editorial", "masonry"],
+  gallery: ["grid", "masonry", "showcase"],
+  testimonial: ["highlight", "card", "minimal"],
+  faq: ["list", "two-columns"],
+  leadForm: ["two-columns", "centered", "compact"],
+  finalCta: ["minimal", "banner"],
+};
+
+export type LandingDesign = {
+  templateId: string;
+  templateVersion: number;
+  sectionVariants: Partial<Record<LandingSectionType, string>>;
+  typography: {
+    heading: "editorial" | "modern" | "friendly";
+    body: "sans" | "humanist";
+  };
+};
+
 export type LandingData = {
+  design?: LandingDesign;
   brand: string;
   navCta: string;
   eyebrow: string;
@@ -48,6 +88,8 @@ export type LandingData = {
   finalCtaEyebrow: string;
   finalCtaHeadline: string;
   heroImage: string;
+  heroImageFit?: LandingImageFit;
+  heroImagePosition?: LandingImagePosition;
   sectionOrder: LandingSectionType[];
   hiddenSections: LandingSectionType[];
   stats: Array<{ value: string; label: string }>;
@@ -65,8 +107,12 @@ export type LandingData = {
     category: string;
     description: string;
     imageUrl: string;
-  }>;
-  gallery: Array<{ url: string; alt: string; caption: string }>;
+  } & LandingImagePresentation>;
+  gallery: Array<{
+    url: string;
+    alt: string;
+    caption: string;
+  } & LandingImagePresentation>;
   testimonial: { quote: string; name: string; role: string };
   faq: Array<{ question: string; answer: string }>;
   leadForm: {
@@ -92,6 +138,26 @@ export type ChatMessage = {
 };
 
 export const defaultLanding: LandingData = {
+  design: {
+    templateId: "service-editorial",
+    templateVersion: 1,
+    sectionVariants: {
+      hero: "split",
+      stats: "row",
+      features: "numbered",
+      pricing: "cards",
+      portfolio: "grid",
+      gallery: "grid",
+      testimonial: "highlight",
+      faq: "list",
+      leadForm: "two-columns",
+      finalCta: "minimal",
+    },
+    typography: {
+      heading: "editorial",
+      body: "sans",
+    },
+  },
   brand: "Morrow",
   navCta: "Nhận tư vấn",
   eyebrow: "Hệ điều hành cho đội ngũ sáng tạo",
@@ -115,6 +181,8 @@ export const defaultLanding: LandingData = {
   finalCtaEyebrow: "Sẵn sàng tạo điều khác biệt?",
   finalCtaHeadline: "Biến ý tưởng tiếp theo\nthành điều lớn lao.",
   heroImage: "",
+  heroImageFit: "smart",
+  heroImagePosition: "center",
   sectionOrder: [
     "hero",
     "stats",
@@ -182,18 +250,24 @@ export const defaultLanding: LandingData = {
       category: "Thương hiệu",
       description: "Từ chiến lược đến bộ nhận diện và trang chuyển đổi.",
       imageUrl: "",
+      imageFit: "smart",
+      imagePosition: "center",
     },
     {
       title: "Nền tảng học tập mới",
       category: "Sản phẩm số",
       description: "Trải nghiệm học đơn giản, thân thiện và tập trung vào kết quả.",
       imageUrl: "",
+      imageFit: "smart",
+      imagePosition: "center",
     },
     {
       title: "Không gian bán lẻ",
       category: "Trải nghiệm",
       description: "Kết nối câu chuyện thương hiệu giữa trực tuyến và cửa hàng.",
       imageUrl: "",
+      imageFit: "smart",
+      imagePosition: "center",
     },
   ],
   gallery: [],
@@ -253,6 +327,18 @@ export function normalizeLandingData(
   return {
     ...structuredClone(defaultLanding),
     ...value,
+    design: {
+      ...structuredClone(defaultLanding.design!),
+      ...(value.design || {}),
+      sectionVariants: {
+        ...defaultLanding.design!.sectionVariants,
+        ...(value.design?.sectionVariants || {}),
+      },
+      typography: {
+        ...defaultLanding.design!.typography,
+        ...(value.design?.typography || {}),
+      },
+    },
     featuresEyebrow:
       typeof value.featuresEyebrow === "string"
         ? value.featuresEyebrow
@@ -301,6 +387,20 @@ export function normalizeLandingData(
       typeof value.finalCtaHeadline === "string"
         ? value.finalCtaHeadline
         : defaultLanding.finalCtaHeadline,
+    heroImageFit:
+      value.heroImageFit === "cover" ||
+      value.heroImageFit === "contain" ||
+      value.heroImageFit === "smart"
+        ? value.heroImageFit
+        : defaultLanding.heroImageFit,
+    heroImagePosition:
+      value.heroImagePosition === "top" ||
+      value.heroImagePosition === "bottom" ||
+      value.heroImagePosition === "left" ||
+      value.heroImagePosition === "right" ||
+      value.heroImagePosition === "center"
+        ? value.heroImagePosition
+        : defaultLanding.heroImagePosition,
     sectionOrder: (() => {
       const allowed = new Set(landingSectionTypes);
       const normalized = Array.isArray(value.sectionOrder)
@@ -336,10 +436,42 @@ export function normalizeLandingData(
       ? value.pricing
       : defaultLanding.pricing,
     portfolio: Array.isArray(value.portfolio)
-      ? value.portfolio
+      ? value.portfolio.map((item) => ({
+          ...item,
+          imageFit:
+            item.imageFit === "contain" ||
+            item.imageFit === "cover" ||
+            item.imageFit === "smart"
+              ? item.imageFit
+              : "smart",
+          imagePosition:
+            item.imagePosition === "top" ||
+            item.imagePosition === "bottom" ||
+            item.imagePosition === "left" ||
+            item.imagePosition === "right" ||
+            item.imagePosition === "center"
+              ? item.imagePosition
+              : "center",
+        }))
       : defaultLanding.portfolio,
     gallery: Array.isArray(value.gallery)
-      ? value.gallery
+      ? value.gallery.map((item) => ({
+          ...item,
+          imageFit:
+            item.imageFit === "contain" ||
+            item.imageFit === "cover" ||
+            item.imageFit === "smart"
+              ? item.imageFit
+              : "smart",
+          imagePosition:
+            item.imagePosition === "top" ||
+            item.imagePosition === "bottom" ||
+            item.imagePosition === "left" ||
+            item.imagePosition === "right" ||
+            item.imagePosition === "center"
+              ? item.imagePosition
+              : "center",
+        }))
       : defaultLanding.gallery,
     faq: Array.isArray(value.faq) ? value.faq : defaultLanding.faq,
     testimonial: {

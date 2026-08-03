@@ -1,4 +1,5 @@
 import {
+  landingSectionVariantOptions,
   landingSectionTypes,
   normalizeLandingData,
   type LandingData,
@@ -9,6 +10,10 @@ import {
   editableFieldsBySection,
   type LandingEditableField,
 } from "./landing-manifest";
+import {
+  landingOperationKeys as operationKeys,
+  normalizeLandingOperationInput,
+} from "./landing-operation-normalizer";
 
 export type LandingOperation =
   | {
@@ -124,8 +129,11 @@ const landingKeys: Array<keyof LandingData> = [
   "finalCtaEyebrow",
   "finalCtaHeadline",
   "heroImage",
+  "heroImageFit",
+  "heroImagePosition",
   "sectionOrder",
   "hiddenSections",
+  "design",
   "stats",
   "features",
   "pricing",
@@ -136,25 +144,6 @@ const landingKeys: Array<keyof LandingData> = [
   "leadForm",
   "palette",
 ];
-const operationKeys: Record<string, readonly string[]> = {
-  update_text: [
-    "type",
-    "section",
-    "field",
-    "value",
-    "index",
-    "nestedIndex",
-  ],
-  replace_section: ["type", "section", "value"],
-  set_palette: ["type", "token", "value"],
-  hide_section: ["type", "section"],
-  show_section: ["type", "section"],
-  move_section: ["type", "section", "toIndex"],
-  add_section: ["type", "section", "atIndex"],
-  assign_image: ["type", "target", "url", "alt"],
-  replace_landing: ["type", "value"],
-};
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
@@ -283,6 +272,25 @@ export function validateLandingData(
   });
 
   if (
+    value.heroImageFit !== undefined &&
+    value.heroImageFit !== "cover" &&
+    value.heroImageFit !== "contain" &&
+    value.heroImageFit !== "smart"
+  ) {
+    errors.push("heroImageFit phải là cover, contain hoặc smart.");
+  }
+  if (
+    value.heroImagePosition !== undefined &&
+    value.heroImagePosition !== "center" &&
+    value.heroImagePosition !== "top" &&
+    value.heroImagePosition !== "bottom" &&
+    value.heroImagePosition !== "left" &&
+    value.heroImagePosition !== "right"
+  ) {
+    errors.push("heroImagePosition không hợp lệ.");
+  }
+
+  if (
     !Array.isArray(value.sectionOrder) ||
     value.sectionOrder.some((section) => !isSection(section))
   ) {
@@ -305,6 +313,79 @@ export function validateLandingData(
     )
   ) {
     errors.push("hiddenSections chứa section không hợp lệ.");
+  }
+
+  if (value.design !== undefined) {
+    if (!isRecord(value.design)) {
+      errors.push("design phải là object.");
+    } else {
+      errors.push(
+        ...validateAllowedKeys(
+          value.design,
+          ["templateId", "templateVersion", "sectionVariants", "typography"],
+          "design"
+        )
+      );
+
+      if (!isSafeText(value.design.templateId, 100)) {
+        errors.push("design.templateId phải là chuỗi hợp lệ.");
+      }
+      if (
+        typeof value.design.templateVersion !== "number" ||
+        !Number.isInteger(value.design.templateVersion) ||
+        value.design.templateVersion < 1
+      ) {
+        errors.push("design.templateVersion phải là số nguyên dương.");
+      }
+
+      if (!isRecord(value.design.sectionVariants)) {
+        errors.push("design.sectionVariants phải là object.");
+      } else {
+        errors.push(
+          ...validateAllowedKeys(
+            value.design.sectionVariants,
+            landingSectionTypes,
+            "design.sectionVariants"
+          )
+        );
+        Object.entries(value.design.sectionVariants).forEach(
+          ([section, variant]) => {
+            if (
+              !isSection(section) ||
+              typeof variant !== "string" ||
+              !landingSectionVariantOptions[section].includes(variant)
+            ) {
+              errors.push(`design.sectionVariants.${section} không hợp lệ.`);
+            }
+          }
+        );
+      }
+
+      if (!isRecord(value.design.typography)) {
+        errors.push("design.typography phải là object.");
+      } else {
+        errors.push(
+          ...validateAllowedKeys(
+            value.design.typography,
+            ["heading", "body"],
+            "design.typography"
+          )
+        );
+        if (
+          value.design.typography.heading !== "editorial" &&
+          value.design.typography.heading !== "modern" &&
+          value.design.typography.heading !== "friendly"
+        ) {
+          errors.push("design.typography.heading không hợp lệ.");
+        }
+        if (
+          value.design.typography.body !== "sans" &&
+          value.design.typography.body !== "humanist"
+        ) {
+          errors.push("design.typography.body không hợp lệ.");
+        }
+      }
+    }
   }
 
   const arrayRules: Array<{
@@ -338,7 +419,11 @@ export function validateLandingData(
     items.forEach((item, index) => {
       errors.push(...validateStringRecord(item, fields, `${key}[${index}]`));
       const extraFields =
-        key === "pricing" ? ["features", "highlighted"] : [];
+        key === "pricing"
+          ? ["features", "highlighted"]
+          : key === "portfolio" || key === "gallery"
+            ? ["imageFit", "imagePosition"]
+            : [];
       errors.push(
         ...validateAllowedKeys(
           item,
@@ -359,6 +444,28 @@ export function validateLandingData(
         (!isRecord(item) || typeof item.highlighted !== "boolean")
       ) {
         errors.push(`${key}[${index}].highlighted phải là boolean.`);
+      }
+      if (
+        (key === "portfolio" || key === "gallery") &&
+        isRecord(item) &&
+        item.imageFit !== undefined &&
+        item.imageFit !== "cover" &&
+        item.imageFit !== "contain" &&
+        item.imageFit !== "smart"
+      ) {
+        errors.push(`${key}[${index}].imageFit không hợp lệ.`);
+      }
+      if (
+        (key === "portfolio" || key === "gallery") &&
+        isRecord(item) &&
+        item.imagePosition !== undefined &&
+        item.imagePosition !== "center" &&
+        item.imagePosition !== "top" &&
+        item.imagePosition !== "bottom" &&
+        item.imagePosition !== "left" &&
+        item.imagePosition !== "right"
+      ) {
+        errors.push(`${key}[${index}].imagePosition không hợp lệ.`);
       }
     });
   });
@@ -449,13 +556,14 @@ function parseIndex(value: unknown) {
 }
 
 export function parseLandingOperationEnvelope(
-  value: unknown,
+  rawValue: unknown,
   options: {
     mode: LandingOperationMode;
     current: LandingData;
     source?: "ai" | "ui" | "system";
   }
 ): LandingOperationEnvelope {
+  const value = normalizeLandingOperationInput(rawValue, options);
   if (!isRecord(value) || !Array.isArray(value.operations)) {
     throw new LandingOperationValidationError([
       "Phản hồi phải là object có mảng operations.",
@@ -952,12 +1060,28 @@ function applyImageOperation(
   operation: Extract<LandingOperation, { type: "assign_image" }>
 ) {
   const { target, url, alt = "" } = operation;
-  if (target === "hero") return { ...current, heroImage: url };
+  if (target === "hero") {
+    return {
+      ...current,
+      heroImage: url,
+      heroImageFit: "smart" as const,
+      heroImagePosition: "center" as const,
+    };
+  }
   if (target === "gallery:add") {
     return ensureSectionPresent(
       {
         ...current,
-        gallery: [...current.gallery, { url, alt, caption: "" }],
+        gallery: [
+          ...current.gallery,
+          {
+            url,
+            alt,
+            caption: "",
+            imageFit: "smart" as const,
+            imagePosition: "center" as const,
+          },
+        ],
       },
       "gallery"
     );
@@ -979,6 +1103,8 @@ function applyImageOperation(
     portfolio: updateIndexedItem(current.portfolio, index, (item) => ({
       ...item,
       imageUrl: url,
+      imageFit: "smart" as const,
+      imagePosition: "center" as const,
     })),
   };
 }

@@ -8,6 +8,9 @@ import {
 } from "react";
 import type {
   LandingData,
+  LandingImageFit,
+  LandingImagePosition,
+  LandingImageTarget,
   LandingSectionType,
 } from "../landing-data";
 import type { LandingTextEdit } from "./inline-editing";
@@ -23,7 +26,78 @@ type SectionPropertiesPanelProps = {
     value: string
   ) => void;
   onToggleVisibility: (section: LandingSectionType) => void;
+  onSetImagePresentation: (
+    target: LandingImageTarget,
+    patch: {
+      imageFit?: LandingImageFit;
+      imagePosition?: LandingImagePosition;
+    }
+  ) => void;
 };
+
+function ImagePresentationFields({
+  target,
+  fit,
+  position,
+  disabled,
+  onCommit,
+}: {
+  target: LandingImageTarget;
+  fit: LandingImageFit | undefined;
+  position: LandingImagePosition | undefined;
+  disabled: boolean;
+  onCommit: SectionPropertiesPanelProps["onSetImagePresentation"];
+}) {
+  const fitId = useId();
+  const positionId = useId();
+
+  return (
+    <div className="property-image-presentation">
+      <strong>Cách hiển thị ảnh</strong>
+      <div className="property-image-presentation__grid">
+        <label htmlFor={fitId}>
+          <span>Kích thước</span>
+          <select
+            id={fitId}
+            value={fit || "smart"}
+            disabled={disabled}
+            onChange={(event) =>
+              onCommit(target, {
+                imageFit: event.target.value as LandingImageFit,
+              })
+            }
+          >
+            <option value="smart">Vừa khung thông minh</option>
+            <option value="contain">Hiện đầy đủ</option>
+            <option value="cover">Lấp đầy khung</option>
+          </select>
+        </label>
+        <label htmlFor={positionId}>
+          <span>Trọng tâm</span>
+          <select
+            id={positionId}
+            value={position || "center"}
+            disabled={disabled}
+            onChange={(event) =>
+              onCommit(target, {
+                imagePosition: event.target.value as LandingImagePosition,
+              })
+            }
+          >
+            <option value="center">Ở giữa</option>
+            <option value="top">Phía trên</option>
+            <option value="bottom">Phía dưới</option>
+            <option value="left">Bên trái</option>
+            <option value="right">Bên phải</option>
+          </select>
+        </label>
+      </div>
+      <small>
+        “Vừa khung thông minh” giữ đủ ảnh và dùng nền mờ để lấp khoảng trống.
+      </small>
+    </div>
+  );
+}
 
 function PropertyTextField({
   label,
@@ -127,6 +201,7 @@ export function SectionPropertiesPanel({
   onEditText,
   onSetPalette,
   onToggleVisibility,
+  onSetImagePresentation,
 }: SectionPropertiesPanelProps) {
   const textField = (
     label: string,
@@ -188,6 +263,15 @@ export function SectionPropertiesPanel({
                   : "Chưa có ảnh · kéo ảnh vào Hero"}
               </strong>
             </div>
+            {landing.heroImage ? (
+              <ImagePresentationFields
+                target="hero"
+                fit={landing.heroImageFit}
+                position={landing.heroImagePosition}
+                disabled={isBusy}
+                onCommit={onSetImagePresentation}
+              />
+            ) : null}
           </>
         );
       case "stats":
@@ -315,6 +399,15 @@ export function SectionPropertiesPanel({
                   { section, field: "portfolio.description", index },
                   true
                 )}
+                {item.imageUrl ? (
+                  <ImagePresentationFields
+                    target={`portfolio:${index}`}
+                    fit={item.imageFit}
+                    position={item.imagePosition}
+                    disabled={isBusy}
+                    onCommit={onSetImagePresentation}
+                  />
+                ) : null}
               </fieldset>
             ))}
           </>
@@ -346,6 +439,13 @@ export function SectionPropertiesPanel({
                     field: "gallery.caption",
                     index,
                   })}
+                  <ImagePresentationFields
+                    target={`gallery:${index}`}
+                    fit={item.imageFit}
+                    position={item.imagePosition}
+                    disabled={isBusy}
+                    onCommit={onSetImagePresentation}
+                  />
                 </fieldset>
               ))
             ) : (

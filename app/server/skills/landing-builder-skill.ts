@@ -7,6 +7,7 @@ import {
   parseLandingOperationEnvelope,
   type LandingOperationMode,
 } from "../../landing-operations";
+import { describeLandingOperationSchemas } from "../../landing-operation-normalizer";
 
 const requiredKeys: Array<keyof LandingData> = [
   "brand",
@@ -230,6 +231,7 @@ export const landingBuilderSkill = {
     "Mọi phản hồi phải là một JSON object có khóa operations là một mảng và explanation là một câu ngắn.",
     "Khi chỉnh sửa, luôn trả thay đổi nhỏ nhất có thể; không trả lại toàn bộ LandingData.",
     "Các operation được phép: update_text, replace_section, set_palette, hide_section, show_section, move_section, add_section, assign_image và replace_landing.",
+    `Schema field bắt buộc; không thêm field khác: ${describeLandingOperationSchemas()}.`,
     "update_text có dạng {type, section, field, value, index?, nestedIndex?}. Chỉ dùng field có trong manifest; field của mảng phải có index, pricing.feature phải có cả index và nestedIndex.",
     "replace_section chỉ dùng khi người dùng yêu cầu viết lại toàn bộ một section.",
     "set_palette có token ink, paper, accent, soft hoặc line và value là mã hex 6 ký tự.",

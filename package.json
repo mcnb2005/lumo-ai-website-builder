@@ -11,7 +11,7 @@
     "build": "node scripts/run-vinext.mjs build",
     "start": "node scripts/run-vinext.mjs start",
     "start:lan": "node scripts/run-vinext.mjs start --host 0.0.0.0",
-    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/dashboard.test.mjs tests/skills.test.mjs tests/editor.test.mjs tests/operation-pipeline.test.mjs tests/google-auth.test.mjs tests/company-rbac.test.mjs tests/auth-required.test.mjs",
+    "test": "npm run build && node --test tests/rendered-html.test.mjs tests/dashboard.test.mjs tests/skills.test.mjs tests/editor.test.mjs tests/operation-pipeline.test.mjs tests/google-auth.test.mjs tests/company-rbac.test.mjs tests/auth-required.test.mjs tests/templates.test.mjs",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next",
     "db:generate": "drizzle-kit generate"
   },

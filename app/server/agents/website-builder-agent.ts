@@ -27,6 +27,10 @@ import { createDemoBuilderPlan } from "./builder-plan";
 import { resolveLandingRecipe } from "./landing-recipes";
 import { runPlanningAgent } from "./planning-agent";
 import {
+  createLandingFromTemplate,
+  selectTemplateForBrief,
+} from "../../templates/registry";
+import {
   buildSimpleActionOperations,
   describeSimpleAction,
 } from "./simple-action-executor";
@@ -180,7 +184,10 @@ export async function runWebsiteBuilderAgent(
       })
     : createDemoBuilderPlan(input.prompt);
   if (input.apiKey) {
-    const resolution = resolveBuilderPlanTarget(intent, input.current);
+    const resolution = resolveBuilderPlanTarget(intent, input.current, {
+      selectedSection: input.selectedSection,
+      prompt: input.prompt,
+    });
     if (resolution.status === "clarify") {
       intent = {
         ...intent,
@@ -195,6 +202,12 @@ export async function runWebsiteBuilderAgent(
       intent = resolution.plan;
     }
   }
+  const templateSelection =
+    intent.mode === "create" ? selectTemplateForBrief(intent) : undefined;
+  const activeLanding = templateSelection
+    ? createLandingFromTemplate(templateSelection.id)
+    : input.current;
+  const activeManifest = buildLandingManifest(activeLanding);
   const runtimeSkill = resolveRuntimeSkill(input.prompt);
   input.progress?.({
     type: "status",
@@ -215,7 +228,7 @@ export async function runWebsiteBuilderAgent(
       stage: "generating",
       message: "Đang tạo nội dung bằng chế độ mẫu…",
     });
-    const landing = input.createDemoLanding(input.prompt, input.current);
+    const landing = input.createDemoLanding(input.prompt, activeLanding);
     input.progress?.({
       type: "validation",
       stage: "validating",
@@ -248,6 +261,7 @@ export async function runWebsiteBuilderAgent(
             description: runtimeSkill.description,
           }
         : undefined,
+      templateSelection,
     };
   }
 
@@ -326,7 +340,7 @@ export async function runWebsiteBuilderAgent(
   const targetSnapshots = Object.fromEntries(
     intent.targetSections.map((section) => [
       section,
-      getLandingSectionSnapshot(input.current, section),
+      getLandingSectionSnapshot(activeLanding, section),
     ])
   );
   const runtimeSkillContext = runtimeSkill
@@ -358,28 +372,35 @@ export async function runWebsiteBuilderAgent(
           creationRecipe
         )}`
       : "",
-    `Section manifest:\n${JSON.stringify(currentManifest)}`,
+    templateSelection
+      ? `Template Registry đã chọn:\n${JSON.stringify({
+          ...templateSelection,
+          design: activeLanding.design,
+        })}\nGiữ templateId và chỉ dùng sectionVariants đã có trong template.`
+      : "",
+    `Section manifest:\n${JSON.stringify(activeManifest)}`,
     `Dữ liệu các section mục tiêu:\n${JSON.stringify(targetSnapshots)}`,
     `Tóm tắt landing hiện tại:\n${JSON.stringify({
-      brand: input.current.brand,
-      palette: input.current.palette,
-      sectionOrder: input.current.sectionOrder,
-      hiddenSections: input.current.hiddenSections,
+      brand: activeLanding.brand,
+      palette: activeLanding.palette,
+      design: activeLanding.design,
+      sectionOrder: activeLanding.sectionOrder,
+      hiddenSections: activeLanding.hiddenSections,
       assets: [
-        input.current.heroImage,
-        ...input.current.gallery.map((item) => item.url),
-        ...input.current.portfolio.map((item) => item.imageUrl),
+        activeLanding.heroImage,
+        ...activeLanding.gallery.map((item) => item.url),
+        ...activeLanding.portfolio.map((item) => item.imageUrl),
       ].filter(Boolean),
     })}`,
     intent.mode === "create"
       ? `LandingData mẫu bắt buộc giữ đúng cấu trúc khi dùng replace_landing:\n${JSON.stringify(
-          input.current
+          activeLanding
         )}`
       : "",
     `Yêu cầu mới của người dùng:\n${input.prompt}`,
     !intent.targetSections.length && intent.mode === "edit"
       ? `Landing page hiện tại để xử lý yêu cầu toàn trang:\n${JSON.stringify(
-          input.current
+          activeLanding
         )}`
       : "",
   ]
@@ -421,12 +442,12 @@ export async function runWebsiteBuilderAgent(
     try {
       const parsed = parseLandingOperations(
         output,
-        input.current,
+        activeLanding,
         intent.mode
       );
       assertSurgicalScope(parsed.operations, intent);
       const applied = applyLandingOperations(
-        input.current,
+        activeLanding,
         parsed.operations
       );
       if (creationRecipe) {
@@ -470,7 +491,13 @@ export async function runWebsiteBuilderAgent(
       : new Error("Agent chưa tạo được thay đổi hợp lệ.");
   }
 
-  landing = preserveInternalAssetUrls(input.current, landing);
+  landing = preserveInternalAssetUrls(activeLanding, landing);
+  if (templateSelection) {
+    landing = {
+      ...landing,
+      design: structuredClone(activeLanding.design),
+    };
+  }
 
   return {
     landing,
@@ -492,5 +519,6 @@ export async function runWebsiteBuilderAgent(
           description: runtimeSkill.description,
         }
       : undefined,
+    templateSelection,
   };
 }

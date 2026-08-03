@@ -13,6 +13,13 @@ import { GenerationProgress } from "./editor/GenerationProgress";
 import { SectionPropertiesPanel } from "./editor/SectionPropertiesPanel";
 import { SectionNavigator } from "./editor/SectionNavigator";
 import { sectionRegistry } from "./editor/section-registry";
+import { NewProjectDialog } from "./templates/NewProjectDialog";
+import {
+  applyTemplateDesign,
+  createBlankLanding,
+  createLandingFromTemplate,
+  type TemplateSelection,
+} from "./templates/registry";
 import {
   applyLandingTextEdit,
   type LandingTextEdit,
@@ -30,9 +37,15 @@ import {
   type ChatMessage,
   type LandingData,
   type LandingImageAsset,
+  type LandingImageFit,
+  type LandingImagePosition,
   type LandingImageTarget,
   type LandingSectionType,
 } from "./landing-data";
+import {
+  createLandingImageDragPayload,
+  LUMO_ASSET_DRAG_TYPE,
+} from "./image-drag-payload";
 
 type Device = "desktop" | "tablet" | "mobile";
 type SaveState = "guest" | "saving" | "saved" | "error";
@@ -207,6 +220,12 @@ export function Studio() {
     useState<GenerationStage | null>(null);
   const [generationMessage, setGenerationMessage] = useState("");
   const [generationErrors, setGenerationErrors] = useState<string[]>([]);
+  const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
+  const [templateDialogMode, setTemplateDialogMode] = useState<
+    "create" | "switch"
+  >("create");
+  const [lastTemplateSelection, setLastTemplateSelection] =
+    useState<TemplateSelection | null>(null);
   const [editorReady, setEditorReady] = useState(false);
   const saveEnabled = useRef(false);
   const conversationEnd = useRef<HTMLDivElement>(null);
@@ -485,31 +504,127 @@ export function Studio() {
     setNotice("Đã cập nhật bảng màu của landing page.");
   }
 
-  function createProject() {
+  function setImagePresentation(
+    target: LandingImageTarget,
+    patch: {
+      imageFit?: LandingImageFit;
+      imagePosition?: LandingImagePosition;
+    }
+  ) {
+    if (isGenerating) return;
+    updateLanding((current) => {
+      if (target === "hero") {
+        return {
+          ...current,
+          heroImageFit: patch.imageFit ?? current.heroImageFit,
+          heroImagePosition:
+            patch.imagePosition ?? current.heroImagePosition,
+        };
+      }
+
+      if (target.startsWith("portfolio:")) {
+        const imageIndex = Number(target.split(":")[1]);
+        if (!Number.isInteger(imageIndex)) return current;
+        return {
+          ...current,
+          portfolio: current.portfolio.map((item, index) =>
+            index === imageIndex ? { ...item, ...patch } : item
+          ),
+        };
+      }
+
+      if (target.startsWith("gallery:") && target !== "gallery:add") {
+        const imageIndex = Number(target.split(":")[1]);
+        if (!Number.isInteger(imageIndex)) return current;
+        return {
+          ...current,
+          gallery: current.gallery.map((item, index) =>
+            index === imageIndex ? { ...item, ...patch } : item
+          ),
+        };
+      }
+
+      return current;
+    });
+    setNotice("Đã cập nhật cách hiển thị ảnh.");
+  }
+
+  function createProject(
+    nextLanding: LandingData = structuredClone(defaultLanding),
+    projectNotice?: string
+  ) {
     saveEnabled.current = false;
     const identity = makeProjectIdentity();
     setProjectId(identity.id);
     setProjectSlug(identity.slug);
-    setLanding(structuredClone(defaultLanding));
+    setLanding(normalizeLandingData(nextLanding));
     setMessages(starterMessages);
     setIsPublished(false);
     setPublicUrl("");
     setUploadedAssets([]);
+    setSelectedSection(null);
+    setLastTemplateSelection(null);
     setGenerationStage(null);
     setGenerationMessage("");
     setGenerationErrors([]);
     setHistory([]);
     setFuture([]);
     setVersion(1);
+    if (projectNotice) {
+      setNotice(projectNotice);
+    } else {
     setNotice(
       user
         ? "Đã tạo dự án mới. Thay đổi sẽ được lưu tự động."
         : "Bạn đang dùng thử. Đăng nhập để lưu dự án này."
     );
+    }
     window.setTimeout(() => {
       saveEnabled.current = true;
       if (!user) setSaveState("guest");
     }, 0);
+  }
+
+  function openNewProjectDialog() {
+    setTemplateDialogMode("create");
+    setNewProjectDialogOpen(true);
+  }
+
+  function createProjectWithAi(prompt: string) {
+    const startingLanding = createBlankLanding();
+    createProject(
+      startingLanding,
+      "Lumo đang phân tích mục tiêu và chọn template phù hợp từ thư viện."
+    );
+    setNewProjectDialogOpen(false);
+    void sendPrompt(prompt, startingLanding, starterMessages);
+  }
+
+  function chooseTemplate(templateId: string) {
+    if (templateDialogMode === "switch") {
+      updateLanding((current) => applyTemplateDesign(current, templateId));
+      setLastTemplateSelection(null);
+      setNotice("Đã đổi thiết kế và giữ nguyên nội dung landing page hiện tại.");
+    } else {
+      createProject(
+        createLandingFromTemplate(templateId),
+        "Đã tạo project từ template. Bạn có thể chat để thay nội dung mà vẫn giữ bố cục."
+      );
+    }
+    setNewProjectDialogOpen(false);
+  }
+
+  function createBlankProject() {
+    createProject(
+      createBlankLanding(),
+      "Đã tạo trang trắng. Hãy thêm section hoặc chat với Lumo để bắt đầu."
+    );
+    setNewProjectDialogOpen(false);
+  }
+
+  function showOtherTemplates() {
+    setTemplateDialogMode("switch");
+    setNewProjectDialogOpen(true);
   }
 
   function selectSection(section: LandingSectionType) {
@@ -588,7 +703,11 @@ export function Studio() {
     setNotice(`${sectionRegistry[nextSection].label} đã được thêm vào trang.`);
   }
 
-  async function sendPrompt(rawPrompt: string) {
+  async function sendPrompt(
+    rawPrompt: string,
+    sourceLanding: LandingData = landing,
+    sourceMessages: ChatMessage[] = messages
+  ) {
     const prompt = rawPrompt.trim();
     if (!prompt || isGenerating) return;
 
@@ -609,9 +728,9 @@ export function Studio() {
         },
         body: JSON.stringify({
           prompt,
-          current: landing,
+          current: sourceLanding,
           selectedSection,
-          history: messages.slice(-8).map(({ role, content }) => ({
+          history: sourceMessages.slice(-8).map(({ role, content }) => ({
             role,
             content,
           })),
@@ -657,6 +776,7 @@ export function Studio() {
       });
 
       updateLanding(() => result.landing);
+      setLastTemplateSelection(result.templateSelection || null);
       setMessages((current) => [
         ...current,
         newMessage(
@@ -734,11 +854,18 @@ export function Studio() {
       url: asset.url,
       alt: asset.alt,
       caption: "",
+      imageFit: "smart" as const,
+      imagePosition: "center" as const,
     }));
 
     updateLanding((current) => {
       if (target === "hero") {
-        const next = { ...current, heroImage: primaryAsset.url };
+        const next = {
+          ...current,
+          heroImage: primaryAsset.url,
+          heroImageFit: "smart" as const,
+          heroImagePosition: "center" as const,
+        };
         if (!remainingGalleryItems.length) return next;
         targetSection = "gallery";
         successMessage = `Đã đặt 1 ảnh vào Hero và thêm ${remainingGalleryItems.length} ảnh vào thư viện.`;
@@ -760,6 +887,8 @@ export function Studio() {
               url: asset.url,
               alt: asset.alt,
               caption: "",
+              imageFit: "smart" as const,
+              imagePosition: "center" as const,
             })),
           ],
         };
@@ -795,7 +924,12 @@ export function Studio() {
         ...visibleLanding,
         portfolio: current.portfolio.map((item, index) =>
           index === portfolioIndex
-            ? { ...item, imageUrl: primaryAsset.url }
+            ? {
+                ...item,
+                imageUrl: primaryAsset.url,
+                imageFit: "smart" as const,
+                imagePosition: "center" as const,
+              }
             : item
         ),
       };
@@ -999,7 +1133,7 @@ export function Studio() {
             <span aria-hidden="true">✦</span>
             lumo
           </button>
-          <button className="new-project-button" type="button" onClick={createProject}>
+          <button className="new-project-button" type="button" onClick={openNewProjectDialog}>
             + Dự án mới
           </button>
         </div>
@@ -1102,6 +1236,21 @@ export function Studio() {
                 <p>{message.content}</p>
               </div>
             ))}
+            {lastTemplateSelection ? (
+              <div className="template-selection-message">
+                <span>AI ĐÃ CHỌN TEMPLATE</span>
+                <strong>{lastTemplateSelection.name}</strong>
+                <p>{lastTemplateSelection.reason}</p>
+                <div>
+                  <button type="button" onClick={() => setLastTemplateSelection(null)}>
+                    Giữ thiết kế này
+                  </button>
+                  <button type="button" onClick={showOtherTemplates}>
+                    Xem mẫu khác
+                  </button>
+                </div>
+              </div>
+            ) : null}
             {generationStage ? (
               <div className="message message-assistant">
                 <span className="message-avatar" aria-hidden="true">✦</span>
@@ -1211,14 +1360,17 @@ export function Studio() {
                         title={`Kéo ${asset.alt} vào trang`}
                         key={asset.id || asset.url}
                         onDragStart={(event) => {
-                          event.dataTransfer.effectAllowed = "copy";
+                          event.stopPropagation();
+                          event.dataTransfer.effectAllowed = "copyMove";
+                          const payload = createLandingImageDragPayload(asset);
                           event.dataTransfer.setData(
-                            "application/x-lumo-asset",
-                            JSON.stringify(asset)
+                            LUMO_ASSET_DRAG_TYPE,
+                            payload.custom
                           );
+                          event.dataTransfer.setData("text/plain", payload.text);
                         }}
                       >
-                        <img src={asset.url} alt={asset.alt} />
+                        <img src={asset.url} alt={asset.alt} draggable={false} />
                       </div>
                     ))}
                   </div>
@@ -1302,6 +1454,7 @@ export function Studio() {
                   isBusy={isGenerating}
                   onEditText={editLandingText}
                   onSetPalette={setLandingPalette}
+                  onSetImagePresentation={setImagePresentation}
                   onToggleVisibility={toggleSectionVisibility}
                 />
               </div>
@@ -1359,6 +1512,16 @@ export function Studio() {
         </section>
       </div>
 
+      <NewProjectDialog
+        key={`${templateDialogMode}-${newProjectDialogOpen ? "open" : "closed"}`}
+        open={newProjectDialogOpen}
+        mode={templateDialogMode}
+        busy={isGenerating}
+        onClose={() => setNewProjectDialogOpen(false)}
+        onCreateWithAi={createProjectWithAi}
+        onChooseTemplate={chooseTemplate}
+        onCreateBlank={createBlankProject}
+      />
     </main>
   );
 }

@@ -14,6 +14,11 @@ export type TargetResolution =
   | { status: "resolved"; plan: BuilderPlan }
   | { status: "clarify"; question: string };
 
+type TargetResolutionContext = {
+  selectedSection?: LandingSectionType | null;
+  prompt?: string;
+};
+
 function textTarget(
   section: LandingSectionType,
   field: LandingEditableField,
@@ -155,6 +160,59 @@ function normalizeLookup(value: string) {
     .trim();
 }
 
+function withPaletteTarget(
+  plan: BuilderPlan,
+  paletteToken: NonNullable<BuilderTarget["paletteToken"]>,
+  section?: LandingSectionType
+): BuilderPlan {
+  const resolvedSection = plan.target.section || section;
+  return {
+    ...plan,
+    target: {
+      ...plan.target,
+      section: resolvedSection,
+      paletteToken,
+    },
+    targetSections: resolvedSection ? [resolvedSection] : [],
+  };
+}
+
+function resolvePaletteTarget(
+  plan: BuilderPlan,
+  context: TargetResolutionContext
+): TargetResolution {
+  if (plan.target.paletteToken) return { status: "resolved", plan };
+
+  const request = normalizeLookup(`${context.prompt || ""} ${plan.summary}`);
+  const selectedSection = plan.target.section || context.selectedSection || undefined;
+
+  if (/\b(toan trang|nen trang|ca trang|landing page|website)\b/.test(request)) {
+    return { status: "resolved", plan: withPaletteTarget(plan, "paper") };
+  }
+  if (/\b(mau chu|chu chinh|van ban)\b/.test(request)) {
+    return { status: "resolved", plan: withPaletteTarget(plan, "ink") };
+  }
+  if (/\b(mau nhan|nut|cta|diem nhan)\b/.test(request)) {
+    return { status: "resolved", plan: withPaletteTarget(plan, "accent") };
+  }
+  if (/\b(duong vien|vien|duong ke)\b/.test(request)) {
+    return { status: "resolved", plan: withPaletteTarget(plan, "line") };
+  }
+  if (selectedSection && /\b(nen|phan nay|section|the|form)\b/.test(request)) {
+    return {
+      status: "resolved",
+      plan: withPaletteTarget(plan, "soft", selectedSection),
+    };
+  }
+
+  return {
+    status: "clarify",
+    question: selectedSection
+      ? `Bạn muốn đổi nền toàn trang hay nền section ${selectedSection} đang chọn?`
+      : "Bạn muốn đổi nền toàn trang, nền section, màu chữ, màu nhấn hay đường viền?",
+  };
+}
+
 function sameIndex(expected: number | undefined, actual: number | undefined) {
   return expected === undefined || expected === actual;
 }
@@ -192,9 +250,14 @@ function withResolvedTarget(
 
 export function resolveBuilderPlanTarget(
   plan: BuilderPlan,
-  landing: LandingData
+  landing: LandingData,
+  context: TargetResolutionContext = {}
 ): TargetResolution {
   if (plan.mode !== "edit") return { status: "resolved", plan };
+
+  if (plan.action === "set_palette") {
+    return resolvePaletteTarget(plan, context);
+  }
 
   if (
     plan.action === "hide_section" ||

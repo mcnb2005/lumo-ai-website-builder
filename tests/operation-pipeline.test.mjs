@@ -9,13 +9,91 @@ test("operation engine rejects unsafe or out-of-schema changes before applying",
     "utf8"
   );
 
-  assert.match(source, /operationKeys/);
+  assert.match(source, /landingOperationKeys as operationKeys/);
   assert.match(source, /validateAllowedKeys/);
   assert.match(source, /unsafeTextPattern/);
   assert.match(source, /replace_landing chỉ được dùng khi tạo project mới/);
   assert.match(source, /Asset nội bộ không tồn tại/);
   assert.match(source, /operations\.length > 50/);
   assert.match(source, /const errors = validateLandingData\(landing, current\)/);
+  assert.match(source, /normalizeLandingOperationInput\(rawValue, options\)/);
+});
+
+test("AI operation normalizer is schema-driven and preserves ambiguous unknown fields", async () => {
+  const source = await readFile(
+    new URL("../app/landing-operation-normalizer.ts", import.meta.url),
+    "utf8"
+  );
+  const javascript = ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  const moduleUrl = `data:text/javascript;base64,${Buffer.from(javascript).toString("base64")}`;
+  const { normalizeLandingOperationInput } = await import(moduleUrl);
+  const landing = { brand: "Lumo" };
+  const input = {
+    operations: [
+      {
+        type: "replace_landing",
+        section: "hero",
+        value: landing,
+        unexpected: "must-still-be-validated",
+      },
+      {
+        type: "update_text",
+        targetSection: "hero",
+        targetField: "headline",
+        text: "Tiêu đề mới",
+        toIndex: 4,
+      },
+      {
+        type: "hide_section",
+        section: "pricing",
+        value: "redundant protocol field",
+      },
+      {
+        type: "show_section",
+        section: "hero",
+        targetSection: "gallery",
+      },
+    ],
+  };
+
+  const normalized = normalizeLandingOperationInput(input, {
+    mode: "create",
+    source: "ai",
+  });
+
+  assert.deepEqual(normalized.operations[0], {
+    type: "replace_landing",
+    value: landing,
+    unexpected: "must-still-be-validated",
+  });
+  assert.deepEqual(normalized.operations[1], {
+    type: "update_text",
+    section: "hero",
+    field: "headline",
+    value: "Tiêu đề mới",
+  });
+  assert.deepEqual(normalized.operations[2], {
+    type: "hide_section",
+    section: "pricing",
+  });
+  assert.equal(normalized.operations[3], input.operations[3]);
+  assert.equal(input.operations[0].section, "hero");
+  assert.deepEqual(
+    normalizeLandingOperationInput(input, { mode: "edit", source: "ai" }),
+    normalized
+  );
+  assert.equal(
+    normalizeLandingOperationInput(input, { mode: "create", source: "ui" }),
+    input
+  );
+  assert.match(source, /landingOperationSchemas/);
+  assert.match(source, /knownProtocolKeys/);
+  assert.match(source, /conflictingAliases/);
 });
 
 test("chat, inline editing and the properties panel share one operation engine", async () => {
@@ -134,6 +212,27 @@ test("AI BuilderPlan resolves create, edit and clarification without keyword int
   assert.equal(editPlan.mode, "edit");
   assert.deepEqual(editPlan.targetSections, ["hero"]);
   assert.equal(editPlan.targetField, "headline");
+
+  const palettePlan = parseBuilderPlan(
+    JSON.stringify({
+      mode: "edit",
+      action: "set_palette",
+      target: {},
+      value: "#f4efe6",
+      summary: "Đổi màu nền cho đẹp hơn",
+      confidence: 0.92,
+      pagePurpose: "general",
+      businessType: "Doanh nghiệp",
+      audience: "Khách hàng",
+      primaryGoal: "Liên hệ",
+      tone: "Tinh tế",
+      recommendedSections: [],
+    }),
+    manifest
+  );
+
+  assert.equal(palettePlan.action, "set_palette");
+  assert.equal(palettePlan.target.paletteToken, undefined);
 
   const clarifyPlan = parseBuilderPlan(
     JSON.stringify({
@@ -289,6 +388,46 @@ test("target resolver asks before ambiguous edits and simple executor handles he
     }),
     [{ type: "hide_section", section: "hero" }]
   );
+
+  const palettePlan = {
+    ...commonPlan,
+    action: "set_palette",
+    target: {},
+    targetSections: [],
+    targetField: undefined,
+    value: "#f4efe6",
+    matchText: undefined,
+    summary: "Đổi màu nền cho đẹp hơn",
+  };
+  const selectedSectionBackground = resolveBuilderPlanTarget(
+    palettePlan,
+    landing,
+    {
+      selectedSection: "leadForm",
+      prompt: "Hãy làm màu nền phần này khác cho đẹp hơn",
+    }
+  );
+  assert.equal(selectedSectionBackground.status, "resolved");
+  assert.equal(selectedSectionBackground.plan.target.paletteToken, "soft");
+  assert.equal(selectedSectionBackground.plan.target.section, "leadForm");
+  assert.deepEqual(
+    buildSimpleActionOperations(selectedSectionBackground.plan),
+    [{ type: "set_palette", token: "soft", value: "#f4efe6" }]
+  );
+
+  const wholePageBackground = resolveBuilderPlanTarget(
+    palettePlan,
+    landing,
+    { prompt: "Đổi nền toàn trang sang màu mới" }
+  );
+  assert.equal(wholePageBackground.status, "resolved");
+  assert.equal(wholePageBackground.plan.target.paletteToken, "paper");
+
+  const unclearPalette = resolveBuilderPlanTarget(palettePlan, landing, {
+    prompt: "Làm màu khác cho đẹp hơn",
+  });
+  assert.equal(unclearPalette.status, "clarify");
+  assert.match(unclearPalette.question, /nền toàn trang/i);
   assert.match(executorSource, /case "show_section"/);
   assert.match(executorSource, /case "move_section"/);
   assert.match(executorSource, /case "assign_image"/);
