@@ -15,6 +15,7 @@ import type {
   BuilderAgentResult,
   BuilderIntent,
   BuilderProgressReporter,
+  PipelineResumeState,
 } from "../../builder-generation";
 import {
   landingBuilderSkill,
@@ -22,9 +23,12 @@ import {
   preserveInternalAssetUrls,
 } from "../skills/landing-builder-skill";
 import { resolveRuntimeSkill } from "../skills/runtime-skills";
-import { runAiChatTool } from "../tools/ai-chat-tool";
+import {
+  runAiChatTool,
+  type AiChatProvider,
+} from "../tools/ai-chat-tool";
 import { createDemoBuilderPlan } from "./builder-plan";
-import { resolveLandingRecipe } from "./landing-recipes";
+import { runLandingCreationPipeline } from "./landing-creation-pipeline";
 import { runPlanningAgent } from "./planning-agent";
 import {
   createLandingFromTemplate,
@@ -51,6 +55,8 @@ type WebsiteBuilderAgentInput = {
   providerUrl: string;
   modelName: string;
   apiKey?: string;
+  fallbackProviders?: AiChatProvider[];
+  resume?: PipelineResumeState;
   createDemoLanding: (prompt: string, current: LandingData) => LandingData;
   progress?: BuilderProgressReporter;
 };
@@ -110,57 +116,6 @@ function validationErrors(error: unknown) {
   return ["Kết quả AI không hợp lệ."];
 }
 
-function validateCreationQuality(
-  landing: LandingData,
-  recipe: { visibleSections: LandingSectionType[] }
-) {
-  const errors: string[] = [];
-  const mainPromise = `${landing.headline} ${landing.accentLine}`.trim();
-  const visibleSections = landing.sectionOrder.filter(
-    (section) => !landing.hiddenSections.includes(section)
-  );
-  const expectedSections = recipe.visibleSections.filter(
-    (section) => section !== "hero" && section !== "finalCta"
-  );
-  const missingExpected = expectedSections.filter(
-    (section) => !visibleSections.includes(section)
-  );
-
-  if (mainPromise.length < 20) {
-    errors.push("Thông điệp Hero quá ngắn để thể hiện giá trị chính.");
-  }
-  if (landing.description.trim().length < 45) {
-    errors.push("Mô tả Hero chưa đủ rõ về lợi ích hoặc đối tượng.");
-  }
-  if (landing.primaryCta.trim().length < 3) {
-    errors.push("Landing page chưa có CTA chính rõ ràng.");
-  }
-  if (visibleSections.length < 6) {
-    errors.push("Landing page chưa đủ các phần cho hành trình chuyển đổi.");
-  }
-  if (
-    expectedSections.length >= 4 &&
-    missingExpected.length > Math.floor(expectedSections.length / 2)
-  ) {
-    errors.push(
-      `Landing page đang thiếu quá nhiều section theo mục tiêu: ${missingExpected.join(
-        ", "
-      )}.`
-    );
-  }
-  if (
-    [mainPromise, landing.description, landing.primaryCta].some((value) =>
-      /\b(lorem ipsum|placeholder|tiêu đề mẫu|nội dung mẫu)\b/i.test(value)
-    )
-  ) {
-    errors.push("Landing page còn chứa nội dung mẫu.");
-  }
-
-  if (errors.length) {
-    throw new LandingOperationValidationError(errors);
-  }
-}
-
 export async function runWebsiteBuilderAgent(
   input: WebsiteBuilderAgentInput
 ): Promise<WebsiteBuilderAgentResult> {
@@ -181,6 +136,7 @@ export async function runWebsiteBuilderAgent(
         providerUrl: input.providerUrl,
         modelName: input.modelName,
         apiKey: input.apiKey,
+        fallbackProviders: input.fallbackProviders,
       })
     : createDemoBuilderPlan(input.prompt);
   if (input.apiKey) {
@@ -337,6 +293,48 @@ export async function runWebsiteBuilderAgent(
     };
   }
 
+  if (intent.mode === "create" && templateSelection) {
+    const created = await runLandingCreationPipeline({
+      prompt: input.prompt,
+      plan: intent,
+      templateSelection,
+      templateLanding: activeLanding,
+      providerUrl: input.providerUrl,
+      modelName: input.modelName,
+      apiKey: input.apiKey,
+      fallbackProviders: input.fallbackProviders,
+      resume: input.resume,
+      progress: input.progress,
+    });
+    const warningSuffix = created.warnings.length
+      ? ` ${created.warnings.length} section dùng nội dung mẫu an toàn vì AI chưa trả đúng schema.`
+      : "";
+    return {
+      landing: created.landing,
+      message: `Mình đã tạo landing page bằng pipeline nhiều bước, chọn template ${templateSelection.name} và đạt ${created.qualityReport.overall}/100 điểm chất lượng.${warningSuffix}`,
+      mode: "ai",
+      operations: created.operations,
+      changedSections: created.changedSections,
+      intent,
+      manifest: buildLandingManifest(created.landing),
+      skill: {
+        id: landingBuilderSkill.id,
+        version: landingBuilderSkill.version,
+      },
+      runtimeSkill: runtimeSkill
+        ? {
+            id: runtimeSkill.id,
+            version: runtimeSkill.version,
+            name: runtimeSkill.name,
+            description: runtimeSkill.description,
+          }
+        : undefined,
+      templateSelection,
+      project: created.project,
+      qualityReport: created.qualityReport,
+    };
+  }
+
   const targetSnapshots = Object.fromEntries(
     intent.targetSections.map((section) => [
       section,
@@ -350,8 +348,6 @@ export async function runWebsiteBuilderAgent(
         `Quy tắc bổ sung: ${runtimeSkill.rules.join(" ")}`,
       ].join("\n")
     : "";
-  const creationRecipe =
-    intent.mode === "create" ? resolveLandingRecipe(intent) : null;
   const systemPrompt = [
     landingBuilderSkill.instructions,
     runtimeSkillContext,
@@ -367,17 +363,6 @@ export async function runWebsiteBuilderAgent(
           .join("\n")}`
       : "",
     `Intent:\n${JSON.stringify(intent)}`,
-    creationRecipe
-      ? `Recipe chuyển đổi bắt buộc tham khảo:\n${JSON.stringify(
-          creationRecipe
-        )}`
-      : "",
-    templateSelection
-      ? `Template Registry đã chọn:\n${JSON.stringify({
-          ...templateSelection,
-          design: activeLanding.design,
-        })}\nGiữ templateId và chỉ dùng sectionVariants đã có trong template.`
-      : "",
     `Section manifest:\n${JSON.stringify(activeManifest)}`,
     `Dữ liệu các section mục tiêu:\n${JSON.stringify(targetSnapshots)}`,
     `Tóm tắt landing hiện tại:\n${JSON.stringify({
@@ -392,11 +377,6 @@ export async function runWebsiteBuilderAgent(
         ...activeLanding.portfolio.map((item) => item.imageUrl),
       ].filter(Boolean),
     })}`,
-    intent.mode === "create"
-      ? `LandingData mẫu bắt buộc giữ đúng cấu trúc khi dùng replace_landing:\n${JSON.stringify(
-          activeLanding
-        )}`
-      : "",
     `Yêu cầu mới của người dùng:\n${input.prompt}`,
     !intent.targetSections.length && intent.mode === "edit"
       ? `Landing page hiện tại để xử lý yêu cầu toàn trang:\n${JSON.stringify(
@@ -425,6 +405,8 @@ export async function runWebsiteBuilderAgent(
       providerUrl: input.providerUrl,
       apiKey: input.apiKey,
       modelName: input.modelName,
+      fallbackProviders: input.fallbackProviders,
+      jsonMode: true,
       systemPrompt:
         attempt === 1
           ? systemPrompt
@@ -450,9 +432,6 @@ export async function runWebsiteBuilderAgent(
         activeLanding,
         parsed.operations
       );
-      if (creationRecipe) {
-        validateCreationQuality(applied.landing, creationRecipe);
-      }
       input.progress?.({
         type: "validation",
         stage: "validating",

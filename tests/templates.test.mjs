@@ -43,7 +43,7 @@ test("uses a controlled template registry for AI, manual and blank project flows
   assert.match(operations, /landingSectionVariantOptions/);
   assert.match(agent, /selectTemplateForBrief\(intent\)/);
   assert.match(agent, /createLandingFromTemplate\(templateSelection\.id\)/);
-  assert.match(agent, /Template Registry đã chọn/);
+  assert.match(agent, /runLandingCreationPipeline/);
   assert.match(studio, /NewProjectDialog/);
   assert.match(studio, /createProjectWithAi/);
   assert.match(studio, /applyTemplateDesign/);
@@ -52,4 +52,10 @@ test("uses a controlled template registry for AI, manual and blank project flows
   assert.match(dialog, /Trang trắng/);
   assert.match(canvas, /variantClass/);
   assert.match(canvas, /template-\$\{templateClass\}/);
+  assert.match(canvas, /const heroVariantFrames/);
+  assert.match(canvas, /HeroSplitFrame/);
+  assert.match(canvas, /HeroCenteredFrame/);
+  assert.match(canvas, /HeroProductShowcaseFrame/);
+  assert.match(canvas, /HeroImageBackgroundFrame/);
+  assert.match(canvas, /variant=\{data\.design\?\.sectionVariants\.hero\}/);
 });

@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Children,
   type DragEvent as ReactDragEvent,
   FormEvent,
   type CSSProperties,
@@ -156,6 +157,101 @@ function ImageDropZone({
       ) : null}
     </div>
   );
+}
+
+type HeroVariantFrameProps = {
+  variant?: string;
+  hasImage: boolean;
+  children: ReactNode;
+};
+
+function heroFrameClass(variant: string, hasImage: boolean) {
+  return `landing-hero variant-${variant}${hasImage ? " has-image" : ""}`;
+}
+
+function HeroSplitFrame({
+  items,
+  hasImage,
+}: {
+  items: ReactNode[];
+  hasImage: boolean;
+}) {
+  return (
+    <section className={heroFrameClass("split", hasImage)}>
+      {items[0]}
+      <div className="hero-split-copy">{items[1]}</div>
+      {items[2] ? <aside className="hero-split-media">{items[2]}</aside> : null}
+    </section>
+  );
+}
+
+function HeroCenteredFrame({
+  items,
+  hasImage,
+}: {
+  items: ReactNode[];
+  hasImage: boolean;
+}) {
+  return (
+    <section className={heroFrameClass("centered", hasImage)}>
+      {items[0]}
+      <div className="hero-centered-content">{items[1]}</div>
+      {items[2] ? <div className="hero-centered-media">{items[2]}</div> : null}
+    </section>
+  );
+}
+
+function HeroProductShowcaseFrame({
+  items,
+  hasImage,
+}: {
+  items: ReactNode[];
+  hasImage: boolean;
+}) {
+  return (
+    <section className={heroFrameClass("product-showcase", hasImage)}>
+      {items[0]}
+      <div className="hero-product-copy">{items[1]}</div>
+      {items[2] ? <aside className="hero-product-media">{items[2]}</aside> : null}
+    </section>
+  );
+}
+
+function HeroImageBackgroundFrame({
+  items,
+  hasImage,
+}: {
+  items: ReactNode[];
+  hasImage: boolean;
+}) {
+  return (
+    <section className={heroFrameClass("image-background", hasImage)}>
+      {items[2] ? <div className="hero-background-media">{items[2]}</div> : null}
+      {items[0]}
+      <div className="hero-background-copy">{items[1]}</div>
+    </section>
+  );
+}
+
+const heroVariantFrames = {
+  split: HeroSplitFrame,
+  centered: HeroCenteredFrame,
+  "product-showcase": HeroProductShowcaseFrame,
+  "image-background": HeroImageBackgroundFrame,
+} as const;
+
+function HeroVariantFrame({
+  variant,
+  hasImage,
+  children,
+}: HeroVariantFrameProps) {
+  const preferred =
+    variant && variant in heroVariantFrames
+      ? (variant as keyof typeof heroVariantFrames)
+      : "split";
+  const resolved = hasImage ? preferred : "centered";
+  const Frame = heroVariantFrames[resolved];
+  return <Frame items={Children.toArray(children)} hasImage={hasImage} />;
 }
 
 function fieldName(label: string, index: number) {
@@ -370,15 +466,43 @@ export function LandingCanvas({
       : "";
   }
 
+  function sectionThemeStyle(section: LandingSectionType) {
+    const colors = data.sectionColors[section];
+    if (!colors) return undefined;
+
+    const themedStyle: CSSProperties = {};
+    if (colors.background) {
+      themedStyle.backgroundColor = colors.background;
+      Object.assign(themedStyle, {
+        "--site-paper": colors.background,
+        "--site-soft": colors.background,
+      });
+    }
+    if (colors.text) {
+      themedStyle.color = colors.text;
+      Object.assign(themedStyle, { "--site-ink": colors.text });
+    }
+    if (colors.accent) {
+      Object.assign(themedStyle, { "--site-accent": colors.accent });
+    }
+    if (colors.background || colors.text) {
+      const lineText = colors.text ?? data.palette.ink;
+      const lineBackground = colors.background ?? data.palette.paper;
+      Object.assign(themedStyle, {
+        "--site-line": `color-mix(in srgb, ${lineText} 18%, ${lineBackground})`,
+      });
+    }
+    return themedStyle;
+  }
+
   function renderSection(section: LandingSectionType) {
     const content = (() => {
       switch (section) {
       case "hero":
         return (
-          <section
-            className={`landing-hero${variantClass("hero")}${
-              data.heroImage || mode === "editor" ? " has-image" : ""
-            }`}
+          <HeroVariantFrame
+            variant={data.design?.sectionVariants.hero}
+            hasImage={Boolean(data.heroImage)}
             key={section}
           >
             <div className="hero-orbit" aria-hidden="true"><span /><span /><span /></div>
@@ -472,7 +596,7 @@ export function LandingCanvas({
                 />
               </div>
             ) : null}
-          </section>
+          </HeroVariantFrame>
         );
       case "stats":
         return (
@@ -969,6 +1093,17 @@ export function LandingCanvas({
     }
     })();
 
+    if (!content) return null;
+    const themedContent = (
+      <div
+        className="landing-section-theme"
+        data-section-theme={section}
+        style={sectionThemeStyle(section)}
+      >
+        {content}
+      </div>
+    );
+
     if (mode === "editor") {
       return (
         <SortableSectionFrame
@@ -978,12 +1113,12 @@ export function LandingCanvas({
           disabled={isBusy}
           onSelect={(value) => onSelectSection?.(value)}
         >
-          {content}
+          {themedContent}
         </SortableSectionFrame>
       );
     }
 
-    return content;
+    return <div key={section}>{themedContent}</div>;
   }
 
   const orderedSections = (sectionOrder ?? data.sectionOrder).filter(

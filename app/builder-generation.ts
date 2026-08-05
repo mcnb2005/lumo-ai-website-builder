@@ -1,7 +1,9 @@
 import type { LandingData, LandingSectionType } from "./landing-data";
 import type { LandingManifest } from "./landing-manifest";
 import type { LandingOperation } from "./landing-operations";
+import type { LandingProject } from "./landing-project";
 import type { BuilderPlan } from "./server/agents/builder-plan";
+import type { LandingQualityReport } from "./server/agents/quality-evaluator";
 import type { TemplateSelection } from "./templates/registry";
 
 export const generationStages = [
@@ -37,6 +39,14 @@ export type BuilderAgentResult = {
     description: string;
   };
   templateSelection?: TemplateSelection;
+  project?: LandingProject;
+  qualityReport?: LandingQualityReport;
+};
+
+export type PipelineResumeState = {
+  prompt: string;
+  landing: LandingData;
+  completedSections: LandingSectionType[];
 };
 
 export type BuilderStreamEvent =
@@ -53,6 +63,15 @@ export type BuilderStreamEvent =
       attempt: number;
     }
   | {
+      type: "checkpoint";
+      stage: "generating";
+      section: LandingSectionType;
+      message: string;
+      landing: LandingData;
+      completedSections: LandingSectionType[];
+      resume: PipelineResumeState;
+    }
+  | {
       type: "complete";
       stage: "completed";
       result: BuilderAgentResult;
@@ -61,6 +80,8 @@ export type BuilderStreamEvent =
       type: "error";
       stage: "failed";
       message: string;
+      pipelineStage?: string;
+      resume?: PipelineResumeState;
     };
 
 export type BuilderProgressReporter = (

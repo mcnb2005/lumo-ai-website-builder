@@ -103,6 +103,7 @@ const indexedFields = new Set<LandingEditableField>([
 
 const nestedFields = new Set<LandingEditableField>(["pricing.feature"]);
 const paletteTokens = ["ink", "paper", "accent", "soft", "line"] as const;
+const sectionColorTokens = ["background", "text", "accent"] as const;
 const hexColorPattern = /^#[0-9a-f]{6}$/i;
 const unsafeTextPattern =
   /<\s*script\b|javascript\s*:|on(?:error|load|click)\s*=/i;
@@ -133,6 +134,7 @@ const landingKeys: Array<keyof LandingData> = [
   "heroImagePosition",
   "sectionOrder",
   "hiddenSections",
+  "sectionColors",
   "design",
   "stats",
   "features",
@@ -313,6 +315,44 @@ export function validateLandingData(
     )
   ) {
     errors.push("hiddenSections chứa section không hợp lệ.");
+  }
+
+  if (!isRecord(value.sectionColors)) {
+    errors.push("sectionColors phải là object.");
+  } else {
+    errors.push(
+      ...validateAllowedKeys(
+        value.sectionColors,
+        landingSectionTypes,
+        "sectionColors"
+      )
+    );
+    Object.entries(value.sectionColors).forEach(([section, colors]) => {
+      if (!isSection(section)) return;
+      if (!isRecord(colors)) {
+        errors.push(`sectionColors.${section} phải là object.`);
+        return;
+      }
+      errors.push(
+        ...validateAllowedKeys(
+          colors,
+          sectionColorTokens,
+          `sectionColors.${section}`
+        )
+      );
+      Object.entries(colors).forEach(([token, color]) => {
+        if (
+          sectionColorTokens.includes(
+            token as (typeof sectionColorTokens)[number]
+          ) &&
+          (typeof color !== "string" || !hexColorPattern.test(color))
+        ) {
+          errors.push(
+            `sectionColors.${section}.${token} phải là mã màu hex 6 ký tự.`
+          );
+        }
+      });
+    });
   }
 
   if (value.design !== undefined) {
@@ -561,6 +601,8 @@ export function parseLandingOperationEnvelope(
     mode: LandingOperationMode;
     current: LandingData;
     source?: "ai" | "ui" | "system";
+    targetSection?: LandingSectionType;
+    editableFields?: readonly LandingEditableField[];
   }
 ): LandingOperationEnvelope {
   const value = normalizeLandingOperationInput(rawValue, options);

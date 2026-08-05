@@ -64,6 +64,12 @@ export type LandingDesign = {
   };
 };
 
+export type LandingSectionColors = {
+  background?: string;
+  text?: string;
+  accent?: string;
+};
+
 export type LandingData = {
   design?: LandingDesign;
   brand: string;
@@ -92,6 +98,7 @@ export type LandingData = {
   heroImagePosition?: LandingImagePosition;
   sectionOrder: LandingSectionType[];
   hiddenSections: LandingSectionType[];
+  sectionColors: Partial<Record<LandingSectionType, LandingSectionColors>>;
   stats: Array<{ value: string; label: string }>;
   features: Array<{ number: string; title: string; text: string }>;
   pricing: Array<{
@@ -196,6 +203,7 @@ export const defaultLanding: LandingData = {
     "finalCta",
   ],
   hiddenSections: [],
+  sectionColors: {},
   stats: [
     { value: "3.4×", label: "Nhanh hơn từ brief đến launch" },
     { value: "42%", label: "Ít vòng phản hồi hơn" },
@@ -320,6 +328,33 @@ export const starterMessages: ChatMessage[] = [
   },
 ];
 
+function normalizeSectionColors(
+  value: unknown
+): Partial<Record<LandingSectionType, LandingSectionColors>> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+
+  const source = value as Record<string, unknown>;
+  const result: Partial<Record<LandingSectionType, LandingSectionColors>> = {};
+  const isHexColor = (color: unknown): color is string =>
+    typeof color === "string" && /^#[0-9a-f]{6}$/i.test(color);
+
+  landingSectionTypes.forEach((section) => {
+    const candidate = source[section];
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+      return;
+    }
+
+    const colors = candidate as Record<string, unknown>;
+    const normalized: LandingSectionColors = {};
+    if (isHexColor(colors.background)) normalized.background = colors.background;
+    if (isHexColor(colors.text)) normalized.text = colors.text;
+    if (isHexColor(colors.accent)) normalized.accent = colors.accent;
+    if (Object.keys(normalized).length) result[section] = normalized;
+  });
+
+  return result;
+}
+
 export function normalizeLandingData(
   value: Partial<LandingData> | null | undefined
 ): LandingData {
@@ -428,6 +463,7 @@ export function normalizeLandingData(
             all.indexOf(section) === index
         )
       : [],
+    sectionColors: normalizeSectionColors(value.sectionColors),
     stats: Array.isArray(value.stats) ? value.stats : defaultLanding.stats,
     features: Array.isArray(value.features)
       ? value.features

@@ -1,6 +1,13 @@
 type LandingOperationNormalizationOptions = {
   mode: "create" | "edit";
   source?: "ai" | "ui" | "system";
+  /**
+   * Section scope assigned by the orchestrator. Only scoped Content Agent
+   * responses receive this value; the general edit agent must name targets.
+   */
+  targetSection?: string;
+  /** Canonical fields copied from the target section manifest. */
+  editableFields?: readonly string[];
 };
 
 type LandingOperationSchema = {
@@ -106,7 +113,97 @@ function sameJsonValue(left: unknown, right: unknown) {
   }
 }
 
-function normalizeOperation(operation: unknown): unknown {
+function uniqueField(candidates: string[]) {
+  const unique = Array.from(new Set(candidates));
+  return unique.length === 1 ? unique[0] : undefined;
+}
+
+function canonicalFieldForLeaf(
+  leaf: string,
+  options: LandingOperationNormalizationOptions
+) {
+  const section = options.targetSection;
+  const editableFields = options.editableFields ?? [];
+  if (!section || !editableFields.length) return undefined;
+
+  const capitalizedLeaf = `${leaf.slice(0, 1).toUpperCase()}${leaf.slice(1)}`;
+  const directCandidates = new Set([
+    leaf,
+    `${section}.${leaf}`,
+    `${section}${capitalizedLeaf}`,
+  ]);
+  const candidates = editableFields.filter((field) =>
+    directCandidates.has(field)
+  );
+  return uniqueField(candidates);
+}
+
+function normalizeScopedUpdateText(
+  normalized: Record<string, unknown>,
+  options: LandingOperationNormalizationOptions
+) {
+  if (
+    normalized.type !== "update_text" ||
+    !options.targetSection ||
+    !options.editableFields?.length
+  ) {
+    return false;
+  }
+
+  let changed = false;
+  if (!hasValue(normalized, "section")) {
+    normalized.section = options.targetSection;
+    changed = true;
+  }
+
+  if (typeof normalized.field !== "string") return changed;
+  if (options.editableFields.includes(normalized.field)) return changed;
+
+  const field = normalized.field.trim();
+  const nestedMatch = field.match(
+    /^(?:items|[A-Za-z][A-Za-z0-9_]*)\[(\d+)\]\.([A-Za-z][A-Za-z0-9_]*)\[(\d+)\]$/
+  );
+  if (nestedMatch) {
+    const [, index, pluralLeaf, nestedIndex] = nestedMatch;
+    const leaf = pluralLeaf.endsWith("s")
+      ? pluralLeaf.slice(0, -1)
+      : pluralLeaf;
+    const canonicalField = canonicalFieldForLeaf(leaf, options);
+    if (canonicalField) {
+      normalized.field = canonicalField;
+      if (!hasValue(normalized, "index")) normalized.index = Number(index);
+      if (!hasValue(normalized, "nestedIndex")) {
+        normalized.nestedIndex = Number(nestedIndex);
+      }
+      return true;
+    }
+  }
+
+  const indexedMatch = field.match(
+    /^(?:(?:items|[A-Za-z][A-Za-z0-9_]*)\[)?(\d+)\]?\.([A-Za-z][A-Za-z0-9_]*)$/
+  );
+  if (indexedMatch) {
+    const [, index, leaf] = indexedMatch;
+    const canonicalField = canonicalFieldForLeaf(leaf, options);
+    if (canonicalField) {
+      normalized.field = canonicalField;
+      if (!hasValue(normalized, "index")) normalized.index = Number(index);
+      return true;
+    }
+  }
+
+  const canonicalField = canonicalFieldForLeaf(field, options);
+  if (canonicalField) {
+    normalized.field = canonicalField;
+    return true;
+  }
+  return changed;
+}
+
+function normalizeOperation(
+  operation: unknown,
+  options: LandingOperationNormalizationOptions
+): unknown {
   if (!isRecord(operation) || typeof operation.type !== "string") {
     return operation;
   }
@@ -136,6 +233,16 @@ function normalizeOperation(operation: unknown): unknown {
     // Preserve conflicting aliases so strict validation reports ambiguity.
     conflictingAliases.add(alias);
   });
+
+  if (
+    operation.type === "replace_section" &&
+    options.targetSection &&
+    !hasValue(normalized, "section")
+  ) {
+    normalized.section = options.targetSection;
+    changed = true;
+  }
+  if (normalizeScopedUpdateText(normalized, options)) changed = true;
 
   const hasAllRequiredFields = schema.required.every((key) =>
     hasValue(normalized, key)
@@ -184,7 +291,7 @@ export function normalizeLandingOperationInput(
 
   let changed = false;
   const operations = value.operations.map((operation) => {
-    const normalized = normalizeOperation(operation);
+    const normalized = normalizeOperation(operation, options);
     if (normalized !== operation) changed = true;
     return normalized;
   });

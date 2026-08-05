@@ -20,6 +20,9 @@ export type RuntimeEnv = {
   AI_API_KEY?: string;
   AI_PROVIDER_URL?: string;
   AI_MODEL_NAME?: string;
+  AI_FALLBACK_PROVIDER_URL?: string;
+  AI_FALLBACK_MODEL_NAME?: string;
+  AI_FALLBACK_API_KEY?: string;
   OPENAI_API_KEY?: string;
   OPENAI_MODEL?: string;
   LOCAL_DEV_AUTH?: string;

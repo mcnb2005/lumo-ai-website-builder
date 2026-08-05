@@ -3,6 +3,47 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 import ts from "typescript";
 
+function compileModule(source) {
+  return ts.transpileModule(source, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+}
+
+function toModuleUrl(source) {
+  return `data:text/javascript;base64,${Buffer.from(source).toString("base64")}`;
+}
+
+async function loadLandingValidationModules() {
+  const [dataSource, manifestSource, normalizerSource, operationsSource] =
+    await Promise.all([
+      readFile(new URL("../app/landing-data.ts", import.meta.url), "utf8"),
+      readFile(new URL("../app/landing-manifest.ts", import.meta.url), "utf8"),
+      readFile(
+        new URL("../app/landing-operation-normalizer.ts", import.meta.url),
+        "utf8"
+      ),
+      readFile(
+        new URL("../app/landing-operations.ts", import.meta.url),
+        "utf8"
+      ),
+    ]);
+  const dataUrl = toModuleUrl(compileModule(dataSource));
+  const manifestUrl = toModuleUrl(compileModule(manifestSource));
+  const normalizerUrl = toModuleUrl(compileModule(normalizerSource));
+  const resolvedOperationsSource = operationsSource
+    .replace('"./landing-data"', JSON.stringify(dataUrl))
+    .replace('"./landing-manifest"', JSON.stringify(manifestUrl))
+    .replace('"./landing-operation-normalizer"', JSON.stringify(normalizerUrl));
+  const [dataModule, operationsModule] = await Promise.all([
+    import(dataUrl),
+    import(toModuleUrl(compileModule(resolvedOperationsSource))),
+  ]);
+  return { ...dataModule, ...operationsModule };
+}
+
 test("operation engine rejects unsafe or out-of-schema changes before applying", async () => {
   const source = await readFile(
     new URL("../app/landing-operations.ts", import.meta.url),
@@ -17,6 +58,34 @@ test("operation engine rejects unsafe or out-of-schema changes before applying",
   assert.match(source, /operations\.length > 50/);
   assert.match(source, /const errors = validateLandingData\(landing, current\)/);
   assert.match(source, /normalizeLandingOperationInput\(rawValue, options\)/);
+});
+
+test("operation engine accepts and validates per-section color overrides", async () => {
+  const { defaultLanding, normalizeLandingData, validateLandingData } =
+    await loadLandingValidationModules();
+  const landing = normalizeLandingData({
+    ...defaultLanding,
+    sectionColors: {
+      hero: {
+        background: "#ffffff",
+        text: "#112233",
+        accent: "#ff6600",
+      },
+    },
+  });
+
+  assert.deepEqual(validateLandingData(landing), []);
+
+  const invalidColorLanding = {
+    ...landing,
+    sectionColors: {
+      hero: { background: "purple" },
+    },
+  };
+  assert.match(
+    validateLandingData(invalidColorLanding).join("\n"),
+    /sectionColors\.hero\.background.*hex/i
+  );
 });
 
 test("AI operation normalizer is schema-driven and preserves ambiguous unknown fields", async () => {
@@ -119,11 +188,28 @@ test("chat, inline editing and the properties panel share one operation engine",
 });
 
 test("AI BuilderPlan resolves create, edit and clarification without keyword intent rules", async () => {
-  const source = await readFile(
-    new URL("../app/server/agents/builder-plan.ts", import.meta.url),
-    "utf8"
+  const [source, aiJsonSource] = await Promise.all([
+    readFile(
+      new URL("../app/server/agents/builder-plan.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/tools/ai-json.ts", import.meta.url),
+      "utf8"
+    ),
+  ]);
+  const aiJsonJavascript = ts.transpileModule(aiJsonSource, {
+    compilerOptions: {
+      module: ts.ModuleKind.ESNext,
+      target: ts.ScriptTarget.ES2022,
+    },
+  }).outputText;
+  const aiJsonModuleUrl = `data:text/javascript;base64,${Buffer.from(aiJsonJavascript).toString("base64")}`;
+  const sourceWithResolvedAiJson = source.replace(
+    '"../tools/ai-json"',
+    JSON.stringify(aiJsonModuleUrl)
   );
-  const javascript = ts.transpileModule(source, {
+  const javascript = ts.transpileModule(sourceWithResolvedAiJson, {
     compilerOptions: {
       module: ts.ModuleKind.ESNext,
       target: ts.ScriptTarget.ES2022,
