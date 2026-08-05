@@ -7,7 +7,9 @@ import {
   parseLandingOperationEnvelope,
   type LandingOperationMode,
 } from "../../landing-operations";
+import type { LandingEditableField } from "../../landing-manifest";
 import { describeLandingOperationSchemas } from "../../landing-operation-normalizer";
+import { extractAiJson } from "../tools/ai-json";
 
 const requiredKeys: Array<keyof LandingData> = [
   "brand",
@@ -34,6 +36,7 @@ const requiredKeys: Array<keyof LandingData> = [
   "heroImage",
   "sectionOrder",
   "hiddenSections",
+  "sectionColors",
   "stats",
   "features",
   "pricing",
@@ -52,17 +55,7 @@ export function isLandingData(value: unknown): value is LandingData {
 }
 
 export function parseLandingJson(text: string, current?: LandingData) {
-  const cleaned = text
-    .replace(/^```(?:json)?/i, "")
-    .replace(/```$/i, "")
-    .trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    throw new Error("AI trả về dữ liệu không hợp lệ.");
-  }
-
-  const value = JSON.parse(cleaned.slice(start, end + 1)) as unknown;
+  const value = extractAiJson(text, "AI trả về dữ liệu không hợp lệ.");
   if (!value || typeof value !== "object") {
     throw new Error("AI chưa trả về đủ nội dung landing page.");
   }
@@ -88,22 +81,21 @@ export function parseLandingJson(text: string, current?: LandingData) {
 export function parseLandingOperations(
   text: string,
   current: LandingData,
-  mode: LandingOperationMode
-) {
-  const cleaned = text
-    .replace(/^```(?:json)?/i, "")
-    .replace(/```$/i, "")
-    .trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    throw new Error("AI trả về dữ liệu operation không hợp lệ.");
+  mode: LandingOperationMode,
+  context?: {
+    targetSection?: LandingSectionType;
+    editableFields?: readonly LandingEditableField[];
   }
-  const value = JSON.parse(cleaned.slice(start, end + 1)) as unknown;
+) {
+  const value = extractAiJson(
+    text,
+    "AI trả về dữ liệu operation không hợp lệ."
+  );
   return parseLandingOperationEnvelope(value, {
     mode,
     current,
     source: "ai",
+    ...context,
   });
 }
 

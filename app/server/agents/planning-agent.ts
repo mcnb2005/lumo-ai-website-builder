@@ -1,6 +1,9 @@
 import type { LandingManifest } from "../../landing-manifest";
 import type { LandingSectionType } from "../../landing-data";
-import { runAiChatTool } from "../tools/ai-chat-tool";
+import {
+  runAiChatTool,
+  type AiChatProvider,
+} from "../tools/ai-chat-tool";
 import {
   builderActions,
   parseBuilderPlan,
@@ -22,6 +25,7 @@ type PlanningAgentInput = {
   providerUrl: string;
   modelName: string;
   apiKey: string;
+  fallbackProviders?: AiChatProvider[];
 };
 
 const plannerInstructions = [
@@ -97,6 +101,8 @@ export async function runPlanningAgent(
       providerUrl: input.providerUrl,
       apiKey: input.apiKey,
       modelName: input.modelName,
+      fallbackProviders: input.fallbackProviders,
+      jsonMode: true,
       temperature: 0.1,
       systemPrompt:
         attempt === 1

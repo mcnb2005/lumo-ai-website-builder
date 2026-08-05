@@ -15,6 +15,12 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
     planner,
     builderPlan,
     recipes,
+    creationPipeline,
+    blueprint,
+    sectionContent,
+    qualityEvaluator,
+    landingProject,
+    pipelineStageError,
   ] = await Promise.all([
     readFile(new URL("../app/server/skills/runtime-skills.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/server/agents/website-builder-agent.ts", import.meta.url), "utf8"),
@@ -42,6 +48,27 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
       new URL("../app/server/agents/landing-recipes.ts", import.meta.url),
       "utf8"
     ),
+    readFile(
+      new URL("../app/server/agents/landing-creation-pipeline.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/creation-blueprint.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/section-content-agent.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/quality-evaluator.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(new URL("../app/landing-project.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/server/agents/pipeline-stage-error.ts", import.meta.url),
+      "utf8"
+    ),
   ]);
 
   assert.match(skills, /export const runtimeSkills/);
@@ -52,8 +79,7 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(agent, /parseLandingOperations/);
   assert.match(agent, /buildLandingManifest/);
   assert.match(agent, /runPlanningAgent/);
-  assert.match(agent, /resolveLandingRecipe/);
-  assert.match(agent, /validateCreationQuality/);
+  assert.match(agent, /runLandingCreationPipeline/);
   assert.match(agent, /attempt <= 2/);
   assert.match(agent, /validationErrors/);
   assert.match(agent, /applyLandingOperations/);
@@ -71,6 +97,36 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(builderPlan, /lowConfidence/);
   assert.match(recipes, /sell_product/);
   assert.match(recipes, /primaryGoal/);
+  assert.match(blueprint, /createBusinessBrief/);
+  assert.match(blueprint, /createLandingBlueprint/);
+  assert.match(blueprint, /resolveLandingRecipe/);
+  assert.match(blueprint, /section === "hero" && !input\.templateLanding\.heroImage/);
+  assert.match(creationPipeline, /runSectionContentAgent/);
+  assert.match(creationPipeline, /evaluateLandingQuality/);
+  assert.match(creationPipeline, /repairAttempt <= 2/);
+  assert.match(creationPipeline, /landingProjectFromLanding/);
+  assert.match(creationPipeline, /compileLandingProject/);
+  assert.match(creationPipeline, /type: "checkpoint"/);
+  assert.match(creationPipeline, /completedSections/);
+  assert.match(creationPipeline, /generateSection\(\"\$\{section\.type\}\"\)/);
+  assert.match(creationPipeline, /PipelineStageError/);
+  assert.match(sectionContent, /Content Generator chỉ phụ trách section/);
+  assert.match(sectionContent, /parseSectionDraftEnvelope/);
+  assert.match(sectionContent, /compileSectionDraftToOperations/);
+  assert.match(sectionContent, /applyLandingOperations/);
+  assert.doesNotMatch(sectionContent, /parseLandingOperations/);
+  assert.match(sectionContent, /attempt <= 2/);
+  assert.match(qualityEvaluator, /businessRelevance/);
+  assert.match(qualityEvaluator, /contentCompleteness/);
+  assert.match(qualityEvaluator, /conversionClarity/);
+  assert.match(qualityEvaluator, /visualSafety/);
+  assert.match(qualityEvaluator, /overall >= 80/);
+  assert.match(landingProject, /type LandingProject/);
+  assert.match(landingProject, /brief: BusinessBrief/);
+  assert.match(landingProject, /blueprint: LandingBlueprint/);
+  assert.match(landingProject, /content: LandingContent/);
+  assert.match(landingProject, /design: LandingProjectDesign/);
+  assert.match(landingProject, /assets: LandingAssetLibrary/);
   assert.match(landingSkill, /recognizedKeys/);
   assert.match(landingSkill, /parseLandingOperations/);
   assert.match(landingSkill, /operations/);
@@ -83,7 +139,20 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   );
   assert.match(landingSkill, /typeof image\?\.url === "string"/);
   assert.match(aiTool, /if \(payload\.error\)/);
+  assert.match(aiTool, /429, 500, 502, 503, 504/);
+  assert.match(aiTool, /AbortController/);
+  assert.match(aiTool, /timeoutMs \?\? 60_000/);
+  assert.match(aiTool, /fallbackProviders/);
+  assert.match(aiTool, /response_format/);
+  assert.match(aiTool, /jsonMode/);
+  assert.match(aiTool, /candidate\.apiKey === provider\.apiKey/);
+  assert.match(aiTool, /providerEndpoint/);
+  assert.match(aiTool, /parseRetryAfter/);
+  assert.match(aiTool, /Đã thử \$\{failures\.length\} cấu hình AI/);
+  assert.match(pipelineStageError, /class PipelineStageError/);
   assert.match(studio, /setNotice\(errorMessage\)/);
+  assert.match(studio, /pipelineResumeRef/);
+  assert.match(studio, /event\.type === "checkpoint"/);
   assert.match(studio, /readBuilderResponse/);
   assert.match(studio, /GenerationProgress/);
   assert.match(operations, /export type LandingOperation/);

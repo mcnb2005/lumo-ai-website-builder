@@ -10,7 +10,7 @@ import {
 import { arrayMove } from "@dnd-kit/sortable";
 import { LandingCanvas } from "./components/LandingCanvas";
 import { GenerationProgress } from "./editor/GenerationProgress";
-import { SectionPropertiesPanel } from "./editor/SectionPropertiesPanel";
+import { SectionColorPanel } from "./editor/SectionColorPanel";
 import { SectionNavigator } from "./editor/SectionNavigator";
 import { sectionRegistry } from "./editor/section-registry";
 import { NewProjectDialog } from "./templates/NewProjectDialog";
@@ -28,6 +28,7 @@ import type {
   BuilderAgentResult,
   BuilderStreamEvent,
   GenerationStage,
+  PipelineResumeState,
 } from "./builder-generation";
 import { applyLandingOperations } from "./landing-operations";
 import {
@@ -40,6 +41,7 @@ import {
   type LandingImageFit,
   type LandingImagePosition,
   type LandingImageTarget,
+  type LandingSectionColors,
   type LandingSectionType,
 } from "./landing-data";
 import {
@@ -234,6 +236,7 @@ export function Studio() {
   const uploadImagesRef = useRef<
     (files: File[], target?: LandingImageTarget) => Promise<void>
   >(async () => {});
+  const pipelineResumeRef = useRef<PipelineResumeState | null>(null);
 
   useEffect(() => {
     setEditorReady(true);
@@ -366,6 +369,7 @@ export function Studio() {
     );
     setHistory([]);
     setFuture([]);
+    pipelineResumeRef.current = null;
     setVersion(1);
     setSaveState("saved");
     window.setTimeout(() => {
@@ -490,18 +494,33 @@ export function Studio() {
     setNotice("Đã cập nhật nội dung trực tiếp trên bản xem trước.");
   }
 
-  function setLandingPalette(
-    token: keyof LandingData["palette"],
+  function setSectionColor(
+    section: LandingSectionType,
+    token: keyof LandingSectionColors,
     value: string
   ) {
     if (isGenerating) return;
-    updateLanding(
-      (current) =>
-        applyLandingOperations(current, [
-          { type: "set_palette", token, value },
-        ]).landing
-    );
-    setNotice("Đã cập nhật bảng màu của landing page.");
+    updateLanding((current) => ({
+      ...current,
+      sectionColors: {
+        ...current.sectionColors,
+        [section]: {
+          ...(current.sectionColors[section] ?? {}),
+          [token]: value,
+        },
+      },
+    }));
+    setNotice(`Đã cập nhật màu riêng cho ${sectionRegistry[section].label}.`);
+  }
+
+  function resetSectionColors(section: LandingSectionType) {
+    if (isGenerating) return;
+    updateLanding((current) => {
+      const sectionColors = { ...current.sectionColors };
+      delete sectionColors[section];
+      return { ...current, sectionColors };
+    });
+    setNotice(`${sectionRegistry[section].label} đang dùng lại màu toàn trang.`);
   }
 
   function setImagePresentation(
@@ -567,6 +586,7 @@ export function Studio() {
     setGenerationStage(null);
     setGenerationMessage("");
     setGenerationErrors([]);
+    pipelineResumeRef.current = null;
     setHistory([]);
     setFuture([]);
     setVersion(1);
@@ -718,6 +738,12 @@ export function Studio() {
     setGenerationMessage("Đang đọc yêu cầu của bạn…");
     setGenerationErrors([]);
     setNotice("AI đang phân tích yêu cầu…");
+    const activeResume =
+      pipelineResumeRef.current?.prompt.trim() === prompt
+        ? pipelineResumeRef.current
+        : null;
+    if (!activeResume) pipelineResumeRef.current = null;
+    let receivedCheckpoint = false;
 
     try {
       const response = await fetch("/api/ai", {
@@ -734,6 +760,7 @@ export function Studio() {
             role,
             content,
           })),
+          resume: activeResume,
         }),
       });
       if (!response.ok) {
@@ -760,11 +787,27 @@ export function Studio() {
                 : "Phản hồi chưa vượt qua kiểm tra."
           );
         }
+        if (event.type === "checkpoint") {
+          if (!receivedCheckpoint) {
+            setHistory((items) => [...items.slice(-14), sourceLanding]);
+            receivedCheckpoint = true;
+          }
+          pipelineResumeRef.current = event.resume;
+          setLanding(normalizeLandingData(event.landing));
+          setFuture([]);
+          setVersion((current) => current + 1);
+          setIsPublished(false);
+          setGenerationStage("generating");
+          setGenerationMessage(event.message);
+          setNotice(event.message);
+        }
         if (event.type === "error") {
+          if (event.resume) pipelineResumeRef.current = event.resume;
           setGenerationStage("failed");
           setGenerationMessage(event.message);
         }
         if (event.type === "complete") {
+          pipelineResumeRef.current = null;
           setGenerationStage("completed");
           setGenerationMessage(
             event.result.intent.mode === "clarify"
@@ -860,11 +903,27 @@ export function Studio() {
 
     updateLanding((current) => {
       if (target === "hero") {
+        const currentHeroVariant = current.design?.sectionVariants.hero;
+        const imageHeroVariant =
+          currentHeroVariant && currentHeroVariant !== "centered"
+            ? currentHeroVariant
+            : current.design?.templateId === "product-modern"
+              ? "product-showcase"
+              : "split";
         const next = {
           ...current,
           heroImage: primaryAsset.url,
           heroImageFit: "smart" as const,
           heroImagePosition: "center" as const,
+          design: current.design
+            ? {
+                ...current.design,
+                sectionVariants: {
+                  ...current.design.sectionVariants,
+                  hero: imageHeroVariant,
+                },
+              }
+            : current.design,
         };
         if (!remainingGalleryItems.length) return next;
         targetSection = "gallery";
@@ -948,7 +1007,21 @@ export function Studio() {
 
   function removePlacedImage(target: LandingImageTarget) {
     updateLanding((current) => {
-      if (target === "hero") return { ...current, heroImage: "" };
+      if (target === "hero") {
+        return {
+          ...current,
+          heroImage: "",
+          design: current.design
+            ? {
+                ...current.design,
+                sectionVariants: {
+                  ...current.design.sectionVariants,
+                  hero: "centered",
+                },
+              }
+            : current.design,
+        };
+      }
       if (target.startsWith("gallery:") && target !== "gallery:add") {
         const imageIndex = Number(target.split(":")[1]);
         return {
@@ -1448,13 +1521,12 @@ export function Studio() {
                   hiddenSections={landing.hiddenSections}
                   isBusy={isGenerating}
                 />
-                <SectionPropertiesPanel
+                <SectionColorPanel
                   landing={landing}
                   selectedSection={selectedSection}
                   isBusy={isGenerating}
-                  onEditText={editLandingText}
-                  onSetPalette={setLandingPalette}
-                  onSetImagePresentation={setImagePresentation}
+                  onSetColor={setSectionColor}
+                  onResetColors={resetSectionColors}
                   onToggleVisibility={toggleSectionVisibility}
                 />
               </div>

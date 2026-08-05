@@ -9,7 +9,11 @@ import { getCurrentDatabaseUser } from "../../server-user";
 import { runWebsiteBuilderAgent } from "../../server/agents/website-builder-agent";
 import { isLandingData } from "../../server/skills/landing-builder-skill";
 import { createDemoLanding } from "../../server/tools/demo-landing-tool";
-import type { BuilderStreamEvent } from "../../builder-generation";
+import type {
+  BuilderStreamEvent,
+  PipelineResumeState,
+} from "../../builder-generation";
+import { getPipelineErrorDetails } from "../../server/agents/pipeline-stage-error";
 
 function streamEvent(event: BuilderStreamEvent) {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -88,6 +92,7 @@ export async function POST(request: Request) {
         role?: "user" | "assistant";
         content?: string;
       }>;
+      resume?: PipelineResumeState;
     };
     const prompt = payload.prompt?.trim();
     const current = isLandingData(payload.current)
@@ -113,6 +118,21 @@ export async function POST(request: Request) {
           )
           .slice(-8)
       : [];
+    const resume =
+      payload.resume?.prompt?.trim() === prompt &&
+      isLandingData(payload.resume.landing)
+        ? {
+            prompt: payload.resume.prompt,
+            landing: payload.resume.landing,
+            completedSections: Array.isArray(payload.resume.completedSections)
+              ? payload.resume.completedSections.filter(
+                  (section, index, all): section is LandingSectionType =>
+                    landingSectionTypes.includes(section) &&
+                    all.indexOf(section) === index
+                )
+              : [],
+          }
+        : undefined;
 
     if (!prompt) {
       return Response.json(
@@ -124,6 +144,19 @@ export async function POST(request: Request) {
     await enforceUsageLimit(request);
 
     const runtime = getRuntimeEnv();
+    const fallbackProviders =
+      runtime.AI_FALLBACK_PROVIDER_URL &&
+      runtime.AI_FALLBACK_MODEL_NAME &&
+      runtime.AI_FALLBACK_API_KEY
+        ? [
+            {
+              name: "AI dự phòng",
+              providerUrl: runtime.AI_FALLBACK_PROVIDER_URL,
+              modelName: runtime.AI_FALLBACK_MODEL_NAME,
+              apiKey: runtime.AI_FALLBACK_API_KEY,
+            },
+          ]
+        : undefined;
     const agentInput = {
       prompt,
       current,
@@ -134,6 +167,8 @@ export async function POST(request: Request) {
       modelName:
         runtime.AI_MODEL_NAME || runtime.OPENAI_MODEL || "gpt-5.6-terra",
       apiKey: runtime.AI_API_KEY || runtime.OPENAI_API_KEY,
+      fallbackProviders,
+      resume,
       createDemoLanding,
     };
 
@@ -158,10 +193,13 @@ export async function POST(request: Request) {
               send({ type: "complete", stage: "completed", result });
             })
             .catch((error) => {
+              const pipeline = getPipelineErrorDetails(error);
               send({
                 type: "error",
                 stage: "failed",
                 message: errorMessage(error),
+                pipelineStage: pipeline?.pipelineStage,
+                resume: pipeline?.resume,
               });
             })
             .finally(() => controller.close());
@@ -181,8 +219,13 @@ export async function POST(request: Request) {
     return Response.json(result);
   } catch (error) {
     const message = errorMessage(error);
+    const pipeline = getPipelineErrorDetails(error);
     return Response.json(
-      { error: message },
+      {
+        error: message,
+        pipelineStage: pipeline?.pipelineStage,
+        resume: pipeline?.resume,
+      },
       { status: message.includes("lượt") ? 429 : 500 }
     );
   }

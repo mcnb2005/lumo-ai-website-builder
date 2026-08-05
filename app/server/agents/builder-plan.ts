@@ -6,6 +6,7 @@ import type {
   LandingImageTarget,
   LandingSectionType,
 } from "../../landing-data";
+import { extractAiJson } from "../tools/ai-json";
 
 export const pagePurposes = [
   "sell_product",
@@ -92,24 +93,11 @@ function isImageTarget(value: unknown): value is LandingImageTarget {
   );
 }
 
-function extractJson(text: string) {
-  const cleaned = text
-    .replace(/^```(?:json)?/i, "")
-    .replace(/```$/i, "")
-    .trim();
-  const start = cleaned.indexOf("{");
-  const end = cleaned.lastIndexOf("}");
-  if (start < 0 || end <= start) {
-    throw new Error("AI Planner không trả về JSON hợp lệ.");
-  }
-  return JSON.parse(cleaned.slice(start, end + 1)) as unknown;
-}
-
 export function parseBuilderPlan(
   text: string,
   manifest: LandingManifest
 ): BuilderPlan {
-  const value = extractJson(text);
+  const value = extractAiJson(text, "AI Planner không trả về JSON hợp lệ.");
   if (!isRecord(value)) {
     throw new Error("BuilderPlan phải là một object.");
   }

@@ -13,9 +13,10 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
     inlineEditing,
     operations,
     manifest,
-    propertiesPanel,
+    colorPanel,
     generationProgress,
     imageDragPayload,
+    styles,
   ] = await Promise.all([
     readFile(new URL("../app/landing-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/editor/section-registry.ts", import.meta.url), "utf8"),
@@ -27,7 +28,7 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
     readFile(new URL("../app/landing-operations.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/landing-manifest.ts", import.meta.url), "utf8"),
     readFile(
-      new URL("../app/editor/SectionPropertiesPanel.tsx", import.meta.url),
+      new URL("../app/editor/SectionColorPanel.tsx", import.meta.url),
       "utf8"
     ),
     readFile(
@@ -35,6 +36,7 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
       "utf8"
     ),
     readFile(new URL("../app/image-drag-payload.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(landingData, /"hero"/);
@@ -42,6 +44,7 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(landingData, /hiddenSections/);
   assert.match(landingData, /heroImageFit/);
   assert.match(landingData, /heroImagePosition/);
+  assert.match(landingData, /sectionColors/);
   assert.match(landingData, /"cover" \| "contain" \| "smart"/);
   assert.match(registry, /hero:/);
   assert.match(registry, /finalCta:/);
@@ -55,7 +58,9 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(studio, /portfolioIndex/);
   assert.match(studio, /ensureSectionVisible/);
   assert.match(studio, /function setImagePresentation/);
-  assert.match(studio, /onSetImagePresentation=\{setImagePresentation\}/);
+  assert.match(studio, /<SectionColorPanel/);
+  assert.match(studio, /onSetColor=\{setSectionColor\}/);
+  assert.match(studio, /onResetColors=\{resetSectionColors\}/);
   assert.match(studio, /multiple/);
   assert.match(studio, /LUMO_ASSET_DRAG_TYPE/);
   assert.match(studio, /createLandingImageDragPayload/);
@@ -76,6 +81,8 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(canvas, /function PresentedImage/);
   assert.match(canvas, /smart-image-frame/);
   assert.match(canvas, /smart-image-background/);
+  assert.match(canvas, /HeroVariantFrame/);
+  assert.match(canvas, /hasImage=\{Boolean\(data\.heroImage\)\}/);
   assert.match(canvas, /objectFit/);
   assert.match(canvas, /objectPosition/);
   assert.match(studio, /reorderGalleryImage/);
@@ -124,19 +131,26 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.doesNotMatch(canvas, /<h2>Một góc nhìn<br \/>đáng nhớ\.<\/h2>/);
   assert.doesNotMatch(canvas, /<h2>Rõ ràng trước khi<br \/>bạn bắt đầu\.<\/h2>/);
   assert.doesNotMatch(canvas, /<h2>Biến ý tưởng tiếp theo<br \/>thành điều lớn lao\.<\/h2>/);
-  assert.match(propertiesPanel, /section-properties__header/);
-  assert.match(propertiesPanel, /landing\.featuresHeadline/);
-  assert.match(propertiesPanel, /landing\.pricingHeadline/);
-  assert.match(propertiesPanel, /landing\.portfolioHeadline/);
-  assert.match(propertiesPanel, /landing\.galleryHeadline/);
-  assert.match(propertiesPanel, /landing\.faqHeadline/);
-  assert.match(propertiesPanel, /landing\.finalCtaHeadline/);
-  assert.match(propertiesPanel, /onSetPalette/);
-  assert.match(propertiesPanel, /ImagePresentationFields/);
-  assert.match(propertiesPanel, /value="smart"/);
-  assert.match(propertiesPanel, /Hiện đầy đủ/);
-  assert.match(propertiesPanel, /Lấp đầy khung/);
+  assert.match(colorPanel, /section-color-panel__header/);
+  assert.match(colorPanel, /landing\.sectionColors\[selectedSection\]/);
+  assert.match(colorPanel, /type="color"/);
+  assert.match(colorPanel, /"background"/);
+  assert.match(colorPanel, /"text"/);
+  assert.match(colorPanel, /"accent"/);
+  assert.match(colorPanel, /contrastRatio/);
+  assert.match(colorPanel, /onResetColors/);
+  assert.match(styles, /\.section-color-panel\s*\{/);
+  assert.match(styles, /\.section-color-panel__fields\s*\{/);
+  assert.match(styles, /\.section-color-field\s*\{/);
+  assert.match(styles, /\.section-color-field__control input\[type="color"\]/);
+  assert.match(styles, /\.section-color-panel__contrast\.is-warning/);
+  assert.match(styles, /\.section-color-panel__visibility/);
   assert.match(generationProgress, /GenerationStage/);
+  assert.match(styles, /\.landing-hero\.variant-centered/);
+  assert.match(styles, /\.landing-hero\.variant-product-showcase/);
+  assert.match(styles, /\.landing-hero\.variant-image-background/);
+  assert.match(styles, /\.landing-hero:not\(\.has-image\)/);
+  assert.match(styles, /min-height: 138px/);
   assert.match(navigator, /sortableKeyboardCoordinates/);
   assert.match(navigator, /onReorder/);
 });
