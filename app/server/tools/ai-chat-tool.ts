@@ -5,9 +5,15 @@ export type AiChatProvider = {
   name?: string;
 };
 
+export type AiImageInput = {
+  dataUrl: string;
+  detail?: "auto" | "low" | "high";
+};
+
 export type AiChatToolInput = AiChatProvider & {
   systemPrompt: string;
   userPrompt: string;
+  imageInputs?: AiImageInput[];
   temperature?: number;
   timeoutMs?: number;
   maxAttempts?: number;
@@ -118,6 +124,19 @@ async function requestProvider(
   let response: Response;
 
   try {
+    const imageInputs = input.imageInputs?.filter((image) => image.dataUrl) || [];
+    const userContent = imageInputs.length
+      ? [
+          { type: "text", text: input.userPrompt },
+          ...imageInputs.map((image) => ({
+            type: "image_url",
+            image_url: {
+              url: image.dataUrl,
+              detail: image.detail || "auto",
+            },
+          })),
+        ]
+      : input.userPrompt;
     response = await fetch(providerEndpoint(provider.providerUrl), {
       method: "POST",
       headers: {
@@ -135,7 +154,7 @@ async function requestProvider(
           : {}),
         messages: [
           { role: "system", content: input.systemPrompt },
-          { role: "user", content: input.userPrompt },
+          { role: "user", content: userContent },
         ],
       }),
     });

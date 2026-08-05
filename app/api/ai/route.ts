@@ -1,4 +1,12 @@
-import { ensureDatabase, getD1, getRuntimeEnv } from "../../../db";
+import { and, eq } from "drizzle-orm";
+import {
+  ensureDatabase,
+  getAssetsBucket,
+  getD1,
+  getDb,
+  getRuntimeEnv,
+} from "../../../db";
+import { assets } from "../../../db/schema";
 import {
   defaultLanding,
   landingSectionTypes,
@@ -14,6 +22,7 @@ import type {
   PipelineResumeState,
 } from "../../builder-generation";
 import { getPipelineErrorDetails } from "../../server/agents/pipeline-stage-error";
+import { analyzeReferenceImage } from "../../server/agents/reference-image-analysis";
 
 function streamEvent(event: BuilderStreamEvent) {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -23,6 +32,52 @@ function errorMessage(error: unknown) {
   return error instanceof Error
     ? error.message
     : "Không thể xử lý yêu cầu AI.";
+}
+
+function toBase64(bytes: Uint8Array) {
+  const chunkSize = 0x8000;
+  let binary = "";
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(offset, offset + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function loadReferenceImageDataUrl(userId: string, assetId: string) {
+  await ensureDatabase();
+  const [asset] = await getDb()
+    .select({
+      objectKey: assets.objectKey,
+      contentType: assets.contentType,
+      size: assets.size,
+    })
+    .from(assets)
+    .where(and(eq(assets.id, assetId), eq(assets.ownerId, userId)))
+    .limit(1);
+  if (!asset) {
+    throw new Error("Không tìm thấy ảnh tham chiếu trong thư viện của bạn.");
+  }
+  if (!asset.contentType.startsWith("image/") || asset.size > 5 * 1024 * 1024) {
+    throw new Error("Ảnh tham chiếu phải là ảnh tối đa 5 MB.");
+  }
+
+  const object = await getAssetsBucket().get(asset.objectKey);
+  if (!object) {
+    throw new Error("Không thể mở ảnh tham chiếu đã chọn.");
+  }
+  const data = new Uint8Array(await object.arrayBuffer());
+  return `data:${asset.contentType};base64,${toBase64(data)}`;
+}
+
+function referencePrompt(prompt: string, analysis: string) {
+  return [
+    "Tạo hoặc cập nhật landing page dựa trên brief ảnh tham chiếu bên dưới.",
+    "Chỉ lấy cảm hứng từ bố cục và phong cách; không sao chép logo, nội dung hay tài sản thương hiệu trong ảnh.",
+    prompt,
+    `Brief anh tham chieu:\n${analysis}`,
+  ]
+    .filter(Boolean)
+    .join("\n\n");
 }
 
 async function enforceUsageLimit(request: Request) {
@@ -86,6 +141,7 @@ export async function POST(request: Request) {
 
     const payload = (await request.json()) as {
       prompt?: string;
+      referenceAssetId?: string;
       current?: LandingData;
       selectedSection?: LandingSectionType | null;
       history?: Array<{
@@ -95,6 +151,7 @@ export async function POST(request: Request) {
       resume?: PipelineResumeState;
     };
     const prompt = payload.prompt?.trim();
+    const referenceAssetId = payload.referenceAssetId?.trim();
     const current = isLandingData(payload.current)
       ? payload.current
       : defaultLanding;
@@ -118,23 +175,7 @@ export async function POST(request: Request) {
           )
           .slice(-8)
       : [];
-    const resume =
-      payload.resume?.prompt?.trim() === prompt &&
-      isLandingData(payload.resume.landing)
-        ? {
-            prompt: payload.resume.prompt,
-            landing: payload.resume.landing,
-            completedSections: Array.isArray(payload.resume.completedSections)
-              ? payload.resume.completedSections.filter(
-                  (section, index, all): section is LandingSectionType =>
-                    landingSectionTypes.includes(section) &&
-                    all.indexOf(section) === index
-                )
-              : [],
-          }
-        : undefined;
-
-    if (!prompt) {
+    if (!prompt && !referenceAssetId) {
       return Response.json(
         { error: "Hãy nhập yêu cầu chỉnh sửa." },
         { status: 400 }
@@ -157,16 +198,52 @@ export async function POST(request: Request) {
             },
           ]
         : undefined;
+    const providerUrl = runtime.AI_PROVIDER_URL || "https://api.openai.com/v1";
+    const modelName =
+      runtime.AI_MODEL_NAME || runtime.OPENAI_MODEL || "gpt-5.6-terra";
+    const apiKey = runtime.AI_API_KEY || runtime.OPENAI_API_KEY;
+    if (referenceAssetId && !apiKey) {
+      throw new Error("Cần cấu hình khóa API có hỗ trợ phân tích ảnh tham chiếu.");
+    }
+    const sourcePrompt =
+      prompt || "Tạo một landing page mới dựa trên ảnh tham chiếu đã chọn.";
+    const imageAnalysis =
+      referenceAssetId && apiKey
+        ? await analyzeReferenceImage({
+            imageDataUrl: await loadReferenceImageDataUrl(user.id, referenceAssetId),
+            userPrompt: sourcePrompt,
+            providerUrl,
+            modelName,
+            apiKey,
+            fallbackProviders,
+          })
+        : "";
+    const agentPrompt = imageAnalysis
+      ? referencePrompt(sourcePrompt, imageAnalysis)
+      : sourcePrompt;
+    const resume =
+      payload.resume?.prompt?.trim() === agentPrompt &&
+      isLandingData(payload.resume.landing)
+        ? {
+            prompt: payload.resume.prompt,
+            landing: payload.resume.landing,
+            completedSections: Array.isArray(payload.resume.completedSections)
+              ? payload.resume.completedSections.filter(
+                  (section, index, all): section is LandingSectionType =>
+                    landingSectionTypes.includes(section) &&
+                    all.indexOf(section) === index
+                )
+              : [],
+          }
+        : undefined;
     const agentInput = {
-      prompt,
+      prompt: agentPrompt,
       current,
       selectedSection,
       history,
-      providerUrl:
-        runtime.AI_PROVIDER_URL || "https://api.openai.com/v1",
-      modelName:
-        runtime.AI_MODEL_NAME || runtime.OPENAI_MODEL || "gpt-5.6-terra",
-      apiKey: runtime.AI_API_KEY || runtime.OPENAI_API_KEY,
+      providerUrl,
+      modelName,
+      apiKey,
       fallbackProviders,
       resume,
       createDemoLanding,

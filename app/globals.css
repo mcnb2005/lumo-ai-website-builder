@@ -3581,6 +3581,7 @@ textarea:focus-visible {
 }
 
 .asset-library-item {
+  position: relative;
   width: 48px;
   height: 42px;
   flex: 0 0 auto;
@@ -3605,6 +3606,79 @@ textarea:focus-visible {
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
+}
+
+.asset-library-item:focus-within,
+.asset-library-item.is-reference {
+  box-shadow: 0 0 0 2px var(--studio-green);
+}
+
+.asset-reference-button {
+  position: absolute;
+  right: 3px;
+  bottom: 3px;
+  width: 19px;
+  height: 19px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  border-radius: 50%;
+  background: var(--studio-green);
+  color: #fff;
+  font: inherit;
+  font-size: 7px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.asset-reference-button:hover,
+.asset-reference-button[aria-pressed="true"] {
+  background: #0e3223;
+}
+
+.reference-asset-chip {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  margin-bottom: 8px;
+  padding: 4px 5px 4px 4px;
+  border: 1px solid #bcd1c3;
+  border-radius: 8px;
+  background: #f2f8f3;
+  color: var(--studio-green);
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.reference-asset-chip img {
+  width: 24px;
+  height: 22px;
+  border-radius: 4px;
+  object-fit: cover;
+}
+
+.reference-asset-chip span {
+  flex: 1;
+}
+
+.reference-asset-chip button {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: #466b54;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.reference-asset-chip button:hover {
+  background: #dcebdd;
 }
 
 /* Expanded landing-page section library */
