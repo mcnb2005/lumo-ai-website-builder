@@ -33,10 +33,7 @@ import {
 import { createDemoBuilderPlan } from "./builder-plan";
 import { runLandingCreationPipeline } from "./landing-creation-pipeline";
 import { runPlanningAgent } from "./planning-agent";
-import {
-  createLandingFromTemplate,
-  selectTemplateForBrief,
-} from "../../templates/registry";
+
 import {
   buildSimpleActionOperations,
   describeSimpleAction,
@@ -161,11 +158,7 @@ export async function runWebsiteBuilderAgent(
       intent = resolution.plan;
     }
   }
-  const templateSelection =
-    intent.mode === "create" ? selectTemplateForBrief(intent) : undefined;
-  const activeLanding = templateSelection
-    ? createLandingFromTemplate(templateSelection.id)
-    : input.current;
+  const activeLanding = input.current;
   const activeManifest = buildLandingManifest(activeLanding);
   const runtimeSkill =
     intent.mode === "create"
@@ -223,7 +216,6 @@ export async function runWebsiteBuilderAgent(
             description: runtimeSkill.description,
           }
         : undefined,
-      templateSelection,
     };
   }
 
@@ -299,12 +291,11 @@ export async function runWebsiteBuilderAgent(
     };
   }
 
-  if (intent.mode === "create" && templateSelection) {
+  if (intent.mode === "create") {
     const created = await runLandingCreationPipeline({
       prompt: input.prompt,
       plan: intent,
-      templateSelection,
-      templateLanding: activeLanding,
+      baseLanding: activeLanding,
       providerUrl: input.providerUrl,
       modelName: input.modelName,
       apiKey: input.apiKey,
@@ -317,7 +308,7 @@ export async function runWebsiteBuilderAgent(
       : "";
     return {
       landing: created.landing,
-      message: `Mình đã tạo landing page bằng pipeline nhiều bước, chọn template ${templateSelection.name} và đạt ${created.qualityReport.overall}/100 điểm chất lượng.${warningSuffix}`,
+      message: `Mình đã tạo landing page bằng pipeline động và đạt ${created.qualityReport.overall}/100 điểm chất lượng.${warningSuffix}`,
       mode: "ai",
       operations: created.operations,
       changedSections: created.changedSections,
@@ -335,7 +326,6 @@ export async function runWebsiteBuilderAgent(
             description: runtimeSkill.description,
           }
         : undefined,
-      templateSelection,
       project: created.project,
       qualityReport: created.qualityReport,
     };
@@ -477,12 +467,6 @@ export async function runWebsiteBuilderAgent(
   }
 
   landing = preserveInternalAssetUrls(activeLanding, landing);
-  if (templateSelection) {
-    landing = {
-      ...landing,
-      design: structuredClone(activeLanding.design),
-    };
-  }
 
   return {
     landing,
@@ -504,6 +488,5 @@ export async function runWebsiteBuilderAgent(
           description: runtimeSkill.description,
         }
       : undefined,
-    templateSelection,
   };
 }

@@ -8,6 +8,7 @@ export const sectionRegistry = {
   testimonial: { label: "Đánh giá" },
   faq: { label: "Câu hỏi thường gặp" },
   leadForm: { label: "Form đăng ký" },
+  customBlock: { label: "Khối tùy chỉnh" },
   finalCta: { label: "Kêu gọi hành động" },
 } as const;
 

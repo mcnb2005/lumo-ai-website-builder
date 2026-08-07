@@ -16,7 +16,6 @@ import {
   applyLandingOperations,
   type LandingOperation,
 } from "../../landing-operations";
-import type { TemplateSelection } from "../../templates/registry";
 import { preserveInternalAssetUrls } from "../skills/landing-builder-skill";
 import type { BuilderPlan } from "./builder-plan";
 import {
@@ -65,8 +64,7 @@ function preserveAssets(current: LandingData, next: LandingData) {
 export async function runLandingCreationPipeline(input: {
   prompt: string;
   plan: BuilderPlan;
-  templateSelection: TemplateSelection;
-  templateLanding: LandingData;
+  baseLanding: LandingData;
   providerUrl: string;
   modelName: string;
   apiKey: string;
@@ -78,8 +76,6 @@ export async function runLandingCreationPipeline(input: {
   const blueprint = createLandingBlueprint({
     plan: input.plan,
     brief,
-    templateSelection: input.templateSelection,
-    templateLanding: input.templateLanding,
   });
   const canResume =
     input.resume?.prompt.trim() === input.prompt.trim() &&
@@ -87,7 +83,7 @@ export async function runLandingCreationPipeline(input: {
   let landing = canResume
     ? normalizeLandingData(input.resume?.landing)
     : normalizeLandingData(
-        applyBlueprintToLanding(input.templateLanding, blueprint)
+        applyBlueprintToLanding(input.baseLanding, blueprint)
       );
 
   if (!canResume && (input.plan.typography || input.plan.radius || input.plan.density) && landing.design) {
@@ -121,7 +117,7 @@ export async function runLandingCreationPipeline(input: {
   input.progress?.({
     type: "status",
     stage: "planning",
-    message: `Đã chọn ${input.templateSelection.name} và lập blueprint gồm ${blueprint.sections.length} section.`,
+    message: `Đã lập blueprint động gồm ${blueprint.sections.length} section.`,
   });
 
   for (let index = 0; index < blueprint.sections.length; index += 1) {

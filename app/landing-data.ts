@@ -8,6 +8,7 @@ export const landingSectionTypes = [
   "testimonial",
   "faq",
   "leadForm",
+  "customBlock",
   "finalCta",
 ] as const;
 
@@ -42,16 +43,17 @@ export const landingSectionVariantOptions: Record<
   LandingSectionType,
   readonly string[]
 > = {
-  hero: ["split", "centered", "product-showcase", "image-background"],
+  hero: ["split", "centered", "product-showcase", "image-background", "minimal"],
   stats: ["row", "cards"],
-  features: ["numbered", "grid", "bento"],
+  features: ["numbered", "grid", "bento", "cards", "minimal"],
   pricing: ["cards", "minimal", "comparison"],
   portfolio: ["grid", "editorial", "masonry"],
   gallery: ["grid", "masonry", "showcase"],
   testimonial: ["highlight", "card", "minimal"],
-  faq: ["list", "two-columns"],
+  faq: ["list", "two-columns", "grid"],
   leadForm: ["two-columns", "centered", "compact"],
-  finalCta: ["minimal", "banner"],
+  customBlock: ["raw"],
+  finalCta: ["minimal", "banner", "split"],
 };
 
 export type LandingDesign = {
@@ -131,6 +133,9 @@ export type LandingData = {
     buttonText: string;
     successMessage: string;
   };
+  customBlock: {
+    htmlCode: string;
+  };
   palette: {
     ink: string;
     paper: string;
@@ -160,6 +165,7 @@ export const defaultLanding: LandingData = {
       testimonial: "highlight",
       faq: "list",
       leadForm: "two-columns",
+      customBlock: "raw",
       finalCta: "minimal",
     },
     typography: {
@@ -204,6 +210,7 @@ export const defaultLanding: LandingData = {
     "testimonial",
     "faq",
     "leadForm",
+    "customBlock",
     "finalCta",
   ],
   hiddenSections: [],
@@ -313,6 +320,9 @@ export const defaultLanding: LandingData = {
     fields: ["Họ và tên", "Email", "Số điện thoại", "Nhu cầu của bạn"],
     buttonText: "Gửi yêu cầu",
     successMessage: "Cảm ơn bạn! Chúng tôi sẽ liên hệ sớm.",
+  },
+  customBlock: {
+    htmlCode: "",
   },
   palette: {
     ink: "#15271f",
@@ -469,18 +479,34 @@ export function normalizeLandingData(
         (section, index, all) => all.indexOf(section) === index
       );
       if (!unique.includes("hero")) unique.unshift("hero");
+      
+      for (const sec of landingSectionTypes) {
+        if (!unique.includes(sec) && sec !== "hero" && sec !== "finalCta") {
+          unique.push(sec);
+        }
+      }
+
       if (!unique.includes("finalCta")) unique.push("finalCta");
       return unique;
     })(),
-    hiddenSections: Array.isArray(value.hiddenSections)
-      ? value.hiddenSections.filter(
-          (section, index, all): section is LandingSectionType =>
-            typeof section === "string" &&
-            landingSectionTypes.includes(section as LandingSectionType) &&
-            section !== "finalCta" &&
-            all.indexOf(section) === index
-        )
-      : [],
+    hiddenSections: (() => {
+      const explicit = Array.isArray(value.hiddenSections)
+        ? value.hiddenSections.filter(
+            (section, index, all): section is LandingSectionType =>
+              typeof section === "string" &&
+              landingSectionTypes.includes(section as LandingSectionType) &&
+              section !== "finalCta" &&
+              all.indexOf(section) === index
+          )
+        : [];
+      const providedOrder = Array.isArray(value.sectionOrder) ? value.sectionOrder : [];
+      const missing = providedOrder.length
+        ? landingSectionTypes.filter(
+            (sec) => !providedOrder.includes(sec) && sec !== "hero" && sec !== "finalCta"
+          )
+        : [];
+      return Array.from(new Set([...explicit, ...missing]));
+    })(),
     sectionColors: normalizeSectionColors(value.sectionColors),
     stats: Array.isArray(value.stats) ? value.stats : defaultLanding.stats,
     features: Array.isArray(value.features)
@@ -535,6 +561,9 @@ export function normalizeLandingData(
     leadForm: {
       ...defaultLanding.leadForm,
       ...(value.leadForm || {}),
+    },
+    customBlock: {
+      htmlCode: typeof value.customBlock?.htmlCode === "string" ? value.customBlock.htmlCode : "",
     },
     palette: {
       ...defaultLanding.palette,

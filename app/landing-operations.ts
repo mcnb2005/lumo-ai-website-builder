@@ -73,6 +73,10 @@ export type LandingOperation =
       density?: "compact" | "comfortable" | "spacious";
     }
   | {
+      type: "update_custom_block";
+      htmlCode: string;
+    }
+  | {
       type: "replace_landing";
       value: LandingData;
     };
@@ -158,6 +162,7 @@ const landingKeys: Array<keyof LandingData> = [
   "testimonial",
   "faq",
   "leadForm",
+  "customBlock",
   "palette",
 ];
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -578,6 +583,13 @@ export function validateLandingData(
     errors.push("leadForm.fields phải là mảng chuỗi hợp lệ.");
   }
 
+  if (
+    !isRecord(value.customBlock) ||
+    typeof value.customBlock.htmlCode !== "string"
+  ) {
+    errors.push("customBlock.htmlCode phải là chuỗi hợp lệ.");
+  }
+
   if (!isRecord(value.palette)) {
     errors.push("palette phải là object.");
   } else {
@@ -932,6 +944,17 @@ export function parseLandingOperationEnvelope(
         });
         return;
       }
+      case "update_custom_block": {
+        if (typeof rawOperation.htmlCode !== "string") {
+          errors.push(`${path}.htmlCode phải là chuỗi.`);
+          return;
+        }
+        operations.push({
+          type: "update_custom_block",
+          htmlCode: rawOperation.htmlCode,
+        });
+        return;
+      }
       case "replace_landing": {
         if (options.mode !== "create" && options.source !== "system") {
           errors.push("replace_landing chỉ được dùng khi tạo project mới.");
@@ -1165,13 +1188,29 @@ function applyReplaceSection(
     case "pricing":
     case "portfolio":
     case "gallery":
-    case "faq":
-      if (!Array.isArray(value)) {
+    case "faq": {
+      let items = value;
+      const patch: Partial<LandingData> = {};
+      
+      if (isRecord(value) && Array.isArray(value.items)) {
+        items = value.items;
+        if (section !== "stats") {
+          if (typeof value.eyebrow === "string") {
+            patch[`${section}Eyebrow` as keyof LandingData] = value.eyebrow as never;
+          }
+          if (typeof value.headline === "string") {
+            patch[`${section}Headline` as keyof LandingData] = value.headline as never;
+          }
+        }
+      }
+
+      if (!Array.isArray(items)) {
         throw new LandingOperationValidationError([
           `Dữ liệu ${section} phải là mảng.`,
         ]);
       }
-      return normalizeLandingData({ ...current, [section]: value });
+      return normalizeLandingData({ ...current, ...patch, [section]: items });
+    }
     case "testimonial":
     case "leadForm":
       if (!isRecord(value)) {
@@ -1357,6 +1396,13 @@ export function applyLandingOperations(
           },
         };
         landing.sectionOrder.forEach((section) => changedSections.add(section));
+        break;
+      case "update_custom_block":
+        landing = {
+          ...landing,
+          customBlock: { htmlCode: operation.htmlCode },
+        };
+        changedSections.add("customBlock");
         break;
       case "replace_landing":
         landing = normalizeLandingData(operation.value);

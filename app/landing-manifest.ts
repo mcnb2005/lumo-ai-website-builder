@@ -104,6 +104,7 @@ export const editableFieldsBySection: Record<
     "leadForm.field",
     "leadForm.buttonText",
   ],
+  customBlock: [],
   finalCta: ["finalCtaEyebrow", "finalCtaHeadline", "primaryCta"],
 };
 
@@ -117,6 +118,7 @@ const sectionLabels: Record<LandingSectionType, string> = {
   testimonial: "Đánh giá",
   faq: "Câu hỏi thường gặp",
   leadForm: "Form đăng ký",
+  customBlock: "Khối tùy chỉnh",
   finalCta: "Kêu gọi hành động",
 };
 
@@ -200,6 +202,8 @@ export function getLandingSectionSnapshot(
       };
     case "leadForm":
       return landing.leadForm;
+    case "customBlock":
+      return landing.customBlock;
     case "finalCta":
       return {
         eyebrow: landing.finalCtaEyebrow,
