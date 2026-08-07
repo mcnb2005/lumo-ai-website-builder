@@ -227,8 +227,6 @@ export function Studio() {
   const [templateDialogMode, setTemplateDialogMode] = useState<
     "create" | "switch"
   >("create");
-  const [lastTemplateSelection, setLastTemplateSelection] =
-    useState<TemplateSelection | null>(null);
   const [editorReady, setEditorReady] = useState(false);
   const saveEnabled = useRef(false);
   const conversationEnd = useRef<HTMLDivElement>(null);
@@ -585,7 +583,6 @@ export function Studio() {
     setUploadedAssets([]);
     setReferenceAsset(null);
     setSelectedSection(null);
-    setLastTemplateSelection(null);
     setGenerationStage(null);
     setGenerationMessage("");
     setGenerationErrors([]);
@@ -626,7 +623,6 @@ export function Studio() {
   function chooseTemplate(templateId: string) {
     if (templateDialogMode === "switch") {
       updateLanding((current) => applyTemplateDesign(current, templateId));
-      setLastTemplateSelection(null);
       setNotice("Đã đổi thiết kế và giữ nguyên nội dung landing page hiện tại.");
     } else {
       createProject(
@@ -643,11 +639,6 @@ export function Studio() {
       "Đã tạo trang trắng. Hãy thêm section hoặc chat với Lumo để bắt đầu."
     );
     setNewProjectDialogOpen(false);
-  }
-
-  function showOtherTemplates() {
-    setTemplateDialogMode("switch");
-    setNewProjectDialogOpen(true);
   }
 
   function selectSection(section: LandingSectionType) {
@@ -826,7 +817,6 @@ export function Studio() {
       });
 
       updateLanding(() => result.landing);
-      setLastTemplateSelection(result.templateSelection || null);
       setMessages((current) => [
         ...current,
         newMessage(
@@ -1317,21 +1307,6 @@ export function Studio() {
                 <p>{message.content}</p>
               </div>
             ))}
-            {lastTemplateSelection ? (
-              <div className="template-selection-message">
-                <span>AI ĐÃ CHỌN TEMPLATE</span>
-                <strong>{lastTemplateSelection.name}</strong>
-                <p>{lastTemplateSelection.reason}</p>
-                <div>
-                  <button type="button" onClick={() => setLastTemplateSelection(null)}>
-                    Giữ thiết kế này
-                  </button>
-                  <button type="button" onClick={showOtherTemplates}>
-                    Xem mẫu khác
-                  </button>
-                </div>
-              </div>
-            ) : null}
             {generationStage ? (
               <div className="message message-assistant">
                 <span className="message-avatar" aria-hidden="true">✦</span>

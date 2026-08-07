@@ -4,7 +4,6 @@ import type { LandingOperation } from "./landing-operations";
 import type { LandingProject } from "./landing-project";
 import type { BuilderPlan } from "./server/agents/builder-plan";
 import type { LandingQualityReport } from "./server/agents/quality-evaluator";
-import type { TemplateSelection } from "./templates/registry";
 
 export const generationStages = [
   "understanding",
@@ -38,7 +37,6 @@ export type BuilderAgentResult = {
     name: string;
     description: string;
   };
-  templateSelection?: TemplateSelection;
   project?: LandingProject;
   qualityReport?: LandingQualityReport;
 };

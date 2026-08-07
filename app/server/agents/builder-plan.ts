@@ -48,6 +48,15 @@ export type BuilderTarget = {
   paletteToken?: "ink" | "paper" | "accent" | "soft" | "line";
 };
 
+export type VisualDirection = {
+  mood: string[];
+  typography: string;
+  density: "compact" | "balanced" | "airy";
+  imageStyle: string;
+  radius: "none" | "small" | "medium" | "large";
+  contrast: "soft" | "balanced" | "high";
+};
+
 export type BuilderPlan = {
   mode: "create" | "edit" | "clarify";
   action: BuilderAction;
@@ -64,6 +73,7 @@ export type BuilderPlan = {
   audience: string;
   primaryGoal: string;
   tone: string;
+  visualDirection?: VisualDirection;
   recommendedSections: LandingSectionType[];
   sectionVariants?: Partial<Record<LandingSectionType, string>>;
   typography?: { heading: string; body: string };
@@ -213,12 +223,14 @@ export function parseBuilderPlan(
     : undefined;
 
   const typography =
-    isRecord(value.typography) &&
-    typeof value.typography.heading === "string" &&
-    typeof value.typography.body === "string"
+    isRecord(value.typography)
       ? {
-          heading: value.typography.heading,
-          body: value.typography.body,
+          heading: (value.typography.heading === "editorial" || value.typography.heading === "modern" || value.typography.heading === "friendly") 
+            ? value.typography.heading 
+            : "editorial",
+          body: (value.typography.body === "sans" || value.typography.body === "humanist") 
+            ? value.typography.body 
+            : "sans",
         }
       : undefined;
 
@@ -237,6 +249,32 @@ export function parseBuilderPlan(
     value.density === "spacious"
       ? value.density
       : undefined;
+
+  const visualDirection = isRecord(value.visualDirection)
+    ? {
+        mood: Array.isArray(value.visualDirection.mood)
+          ? value.visualDirection.mood.filter((m): m is string => typeof m === "string")
+          : [],
+        typography: asText(value.visualDirection.typography),
+        density:
+          value.visualDirection.density === "balanced" ||
+          value.visualDirection.density === "airy"
+            ? value.visualDirection.density
+            : "compact",
+        imageStyle: asText(value.visualDirection.imageStyle),
+        radius:
+          value.visualDirection.radius === "small" ||
+          value.visualDirection.radius === "medium" ||
+          value.visualDirection.radius === "large"
+            ? value.visualDirection.radius
+            : "none",
+        contrast:
+          value.visualDirection.contrast === "soft" ||
+          value.visualDirection.contrast === "high"
+            ? value.visualDirection.contrast
+            : "balanced",
+      }
+    : undefined;
 
   const lowConfidence = confidence < 0.6;
   const mode = lowConfidence ? "clarify" : rawMode;
@@ -275,6 +313,7 @@ export function parseBuilderPlan(
     audience: asText(value.audience, "Khách hàng mục tiêu"),
     primaryGoal: asText(value.primaryGoal, "Thực hiện CTA chính"),
     tone: asText(value.tone, "Rõ ràng, đáng tin cậy"),
+    visualDirection,
     recommendedSections,
     sectionVariants,
     typography,

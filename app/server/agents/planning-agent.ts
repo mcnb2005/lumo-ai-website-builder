@@ -49,8 +49,11 @@ const plannerInstructions = [
   `pagePurpose chỉ được là: ${pagePurposes.join(", ")}.`,
   "confidence nằm trong khoảng 0 đến 1. Nếu confidence dưới 0.6, chọn clarify.",
   `Khi tạo trang mới, áp dụng skill ${landingUiDesignSkill.name}: ${landingUiDesignSkill.rules.join(" ")}`,
-  "recommendedSections chỉ gồm các section thật sự phục vụ mục tiêu, được sắp theo hành trình chuyển đổi riêng của pagePurpose; không mặc định đề xuất toàn bộ catalog.",
-  "Để trang web thêm sinh động, bạn có thể thiết lập typography (heading, body), sectionVariants (ví dụ hero: 'split', features: 'grid'), radius ('none', 'sm', 'md', 'lg', 'full') và density ('compact', 'comfortable', 'spacious') dựa trên Business context và tone.",
+  "QUAN TRỌNG: Kiến trúc mới của hệ thống yêu cầu bạn thực hiện quy trình thiết kế theo thứ tự: Business Intent -> Visual Direction -> Blueprint (recommendedSections) -> Variant Selection.",
+  "1. Visual Direction: Cung cấp visualDirection (mood, typography, density, imageStyle, radius, contrast) phù hợp với lĩnh vực kinh doanh.",
+  "2. Blueprint: recommendedSections chỉ gồm các section thật sự phục vụ mục tiêu, được sắp xếp theo hành trình chuyển đổi; luôn bắt đầu bằng hero và kết thúc bằng finalCta.",
+  "3. Variant Selection: Với mỗi section trong recommendedSections, BẮT BUỘC cung cấp sectionVariants tương ứng (vd: hero: 'minimal', features: 'cards'). ĐỪNG CHỌN NGẪU NHIÊN. Áp dụng theo Visual Direction.",
+  "Mẹo Variant: Hero 'minimal' cho agency/B2B; 'image-background' cho event. Features 'cards' cho consumer app; 'minimal' cho thiết kế tinh tế; 'bento' cho SaaS. FAQ 'grid' tiết kiệm không gian. Final CTA 'split' rất cân đối cho desktop.",
   "Chỉ trả một JSON object, không markdown và không giải thích bên ngoài JSON.",
 ].join(" ");
 

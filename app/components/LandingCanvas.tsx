@@ -233,11 +233,26 @@ function HeroImageBackgroundFrame({
   );
 }
 
+function HeroMinimalFrame({
+  items,
+  hasImage,
+}: {
+  items: ReactNode[];
+  hasImage: boolean;
+}) {
+  return (
+    <section className={heroFrameClass("minimal", false)}>
+      <div className="hero-minimal-content">{items[1]}</div>
+    </section>
+  );
+}
+
 const heroVariantFrames = {
   split: HeroSplitFrame,
   centered: HeroCenteredFrame,
   "product-showcase": HeroProductShowcaseFrame,
   "image-background": HeroImageBackgroundFrame,
+  minimal: HeroMinimalFrame,
 } as const;
 
 function HeroVariantFrame({
@@ -1059,6 +1074,16 @@ export function LandingCanvas({
               ) : null}
             </form>
           </section>
+        );
+      case "customBlock":
+        if (!data.customBlock?.htmlCode) return null;
+        return (
+          <section
+            key={section}
+            className={`custom-block-section${variantClass("customBlock")}`}
+            style={sectionThemeStyle(section)}
+            dangerouslySetInnerHTML={{ __html: data.customBlock.htmlCode }}
+          />
         );
       case "finalCta":
         return (

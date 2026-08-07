@@ -9,11 +9,10 @@ import {
   type BusinessBrief,
   type LandingBlueprint,
 } from "../../landing-project";
-import type { TemplateSelection } from "../../templates/registry";
 import type { BuilderPlan } from "./builder-plan";
 import { resolveLandingRecipe } from "./landing-recipes";
 
-const sectionPurposes: Record<LandingSectionType, string> = {
+const sectionPurposes: Record<string, string> = {
   hero: "Nêu giá trị chính, đối tượng và hành động ưu tiên.",
   stats: "Đưa ra bằng chứng định lượng ngắn gọn.",
   features: "Giải thích lợi ích và điểm khác biệt cốt lõi.",
@@ -24,6 +23,7 @@ const sectionPurposes: Record<LandingSectionType, string> = {
   faq: "Giải quyết băn khoăn trước khi chuyển đổi.",
   leadForm: "Thu thập đúng thông tin cần thiết cho mục tiêu chuyển đổi.",
   finalCta: "Nhắc lại lợi ích và CTA chính ở cuối trang.",
+  customBlock: "Khối nội dung tùy chỉnh do AI tạo bằng HTML.",
 };
 
 export function createBusinessBrief(
@@ -49,41 +49,39 @@ function validVariant(section: LandingSectionType, candidate: string | undefined
 export function createLandingBlueprint(input: {
   plan: BuilderPlan;
   brief: BusinessBrief;
-  templateSelection: TemplateSelection;
-  templateLanding: LandingData;
 }): LandingBlueprint {
   const recipe = resolveLandingRecipe(input.plan);
-  const recipeSections = new Set(recipe.visibleSections);
-  const templateOrderedSections = input.templateLanding.sectionOrder.filter(
-    (section) =>
-      section !== "hero" &&
-      section !== "finalCta" &&
-      recipeSections.has(section)
-  );
+  
+  let middleSections: LandingSectionType[] = [];
+  if (input.plan.recommendedSections && input.plan.recommendedSections.length > 0) {
+    middleSections = input.plan.recommendedSections.filter((s: string) => s !== "hero" && s !== "finalCta") as LandingSectionType[];
+  } else {
+    middleSections = recipe.visibleSections.filter(
+      (section) => section !== "hero" && section !== "finalCta"
+    );
+  }
+
   const visible = Array.from(
     new Set<LandingSectionType>([
       "hero",
-      ...templateOrderedSections,
-      ...recipe.visibleSections.filter(
-        (section) => section !== "hero" && section !== "finalCta"
-      ),
+      ...middleSections,
       "finalCta",
     ])
   );
 
   return {
-    templateId: input.templateSelection.id,
+    templateId: "dynamic",
     sections: visible.map((section, order) => {
-      const preferred = input.plan.sectionVariants?.[section] || input.templateLanding.design?.sectionVariants[section];
+      const preferred = input.plan.sectionVariants?.[section];
       const variant =
-        section === "hero" && !input.templateLanding.heroImage
+        section === "hero"
           ? validVariant(section, preferred || "centered")
           : validVariant(section, preferred);
       return {
         id: `${section}-main`,
         type: section,
         variant,
-        purpose: sectionPurposes[section],
+        purpose: sectionPurposes[section as string],
         order,
       };
     }),

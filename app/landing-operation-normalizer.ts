@@ -32,6 +32,9 @@ export const landingOperationSchemas = {
       nested_index: "nestedIndex",
     },
   },
+  update_custom_block: {
+    required: ["type", "htmlCode"],
+  },
   replace_section: {
     required: ["type", "section", "value"],
     aliases: { targetSection: "section", data: "value" },
