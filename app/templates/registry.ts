@@ -37,8 +37,6 @@ export type TemplateSelection = {
   confidence: number;
 };
 
-const allSections = [...landingSectionTypes];
-
 function makeTemplate(input: Omit<LandingTemplate, "landing"> & {
   design: Omit<LandingDesign, "templateId" | "templateVersion">;
   landing: Partial<LandingData>;
@@ -71,7 +69,7 @@ export const landingTemplates: LandingTemplate[] = [
     name: "Sản phẩm hiện đại",
     description: "Tập trung vào sản phẩm, lợi ích, giá bán và hành động mua.",
     category: "product",
-    version: 1,
+    version: 2,
     tags: ["hiện đại", "sản phẩm", "thương mại", "tin cậy"],
     recommendedFor: ["sell_product", "launch", "promotion"],
     design: {
@@ -105,7 +103,18 @@ export const landingTemplates: LandingTemplate[] = [
       pricingHeadline: "Mức giá rõ ràng, giá trị lâu dài.",
       finalCtaEyebrow: "Sẵn sàng trải nghiệm?",
       finalCtaHeadline: "Chọn sản phẩm phù hợp với bạn hôm nay.",
-      sectionOrder: allSections,
+      sectionOrder: [
+        "hero",
+        "gallery",
+        "stats",
+        "features",
+        "pricing",
+        "testimonial",
+        "faq",
+        "leadForm",
+        "finalCta",
+        "portfolio",
+      ],
       hiddenSections: ["portfolio"],
       palette: {
         ink: "#10243e",
@@ -121,7 +130,7 @@ export const landingTemplates: LandingTemplate[] = [
     name: "Dịch vụ cao cấp",
     description: "Bố cục biên tập dành cho tư vấn, thiết kế và dịch vụ chuyên môn.",
     category: "service",
-    version: 1,
+    version: 2,
     tags: ["cao cấp", "tối giản", "chuyên nghiệp", "dịch vụ"],
     recommendedFor: ["service", "booking", "general"],
     design: {
@@ -160,7 +169,18 @@ export const landingTemplates: LandingTemplate[] = [
         buttonText: "Nhận báo giá",
         successMessage: "Cảm ơn bạn! Chúng tôi sẽ liên hệ sớm.",
       },
-      sectionOrder: allSections,
+      sectionOrder: [
+        "hero",
+        "stats",
+        "portfolio",
+        "features",
+        "testimonial",
+        "pricing",
+        "faq",
+        "leadForm",
+        "finalCta",
+        "gallery",
+      ],
       hiddenSections: ["gallery"],
       palette: {
         ink: "#183126",
@@ -176,7 +196,7 @@ export const landingTemplates: LandingTemplate[] = [
     name: "Khóa học thân thiện",
     description: "Giải thích chương trình học, kết quả và lộ trình đăng ký rõ ràng.",
     category: "course",
-    version: 1,
+    version: 2,
     tags: ["giáo dục", "thân thiện", "năng động", "khóa học"],
     recommendedFor: ["course", "lead_generation"],
     design: {
@@ -209,7 +229,18 @@ export const landingTemplates: LandingTemplate[] = [
       pricingHeadline: "Chọn lộ trình phù hợp với mục tiêu của bạn.",
       finalCtaEyebrow: "Bắt đầu ngay hôm nay",
       finalCtaHeadline: "Đăng ký để được tư vấn lộ trình miễn phí.",
-      sectionOrder: allSections,
+      sectionOrder: [
+        "hero",
+        "stats",
+        "features",
+        "testimonial",
+        "pricing",
+        "faq",
+        "leadForm",
+        "finalCta",
+        "portfolio",
+        "gallery",
+      ],
       hiddenSections: ["portfolio", "gallery"],
       palette: {
         ink: "#17213a",
@@ -225,7 +256,7 @@ export const landingTemplates: LandingTemplate[] = [
     name: "Sự kiện nổi bật",
     description: "Tạo cảm giác cấp thiết với thông tin thời gian và đăng ký nổi bật.",
     category: "event",
-    version: 1,
+    version: 2,
     tags: ["sự kiện", "workshop", "nổi bật", "năng lượng"],
     recommendedFor: ["event", "launch", "promotion"],
     design: {
@@ -261,7 +292,18 @@ export const landingTemplates: LandingTemplate[] = [
         buttonText: "Giữ chỗ ngay",
         successMessage: "Bạn đã đăng ký thành công!",
       },
-      sectionOrder: allSections,
+      sectionOrder: [
+        "hero",
+        "stats",
+        "portfolio",
+        "features",
+        "testimonial",
+        "leadForm",
+        "faq",
+        "finalCta",
+        "pricing",
+        "gallery",
+      ],
       hiddenSections: ["pricing", "gallery"],
       palette: {
         ink: "#20211f",
@@ -277,7 +319,7 @@ export const landingTemplates: LandingTemplate[] = [
     name: "Portfolio biên tập",
     description: "Đặt dự án và hình ảnh ở trung tâm cho cá nhân hoặc studio sáng tạo.",
     category: "portfolio",
-    version: 1,
+    version: 2,
     tags: ["portfolio", "cá nhân", "studio", "biên tập"],
     recommendedFor: ["portfolio", "service"],
     design: {
@@ -308,7 +350,18 @@ export const landingTemplates: LandingTemplate[] = [
       portfolioHeadline: "Mỗi dự án bắt đầu bằng một câu hỏi đúng.",
       galleryEyebrow: "Hình ảnh",
       galleryHeadline: "Chi tiết tạo nên bản sắc.",
-      sectionOrder: allSections,
+      sectionOrder: [
+        "hero",
+        "portfolio",
+        "gallery",
+        "testimonial",
+        "stats",
+        "features",
+        "leadForm",
+        "finalCta",
+        "pricing",
+        "faq",
+      ],
       hiddenSections: ["pricing", "faq"],
       palette: {
         ink: "#171916",
@@ -324,7 +377,7 @@ export const landingTemplates: LandingTemplate[] = [
     name: "Thu thập khách hàng",
     description: "Một thông điệp, một ưu đãi và form ngắn tập trung chuyển đổi.",
     category: "lead-generation",
-    version: 1,
+    version: 2,
     tags: ["lead", "tối giản", "quảng cáo", "chuyển đổi"],
     recommendedFor: ["lead_generation", "booking", "promotion"],
     design: {
@@ -359,7 +412,18 @@ export const landingTemplates: LandingTemplate[] = [
         buttonText: "Gửi tài liệu cho tôi",
         successMessage: "Hãy kiểm tra email của bạn!",
       },
-      sectionOrder: allSections,
+      sectionOrder: [
+        "hero",
+        "leadForm",
+        "stats",
+        "features",
+        "testimonial",
+        "faq",
+        "finalCta",
+        "pricing",
+        "portfolio",
+        "gallery",
+      ],
       hiddenSections: ["pricing", "portfolio", "gallery"],
       palette: {
         ink: "#15352c",

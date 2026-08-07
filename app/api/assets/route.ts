@@ -1,7 +1,12 @@
 import { and, desc, eq } from "drizzle-orm";
 import { ensureDatabase, getAssetsBucket, getDb } from "../../../db";
 import { assets, projects } from "../../../db/schema";
-import { getCurrentDatabaseUser } from "../../server-user";
+import {
+  forbiddenCompanyResponse,
+  getAuthenticatedCompanyContext,
+  unauthorizedCompanyResponse,
+} from "../../company-access";
+import { canEditLanding } from "../../company-data";
 
 const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 const IMAGE_TYPES = new Set([
@@ -13,13 +18,12 @@ const IMAGE_TYPES = new Set([
 
 export async function GET(request: Request) {
   try {
-    const user = await getCurrentDatabaseUser();
-    if (!user) {
-      return Response.json(
-        { error: "Đăng nhập để xem thư viện ảnh." },
-        { status: 401 }
-      );
+    const auth = await getAuthenticatedCompanyContext();
+    if (!auth) return unauthorizedCompanyResponse();
+    if (auth.user.mustChangePassword || !canEditLanding(auth.company.role)) {
+      return forbiddenCompanyResponse();
     }
+    const user = auth.user;
 
     const projectId = new URL(request.url).searchParams.get("projectId");
     if (!projectId) {
@@ -70,13 +74,12 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentDatabaseUser();
-    if (!user) {
-      return Response.json(
-        { error: "Đăng nhập để tải ảnh lên." },
-        { status: 401 }
-      );
+    const auth = await getAuthenticatedCompanyContext();
+    if (!auth) return unauthorizedCompanyResponse();
+    if (auth.user.mustChangePassword || !canEditLanding(auth.company.role)) {
+      return forbiddenCompanyResponse();
     }
+    const user = auth.user;
 
     const form = await request.formData();
     const file = form.get("file");

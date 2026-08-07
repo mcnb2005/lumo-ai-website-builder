@@ -233,7 +233,8 @@ function validateDraft(
       if (
         isRecord(draft) &&
         Array.isArray(draft.items) &&
-        draft.items.length !== (current.gallery?.length ?? 0)
+        (current.gallery?.length ?? 0) > 0 &&
+        draft.items.length !== current.gallery.length
       ) {
         errors.push(
           "draft.items của gallery phải giữ nguyên số lượng ảnh hiện có."
@@ -403,12 +404,15 @@ export function compileSectionDraftToOperations<S extends LandingSectionType>(
     }
     case "gallery": {
       const draft = rawDraft as SectionDraftByType["gallery"];
+      const maxItems = Math.max(current.gallery?.length ?? 0, 0);
       return [
         ...headingOperations("gallery", draft.eyebrow, draft.headline),
-        ...draft.items.flatMap((item, index) => [
-          updateText("gallery", "gallery.alt", item.alt, index),
-          updateText("gallery", "gallery.caption", item.caption, index),
-        ]),
+        ...draft.items
+          .slice(0, maxItems)
+          .flatMap((item, index) => [
+            updateText("gallery", "gallery.alt", item.alt, index),
+            updateText("gallery", "gallery.caption", item.caption, index),
+          ]),
       ];
     }
     case "testimonial": {

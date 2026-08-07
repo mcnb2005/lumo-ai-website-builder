@@ -22,7 +22,10 @@ import {
   parseLandingOperations,
   preserveInternalAssetUrls,
 } from "../skills/landing-builder-skill";
-import { resolveRuntimeSkill } from "../skills/runtime-skills";
+import {
+  landingUiDesignSkill,
+  resolveRuntimeSkill,
+} from "../skills/runtime-skills";
 import {
   runAiChatTool,
   type AiChatProvider,
@@ -164,7 +167,10 @@ export async function runWebsiteBuilderAgent(
     ? createLandingFromTemplate(templateSelection.id)
     : input.current;
   const activeManifest = buildLandingManifest(activeLanding);
-  const runtimeSkill = resolveRuntimeSkill(input.prompt);
+  const runtimeSkill =
+    intent.mode === "create"
+      ? landingUiDesignSkill
+      : resolveRuntimeSkill(input.prompt);
   input.progress?.({
     type: "status",
     stage: "planning",

@@ -1,6 +1,7 @@
 import { ensureDatabase, getD1 } from "../../../db";
 import {
   canManageCompany,
+  canCreateLanding,
   canManageMember,
   type CompanyRole,
   writeCompanyAudit,
@@ -10,24 +11,249 @@ import {
   getAuthenticatedCompanyContext,
   unauthorizedCompanyResponse,
 } from "../../company-access";
-import { createOpaqueToken, hashOpaqueToken } from "../../google-auth";
-import { sendSmtpEmail } from "../../server/smtp-email";
+import {
+  generateTemporaryPassword,
+  hashPassword,
+} from "../../password-auth";
 
-function validManagedRole(value: unknown): value is "admin" | "member" {
-  return value === "admin" || value === "member";
+function validManagedRole(
+  value: unknown
+): value is "admin" | "member" | "viewer" {
+  return value === "admin" || value === "member" || value === "viewer";
 }
 
 function roleOf(value: string): CompanyRole {
-  return value === "owner" || value === "admin" ? value : "member";
+  return value === "owner" ||
+    value === "admin" ||
+    value === "member" ||
+    value === "viewer"
+    ? value
+    : "member";
 }
 
-function escapeHtml(value: string) {
+const INTERNAL_ACCOUNT_DOMAIN = "lumo.local";
+const BULK_ACCOUNT_LIMIT = 100;
+
+type CompanyAuthContext = NonNullable<
+  Awaited<ReturnType<typeof getAuthenticatedCompanyContext>>
+>;
+
+type ManagedAccountInput = {
+  username?: string;
+  email?: string;
+  name?: string;
+  role?: unknown;
+};
+
+type ManagedAccountCredential = {
+  accountCreated: boolean;
+  memberId: string;
+  temporaryPassword: string;
+  username: string;
+  email: string;
+  name: string;
+};
+
+class CompanyAccountError extends Error {
+  constructor(
+    message: string,
+    public status = 400
+  ) {
+    super(message);
+  }
+}
+
+function normalizeUsername(value: string) {
   return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, ".")
+    .replace(/[._-]{2,}/g, ".")
+    .replace(/^[._-]+|[._-]+$/g, "")
+    .slice(0, 32);
+}
+
+function internalEmailForUsername(username: string) {
+  return `${username}@${INTERNAL_ACCOUNT_DOMAIN}`;
+}
+
+function textValue(value: unknown) {
+  return typeof value === "string" ? value : "";
+}
+
+function coerceAccountInput(value: unknown): ManagedAccountInput | null {
+  if (typeof value === "string") return { username: value };
+  if (!value || typeof value !== "object") return null;
+  const account = value as Record<string, unknown>;
+  return {
+    username: textValue(account.username),
+    email: textValue(account.email),
+    name: textValue(account.name),
+    role: account.role,
+  };
+}
+
+async function createManagedAccount(
+  auth: CompanyAuthContext,
+  input: ManagedAccountInput,
+  fallbackRole?: unknown
+): Promise<ManagedAccountCredential> {
+  const usernameSource = input.username || input.email || "";
+  const username = normalizeUsername(usernameSource);
+  const providedEmail = input.email?.trim().toLowerCase();
+  const email =
+    providedEmail && providedEmail.includes("@")
+      ? providedEmail
+      : internalEmailForUsername(username);
+  const requestedRole = validManagedRole(input.role)
+    ? input.role
+    : fallbackRole;
+  const name = input.name?.trim();
+  if (!username || username.length < 3 || !validManagedRole(requestedRole)) {
+    throw new CompanyAccountError(
+      "Tên đăng nhập hoặc vai trò nhân viên chưa hợp lệ.",
+      400
+    );
+  }
+  const role = requestedRole;
+
+  const alreadyMember = await getD1()
+    .prepare(
+      `SELECT cm.id
+       FROM company_members cm
+       INNER JOIN users u ON u.id = cm.user_id
+       WHERE cm.company_id = ?
+         AND (lower(u.username) = ? OR lower(u.email) = ?)
+         AND cm.status = 'active'
+       LIMIT 1`
+    )
+    .bind(auth.company.companyId, username, email)
+    .first();
+  if (alreadyMember) {
+    throw new CompanyAccountError(
+      "Tài khoản này đã là thành viên của công ty.",
+      409
+    );
+  }
+
+  const now = new Date().toISOString();
+  const existingUser = await getD1()
+    .prepare(
+      `SELECT id, email, username, name
+       FROM users
+       WHERE lower(username) = ? OR lower(email) = ?
+       LIMIT 1`
+    )
+    .bind(username, email)
+    .first<{
+      id: string;
+      email: string;
+      username: string | null;
+      name: string | null;
+    }>();
+  if (existingUser) {
+    const otherMembership = await getD1()
+      .prepare(
+        `SELECT c.name
+         FROM company_members cm
+         INNER JOIN companies c ON c.id = cm.company_id
+         WHERE cm.user_id = ? AND cm.company_id <> ?
+           AND cm.status = 'active'
+         LIMIT 1`
+      )
+      .bind(existingUser.id, auth.company.companyId)
+      .first<{ name: string }>();
+    if (otherMembership) {
+      throw new CompanyAccountError(
+        `Tài khoản này đang thuộc công ty ${otherMembership.name}.`,
+        409
+      );
+    }
+  }
+
+  const temporaryPassword = generateTemporaryPassword();
+  const passwordHash = await hashPassword(temporaryPassword);
+  const userId = existingUser?.id || crypto.randomUUID();
+  const accountUsername = existingUser?.username || username;
+  const displayName = name || existingUser?.name || accountUsername;
+  const membershipId = crypto.randomUUID();
+
+  const statements = [];
+  if (existingUser) {
+    statements.push(
+      getD1()
+        .prepare(
+          `UPDATE users
+           SET username = COALESCE(username, ?),
+               name = ?, password_hash = ?, must_change_password = 1,
+               password_updated_at = ?, updated_at = ?
+           WHERE id = ?`
+        )
+        .bind(accountUsername, displayName, passwordHash, now, now, userId)
+    );
+  } else {
+    statements.push(
+      getD1()
+        .prepare(
+          `INSERT INTO users
+           (id, email, username, name, password_hash, must_change_password,
+            password_updated_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`
+        )
+        .bind(
+          userId,
+          email,
+          accountUsername,
+          displayName,
+          passwordHash,
+          now,
+          now,
+          now
+        )
+    );
+  }
+  statements.push(
+    getD1()
+      .prepare(
+        `INSERT INTO company_members
+         (id, company_id, user_id, role, status, invited_by, joined_at, updated_at)
+         VALUES (?, ?, ?, ?, 'active', ?, ?, ?)
+         ON CONFLICT(company_id, user_id) DO UPDATE SET
+           role = excluded.role,
+           status = 'active',
+           invited_by = excluded.invited_by,
+           joined_at = excluded.joined_at,
+           updated_at = excluded.updated_at`
+      )
+      .bind(
+        membershipId,
+        auth.company.companyId,
+        userId,
+        role,
+        auth.user.id,
+        now,
+        now
+      )
+  );
+  await getD1().batch(statements);
+  await writeCompanyAudit(
+    auth.company,
+    existingUser ? "member.account_reset" : "member.account_created",
+    "user",
+    userId,
+    { username: accountUsername, email, role }
+  );
+
+  return {
+    accountCreated: !existingUser,
+    memberId: membershipId,
+    temporaryPassword,
+    username: accountUsername,
+    email,
+    name: displayName,
+  };
 }
 
 export async function GET() {
@@ -49,6 +275,7 @@ export async function GET() {
               cm.joined_at AS joinedAt,
               u.name,
               u.email,
+              u.username,
               u.avatar_url AS avatarUrl,
               (
                 SELECT COUNT(*)
@@ -61,8 +288,8 @@ export async function GET() {
             INNER JOIN users u ON u.id = cm.user_id
             WHERE cm.company_id = ? AND cm.status = 'active'
             ORDER BY
-              CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
-              lower(COALESCE(u.name, u.email)) ASC`
+              CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,
+              lower(COALESCE(u.name, u.username, u.email)) ASC`
           )
           .bind(company.companyId)
           .all()
@@ -76,6 +303,7 @@ export async function GET() {
               cm.joined_at AS joinedAt,
               u.name,
               u.email,
+              u.username,
               u.avatar_url AS avatarUrl,
               (
                 SELECT COUNT(*)
@@ -103,8 +331,9 @@ export async function GET() {
           p.published_at AS publishedAt,
           p.owner_id AS ownerId,
           p.created_by_id AS createdById,
-          COALESCE(creator.name, creator.email, 'Thành viên đã rời công ty') AS creatorName,
-          creator.email AS creatorEmail
+          COALESCE(creator.name, creator.username, creator.email, 'Thành viên đã rời công ty') AS creatorName,
+          creator.email AS creatorEmail,
+          creator.username AS creatorUsername
         FROM projects p
         LEFT JOIN users creator ON creator.id = p.created_by_id
         WHERE p.company_id = ? AND p.deleted_at IS NULL
@@ -120,8 +349,9 @@ export async function GET() {
           p.published_at AS publishedAt,
           p.owner_id AS ownerId,
           p.created_by_id AS createdById,
-          COALESCE(creator.name, creator.email, 'Thành viên') AS creatorName,
-          creator.email AS creatorEmail
+          COALESCE(creator.name, creator.username, creator.email, 'Thành viên') AS creatorName,
+          creator.email AS creatorEmail,
+          creator.username AS creatorUsername
         FROM projects p
         LEFT JOIN users creator ON creator.id = p.created_by_id
         WHERE p.company_id = ? AND p.owner_id = ? AND p.deleted_at IS NULL
@@ -150,6 +380,7 @@ export async function GET() {
         slug: company.companySlug,
         role: company.role,
         canManage: manager,
+        canCreateLanding: canCreateLanding(company.role),
       },
       members: members.results || [],
       projects: projectRows.results || [],
@@ -176,167 +407,110 @@ export async function POST(request: Request) {
       return forbiddenCompanyResponse();
     }
     const payload = (await request.json()) as {
+      accounts?: unknown;
+      username?: string;
       email?: string;
+      name?: string;
       role?: unknown;
-      sendEmail?: boolean;
     };
-    const email = payload.email?.trim().toLowerCase();
-    if (!email || !email.includes("@") || !validManagedRole(payload.role)) {
-      return Response.json(
-        { error: "Email hoặc vai trò nhân viên chưa hợp lệ." },
-        { status: 400 }
-      );
-    }
     await ensureDatabase();
 
-    const alreadyMember = await getD1()
-      .prepare(
-        `SELECT cm.id
-         FROM company_members cm
-         INNER JOIN users u ON u.id = cm.user_id
-         WHERE cm.company_id = ? AND lower(u.email) = ? AND cm.status = 'active'
-         LIMIT 1`
-      )
-      .bind(auth.company.companyId, email)
-      .first();
-    if (alreadyMember) {
-      return Response.json(
-        { error: "Tài khoản này đã là thành viên của công ty." },
-        { status: 409 }
-      );
-    }
-
-    const now = new Date().toISOString();
-    const existingInvitation = await getD1()
-      .prepare(
-        `SELECT id
-         FROM company_invitations
-         WHERE company_id = ? AND lower(email) = ?
-           AND accepted_at IS NULL AND expires_at > ?
-         LIMIT 1`
-      )
-      .bind(auth.company.companyId, email, now)
-      .first<{ id: string }>();
-
-    const inviteToken = createOpaqueToken();
-    const tokenHash = await hashOpaqueToken(inviteToken);
-    const expiresAt = new Date(
-      Date.now() + 7 * 24 * 60 * 60 * 1000
-    ).toISOString();
-    const invitationId = existingInvitation?.id || crypto.randomUUID();
-    if (existingInvitation) {
-      await getD1()
-        .prepare(
-          `UPDATE company_invitations
-           SET role = ?, invited_by = ?, token_hash = ?, expires_at = ?,
-               created_at = CURRENT_TIMESTAMP
-           WHERE id = ?`
-        )
-        .bind(
-          payload.role,
-          auth.user.id,
-          tokenHash,
-          expiresAt,
-          invitationId
-        )
-        .run();
-    } else {
-      await getD1()
-        .prepare(
-          `INSERT INTO company_invitations
-           (id, company_id, email, role, invited_by, token_hash, expires_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`
-        )
-        .bind(
-          invitationId,
-          auth.company.companyId,
-          email,
-          payload.role,
-          auth.user.id,
-          tokenHash,
-          expiresAt
-        )
-        .run();
-    }
-    await writeCompanyAudit(
-      auth.company,
-      existingInvitation ? "member.reinvited" : "member.invited",
-      "invitation",
-      invitationId,
-      { email, role: payload.role }
-    );
-    const relativeInviteUrl = `/company/join/${encodeURIComponent(inviteToken)}`;
-    const inviteUrl = new URL(relativeInviteUrl, request.url).toString();
-    let emailStatus: "sent" | "not_configured" | "failed" =
-      "not_configured";
-    let emailError = "";
-
-    if (payload.sendEmail !== false) {
-      const roleLabel =
-        payload.role === "admin" ? "Quản trị viên" : "Nhân viên";
-      const subject = `Lời mời tham gia ${auth.company.companyName} trên Lumo`;
-      const body = [
-        `Xin chào,`,
-        "",
-        `${auth.user.name} (${auth.user.email}) đã mời bạn tham gia công ty ${auth.company.companyName} trên Lumo.`,
-        `Vai trò: ${roleLabel}`,
-        "",
-        "Bấm đường dẫn dưới đây để tham gia:",
-        inviteUrl,
-        "",
-        `Hãy đăng nhập Google bằng đúng tài khoản ${email}.`,
-        "Lời mời có hiệu lực trong 7 ngày.",
-        "",
-        "Nếu bạn không mong đợi lời mời này, bạn có thể bỏ qua email.",
-      ].join("\r\n");
-      const safeInviteUrl = escapeHtml(inviteUrl);
-      const htmlBody = [
-        '<!doctype html><html lang="vi"><body style="font-family:Arial,sans-serif;color:#173523;line-height:1.6">',
-        `<h2>Lời mời tham gia ${escapeHtml(auth.company.companyName)}</h2>`,
-        `<p>${escapeHtml(auth.user.name)} (${escapeHtml(auth.user.email)}) đã mời bạn tham gia công ty trên Lumo với vai trò <strong>${escapeHtml(roleLabel)}</strong>.</p>`,
-        `<p><a href="${safeInviteUrl}" style="display:inline-block;padding:12px 20px;border-radius:10px;background:#173523;color:#fff;text-decoration:none;font-weight:700">Tham gia công ty</a></p>`,
-        `<p>Nếu nút không hoạt động, hãy sao chép toàn bộ đường dẫn này:<br><a href="${safeInviteUrl}" style="word-break:break-all">${safeInviteUrl}</a></p>`,
-        `<p>Hãy đăng nhập Google bằng đúng tài khoản <strong>${escapeHtml(email)}</strong>. Lời mời có hiệu lực trong 7 ngày.</p>`,
-        "</body></html>",
-      ].join("");
-
-      try {
-        const sentAt = await sendSmtpEmail({
-          to: email,
-          subject,
-          text: body,
-          html: htmlBody,
-        });
-        emailStatus = sentAt ? "sent" : "not_configured";
-        if (sentAt) {
-          await writeCompanyAudit(
-            auth.company,
-            "invitation.email_sent",
-            "invitation",
-            invitationId,
-            { email, sentAt }
-          );
-        }
-      } catch (error) {
-        emailStatus = "failed";
-        emailError =
-          error instanceof Error ? error.message : "Không thể gửi email.";
+    if (Array.isArray(payload.accounts)) {
+      if (payload.accounts.length > BULK_ACCOUNT_LIMIT) {
+        return Response.json(
+          { error: `Chỉ tạo tối đa ${BULK_ACCOUNT_LIMIT} tài khoản mỗi lần.` },
+          { status: 400 }
+        );
       }
+
+      const credentials: ManagedAccountCredential[] = [];
+      const failures: Array<{
+        index: number;
+        username: string;
+        error: string;
+      }> = [];
+      const seenUsernames = new Set<string>();
+
+      for (const [index, rawAccount] of payload.accounts.entries()) {
+        const account = coerceAccountInput(rawAccount);
+        const usernameLabel =
+          account?.username?.trim() ||
+          account?.email?.trim() ||
+          `Dòng ${index + 1}`;
+        if (!account) {
+          failures.push({
+            index: index + 1,
+            username: usernameLabel,
+            error: "Dòng này chưa đúng định dạng.",
+          });
+          continue;
+        }
+
+        const normalizedUsername = normalizeUsername(
+          account.username || account.email || ""
+        );
+        if (!normalizedUsername || normalizedUsername.length < 3) {
+          failures.push({
+            index: index + 1,
+            username: usernameLabel,
+            error: "Tên đăng nhập chưa hợp lệ.",
+          });
+          continue;
+        }
+        if (seenUsernames.has(normalizedUsername)) {
+          failures.push({
+            index: index + 1,
+            username: usernameLabel,
+            error: "Tên đăng nhập bị trùng trong danh sách.",
+          });
+          continue;
+        }
+        seenUsernames.add(normalizedUsername);
+
+        try {
+          credentials.push(
+            await createManagedAccount(auth, account, payload.role)
+          );
+        } catch (error) {
+          failures.push({
+            index: index + 1,
+            username: usernameLabel,
+            error:
+              error instanceof Error
+                ? error.message
+                : "Không thể tạo tài khoản.",
+          });
+        }
+      }
+
+      if (!credentials.length) {
+        return Response.json(
+          {
+            error: "Chưa tạo được tài khoản nào.",
+            credentials,
+            failures,
+          },
+          { status: 400 }
+        );
+      }
+
+      return Response.json({
+        added: true,
+        credentials,
+        failures,
+        createdCount: credentials.length,
+        failedCount: failures.length,
+        message: failures.length
+          ? `Đã cấp ${credentials.length} tài khoản. ${failures.length} dòng chưa được tạo.`
+          : `Đã cấp ${credentials.length} tài khoản.`,
+      });
     }
 
+    const credential = await createManagedAccount(auth, payload);
     return Response.json({
-      added: false,
-      pending: true,
-      renewed: Boolean(existingInvitation),
-      inviteUrl: relativeInviteUrl,
-      emailStatus,
-      emailError: emailError || undefined,
-      message:
-        emailStatus === "sent"
-          ? `Đã gửi lời mời đến ${email}.`
-          : emailStatus === "failed"
-            ? "Đã tạo lời mời nhưng SMTP gửi thất bại. Hãy sao chép đường dẫn dự phòng."
-            : "Đã tạo lời mời. SMTP chưa được cấu hình nên hãy dùng đường dẫn dự phòng.",
+      added: true,
+      ...credential,
+      message: `Đã cấp tài khoản ${credential.username}. Hãy gửi tên đăng nhập và mật khẩu tạm cho nhân viên, rồi yêu cầu đổi mật khẩu khi đăng nhập lần đầu.`,
     });
   } catch (error) {
     return Response.json(
@@ -346,7 +520,7 @@ export async function POST(request: Request) {
             ? error.message
             : "Không thể thêm nhân viên.",
       },
-      { status: 500 }
+      { status: error instanceof CompanyAccountError ? error.status : 500 }
     );
   }
 }
@@ -359,24 +533,39 @@ export async function PATCH(request: Request) {
       return forbiddenCompanyResponse();
     }
     const payload = (await request.json()) as {
+      action?: string;
       memberId?: string;
       role?: unknown;
     };
-    if (!payload.memberId || !validManagedRole(payload.role)) {
+    if (!payload.memberId) {
       return Response.json(
-        { error: "Thành viên hoặc vai trò chưa hợp lệ." },
+        { error: "Thành viên chưa hợp lệ." },
+        { status: 400 }
+      );
+    }
+    if (payload.action !== "resetPassword" && !validManagedRole(payload.role)) {
+      return Response.json(
+        { error: "Vai trò nhân viên chưa hợp lệ." },
         { status: 400 }
       );
     }
     const target = await getD1()
       .prepare(
-        `SELECT id, user_id, role
-         FROM company_members
-         WHERE id = ? AND company_id = ? AND status = 'active'
+        `SELECT cm.id, cm.user_id, cm.role, u.username, u.email, u.name
+         FROM company_members cm
+         INNER JOIN users u ON u.id = cm.user_id
+         WHERE cm.id = ? AND cm.company_id = ? AND cm.status = 'active'
          LIMIT 1`
       )
       .bind(payload.memberId, auth.company.companyId)
-      .first<{ id: string; user_id: string; role: string }>();
+      .first<{
+        id: string;
+        user_id: string;
+        role: string;
+        username: string | null;
+        email: string;
+        name: string | null;
+      }>();
     if (
       !target ||
       target.user_id === auth.user.id ||
@@ -384,9 +573,43 @@ export async function PATCH(request: Request) {
     ) {
       return forbiddenCompanyResponse();
     }
+    if (payload.action === "resetPassword") {
+      const temporaryPassword = generateTemporaryPassword();
+      const passwordHash = await hashPassword(temporaryPassword);
+      const now = new Date().toISOString();
+      await getD1()
+        .prepare(
+          `UPDATE users
+           SET password_hash = ?, must_change_password = 1,
+               password_updated_at = ?, updated_at = ?
+           WHERE id = ?`
+        )
+        .bind(passwordHash, now, now, target.user_id)
+        .run();
+      await getD1()
+        .prepare("DELETE FROM auth_sessions WHERE user_id = ?")
+        .bind(target.user_id)
+        .run();
+      await writeCompanyAudit(
+        auth.company,
+        "member.password_reset",
+        "user",
+        target.user_id,
+        { username: target.username, email: target.email }
+      );
+      return Response.json({
+        reset: true,
+        temporaryPassword,
+        username: target.username || target.email,
+        email: target.email,
+        name: target.name || target.username || target.email,
+        message:
+          "Đã tạo lại mật khẩu tạm. Hãy gửi thông tin đăng nhập mới cho nhân viên.",
+      });
+    }
     await getD1()
       .prepare(
-        "UPDATE company_members SET role = ?, updated_at = ? WHERE id = ?"
+        `UPDATE company_members SET role = ?, updated_at = ? WHERE id = ?`
       )
       .bind(payload.role, new Date().toISOString(), target.id)
       .run();
@@ -427,7 +650,7 @@ export async function DELETE(request: Request) {
     }
     const target = await getD1()
       .prepare(
-        `SELECT cm.id, cm.user_id, cm.role, u.email, u.name
+        `SELECT cm.id, cm.user_id, cm.role, u.email, u.username, u.name
          FROM company_members cm
          INNER JOIN users u ON u.id = cm.user_id
          WHERE cm.id = ? AND cm.company_id = ? AND cm.status = 'active'
@@ -439,6 +662,7 @@ export async function DELETE(request: Request) {
         user_id: string;
         role: string;
         email: string;
+        username: string | null;
         name: string | null;
       }>();
     if (
@@ -480,6 +704,7 @@ export async function DELETE(request: Request) {
       "user",
       target.user_id,
       {
+        username: target.username,
         email: target.email,
         role: target.role,
         projectsTransferredTo: auth.company.companyOwnerId,

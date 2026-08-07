@@ -1,5 +1,6 @@
 import type { LandingManifest } from "../../landing-manifest";
 import type { LandingSectionType } from "../../landing-data";
+import { landingUiDesignSkill } from "../skills/runtime-skills";
 import {
   runAiChatTool,
   type AiChatProvider,
@@ -47,7 +48,9 @@ const plannerInstructions = [
   "Section đang chọn chỉ là tín hiệu hỗ trợ. Yêu cầu mới nhất luôn được ưu tiên.",
   `pagePurpose chỉ được là: ${pagePurposes.join(", ")}.`,
   "confidence nằm trong khoảng 0 đến 1. Nếu confidence dưới 0.6, chọn clarify.",
-  "recommendedSections dùng cho trang mới, được sắp theo hành trình chuyển đổi.",
+  `Khi tạo trang mới, áp dụng skill ${landingUiDesignSkill.name}: ${landingUiDesignSkill.rules.join(" ")}`,
+  "recommendedSections chỉ gồm các section thật sự phục vụ mục tiêu, được sắp theo hành trình chuyển đổi riêng của pagePurpose; không mặc định đề xuất toàn bộ catalog.",
+  "Để trang web thêm sinh động, bạn có thể thiết lập typography (heading, body), sectionVariants (ví dụ hero: 'split', features: 'grid'), radius ('none', 'sm', 'md', 'lg', 'full') và density ('compact', 'comfortable', 'spacious') dựa trên Business context và tone.",
   "Chỉ trả một JSON object, không markdown và không giải thích bên ngoài JSON.",
 ].join(" ");
 
@@ -88,6 +91,10 @@ export async function runPlanningAgent(
   "primaryGoal": "Hành động chuyển đổi chính",
   "tone": "Giọng điệu",
   "recommendedSections": [],
+  "sectionVariants": { "hero": "split", "features": "bento" },
+  "typography": { "heading": "modern", "body": "sans" },
+  "radius": "md",
+  "density": "comfortable",
   "clarificationQuestion": "chỉ dùng khi clarify"
 }`,
   ]

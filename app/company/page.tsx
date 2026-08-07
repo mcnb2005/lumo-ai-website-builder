@@ -1,9 +1,5 @@
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
-import {
-  canManageCompany,
-  ensureCompanyForUser,
-} from "../company-data";
+import { ensureCompanyForUser } from "../company-data";
 import { requireCurrentDatabaseUser } from "../server-user";
 import { CompanyDashboard } from "./CompanyDashboard";
 
@@ -17,10 +13,7 @@ export const metadata: Metadata = {
 
 export default async function CompanyPage() {
   const user = await requireCurrentDatabaseUser("/company");
-  const company = await ensureCompanyForUser(user);
-  if (!canManageCompany(company.role)) {
-    redirect("/");
-  }
+  await ensureCompanyForUser(user);
   return (
     <CompanyDashboard
       currentUserId={user.id}

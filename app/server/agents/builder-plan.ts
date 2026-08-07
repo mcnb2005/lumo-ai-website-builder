@@ -65,6 +65,10 @@ export type BuilderPlan = {
   primaryGoal: string;
   tone: string;
   recommendedSections: LandingSectionType[];
+  sectionVariants?: Partial<Record<LandingSectionType, string>>;
+  typography?: { heading: string; body: string };
+  radius?: "none" | "sm" | "md" | "lg" | "full";
+  density?: "compact" | "comfortable" | "spacious";
   clarificationQuestion?: string;
   source: "ai" | "demo";
 };
@@ -200,6 +204,40 @@ export function parseBuilderPlan(
     )
   );
 
+  const sectionVariants = isRecord(value.sectionVariants)
+    ? (Object.fromEntries(
+        Object.entries(value.sectionVariants).filter(
+          ([key, val]) => availableSections.has(key as LandingSectionType) && typeof val === "string"
+        )
+      ) as Partial<Record<LandingSectionType, string>>)
+    : undefined;
+
+  const typography =
+    isRecord(value.typography) &&
+    typeof value.typography.heading === "string" &&
+    typeof value.typography.body === "string"
+      ? {
+          heading: value.typography.heading,
+          body: value.typography.body,
+        }
+      : undefined;
+
+  const radius =
+    value.radius === "none" ||
+    value.radius === "sm" ||
+    value.radius === "md" ||
+    value.radius === "lg" ||
+    value.radius === "full"
+      ? value.radius
+      : undefined;
+
+  const density =
+    value.density === "compact" ||
+    value.density === "comfortable" ||
+    value.density === "spacious"
+      ? value.density
+      : undefined;
+
   const lowConfidence = confidence < 0.6;
   const mode = lowConfidence ? "clarify" : rawMode;
   const action: BuilderAction =
@@ -238,6 +276,10 @@ export function parseBuilderPlan(
     primaryGoal: asText(value.primaryGoal, "Thực hiện CTA chính"),
     tone: asText(value.tone, "Rõ ràng, đáng tin cậy"),
     recommendedSections,
+    sectionVariants,
+    typography,
+    radius,
+    density,
     clarificationQuestion,
     source: "ai",
   };

@@ -89,6 +89,18 @@ export async function runLandingCreationPipeline(input: {
     : normalizeLandingData(
         applyBlueprintToLanding(input.templateLanding, blueprint)
       );
+
+  if (!canResume && (input.plan.typography || input.plan.radius || input.plan.density) && landing.design) {
+    landing.design = {
+      ...landing.design,
+      typography: input.plan.typography ? {
+        ...landing.design.typography,
+        ...input.plan.typography,
+      } : landing.design.typography,
+      ...(input.plan.radius ? { radius: input.plan.radius } : {}),
+      ...(input.plan.density ? { density: input.plan.density } : {}),
+    };
+  }
   const operations: LandingOperation[] = [];
   const changedSections = new Set<LandingSectionType>();
   const warnings: string[] = [];

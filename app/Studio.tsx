@@ -217,6 +217,7 @@ export function Studio() {
   const [isUploading, setIsUploading] = useState(false);
   const [isAssetDragActive, setIsAssetDragActive] = useState(false);
   const [uploadedAssets, setUploadedAssets] = useState<LandingImageAsset[]>([]);
+  const [referenceAsset, setReferenceAsset] = useState<LandingImageAsset | null>(null);
   const [selectedSection, setSelectedSection] = useState<LandingSectionType | null>(null);
   const [generationStage, setGenerationStage] =
     useState<GenerationStage | null>(null);
@@ -369,6 +370,7 @@ export function Studio() {
     );
     setHistory([]);
     setFuture([]);
+    setReferenceAsset(null);
     pipelineResumeRef.current = null;
     setVersion(1);
     setSaveState("saved");
@@ -581,6 +583,7 @@ export function Studio() {
     setIsPublished(false);
     setPublicUrl("");
     setUploadedAssets([]);
+    setReferenceAsset(null);
     setSelectedSection(null);
     setLastTemplateSelection(null);
     setGenerationStage(null);
@@ -726,12 +729,15 @@ export function Studio() {
   async function sendPrompt(
     rawPrompt: string,
     sourceLanding: LandingData = landing,
-    sourceMessages: ChatMessage[] = messages
+    sourceMessages: ChatMessage[] = messages,
+    imageReference: LandingImageAsset | null = referenceAsset
   ) {
     const prompt = rawPrompt.trim();
-    if (!prompt || isGenerating) return;
+    if ((!prompt && !imageReference) || isGenerating) return;
+    const userMessage =
+      prompt || "Tạo landing page dựa trên ảnh tham chiếu đã chọn.";
 
-    setMessages((current) => [...current, newMessage("user", prompt)]);
+    setMessages((current) => [...current, newMessage("user", userMessage)]);
     setInput("");
     setIsGenerating(true);
     setGenerationStage("understanding");
@@ -754,6 +760,7 @@ export function Studio() {
         },
         body: JSON.stringify({
           prompt,
+          referenceAssetId: imageReference?.id,
           current: sourceLanding,
           selectedSection,
           history: sourceMessages.slice(-8).map(({ role, content }) => ({
@@ -828,6 +835,7 @@ export function Studio() {
             "Mình đã cập nhật landing page. Bạn có thể tiếp tục yêu cầu thay đổi nội dung, section, hình ảnh hoặc màu sắc."
         ),
       ]);
+      if (imageReference) setReferenceAsset(null);
       if (result.intent.mode === "clarify") {
         setNotice("Lumo cần bạn làm rõ yêu cầu trước khi sửa trang.");
       } else if (result.mode === "demo") {
@@ -1425,9 +1433,11 @@ export function Studio() {
                   <div className="asset-library-list">
                     {uploadedAssets.map((asset) => (
                       <div
-                        className="asset-library-item"
+                        className={`asset-library-item${
+                          referenceAsset?.id === asset.id ? " is-reference" : ""
+                        }`}
                         draggable
-                        role="img"
+                        role="group"
                         tabIndex={0}
                         aria-label={`Kéo ảnh ${asset.alt} vào trang`}
                         title={`Kéo ${asset.alt} vào trang`}
@@ -1444,6 +1454,20 @@ export function Studio() {
                         }}
                       >
                         <img src={asset.url} alt={asset.alt} draggable={false} />
+                        <button
+                          type="button"
+                          className="asset-reference-button"
+                          aria-pressed={referenceAsset?.id === asset.id}
+                          aria-label={`Dùng ${asset.alt} làm ảnh tham chiếu`}
+                          title="Dùng làm ảnh tham chiếu"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setReferenceAsset(asset);
+                            setNotice("Đã chọn ảnh tham chiếu cho lần tạo tiếp theo.");
+                          }}
+                        >
+                          AI
+                        </button>
                       </div>
                     ))}
                   </div>
@@ -1462,6 +1486,20 @@ export function Studio() {
           </div>
 
           <form className="chat-composer" onSubmit={onSubmit}>
+            {referenceAsset ? (
+              <div className="reference-asset-chip">
+                <img src={referenceAsset.url} alt="" />
+                <span>Ảnh tham chiếu</span>
+                <button
+                  type="button"
+                  aria-label="Bỏ ảnh tham chiếu"
+                  title="Bỏ ảnh tham chiếu"
+                  onClick={() => setReferenceAsset(null)}
+                >
+                  ×
+                </button>
+              </div>
+            ) : null}
             <label htmlFor="chat-prompt" className="sr-only">
               Yêu cầu Lumo chỉnh landing page
             </label>
@@ -1472,17 +1510,21 @@ export function Studio() {
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
-                  if (input.trim()) void sendPrompt(input);
+                  if (input.trim() || referenceAsset) void sendPrompt(input);
                 }
               }}
-              placeholder="Mô tả landing page hoặc yêu cầu chỉnh sửa…"
+              placeholder={
+                referenceAsset
+                  ? "Mô tả thêm (tùy chọn)…"
+                  : "Mô tả landing page hoặc yêu cầu chỉnh sửa…"
+              }
               rows={3}
             />
             <div>
               <span>Enter để gửi · Shift + Enter xuống dòng</span>
               <button
                 type="submit"
-                disabled={!input.trim() || isGenerating}
+                disabled={(!input.trim() && !referenceAsset) || isGenerating}
                 aria-label="Gửi yêu cầu"
               >
                 ↑
