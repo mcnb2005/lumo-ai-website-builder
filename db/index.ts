@@ -77,9 +77,13 @@ export async function ensureDatabase() {
       `CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY NOT NULL,
         email TEXT NOT NULL UNIQUE,
+        username TEXT UNIQUE,
         name TEXT,
         google_sub TEXT UNIQUE,
         avatar_url TEXT,
+        password_hash TEXT,
+        must_change_password INTEGER NOT NULL DEFAULT 0,
+        password_updated_at TEXT,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`
@@ -237,8 +241,26 @@ export async function ensureDatabase() {
   if (!userColumnNames.has("google_sub")) {
     await binding.prepare("ALTER TABLE users ADD COLUMN google_sub TEXT").run();
   }
+  if (!userColumnNames.has("username")) {
+    await binding.prepare("ALTER TABLE users ADD COLUMN username TEXT").run();
+  }
   if (!userColumnNames.has("avatar_url")) {
     await binding.prepare("ALTER TABLE users ADD COLUMN avatar_url TEXT").run();
+  }
+  if (!userColumnNames.has("password_hash")) {
+    await binding.prepare("ALTER TABLE users ADD COLUMN password_hash TEXT").run();
+  }
+  if (!userColumnNames.has("must_change_password")) {
+    await binding
+      .prepare(
+        "ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0"
+      )
+      .run();
+  }
+  if (!userColumnNames.has("password_updated_at")) {
+    await binding
+      .prepare("ALTER TABLE users ADD COLUMN password_updated_at TEXT")
+      .run();
   }
 
   const authStateColumns = await binding
@@ -341,6 +363,9 @@ export async function ensureDatabase() {
     ),
     binding.prepare(
       "CREATE UNIQUE INDEX IF NOT EXISTS users_google_sub_idx ON users (google_sub)"
+    ),
+    binding.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS users_username_idx ON users (username)"
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS auth_sessions_user_idx ON auth_sessions (user_id)"

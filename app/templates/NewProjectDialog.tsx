@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useMemo, useState, type CSSProperties } from "rea
 import {
   landingTemplates,
   templateCategories,
+  type LandingTemplate,
   type TemplateCategory,
 } from "./registry";
 
@@ -26,6 +27,106 @@ const categoryLabels: Record<TemplateCategory | "all", string> = {
   portfolio: "Portfolio",
   "lead-generation": "Thu thập lead",
 };
+
+function TemplatePreviewArt({ category }: { category: TemplateCategory }) {
+  if (category === "product") {
+    return (
+      <>
+        <span className="art-product-panel" />
+        <span className="art-product-bottle" />
+        <span className="art-product-cap" />
+        <span className="art-product-shadow" />
+      </>
+    );
+  }
+
+  if (category === "service") {
+    return (
+      <>
+        <span className="art-service-portrait" />
+        <span className="art-service-card" />
+        <span className="art-service-line is-long" />
+        <span className="art-service-line is-short" />
+        <span className="art-service-badge" />
+      </>
+    );
+  }
+
+  if (category === "course") {
+    return (
+      <>
+        <span className="art-course-card is-back" />
+        <span className="art-course-card is-mid" />
+        <span className="art-course-card is-front">
+          <i />
+          <b />
+        </span>
+        <span className="art-course-progress" />
+      </>
+    );
+  }
+
+  if (category === "event") {
+    return (
+      <>
+        <span className="art-event-light is-left" />
+        <span className="art-event-light is-right" />
+        <span className="art-event-stage" />
+        <span className="art-event-date" />
+        <span className="art-event-people" />
+      </>
+    );
+  }
+
+  if (category === "portfolio") {
+    return (
+      <>
+        <span className="art-portfolio-tile is-large" />
+        <span className="art-portfolio-tile is-top" />
+        <span className="art-portfolio-tile is-mid" />
+        <span className="art-portfolio-tile is-bottom" />
+      </>
+    );
+  }
+
+  return (
+    <>
+      <span className="art-lead-form" />
+      <span className="art-lead-field is-one" />
+      <span className="art-lead-field is-two" />
+      <span className="art-lead-button" />
+      <span className="art-lead-cursor" />
+    </>
+  );
+}
+
+function TemplatePreview({ template }: { template: LandingTemplate }) {
+  const palette = template.landing.palette;
+
+  return (
+    <div
+      className={`template-card-preview is-${template.category}`}
+      style={
+        {
+          "--preview-paper": palette.paper,
+          "--preview-ink": palette.ink,
+          "--preview-accent": palette.accent,
+          "--preview-soft": palette.soft,
+        } as CSSProperties
+      }
+    >
+      <div className="template-preview-copy" aria-hidden="true">
+        <span className="template-preview-kicker" />
+        <span className="template-preview-title" />
+        <span className="template-preview-body" />
+        <span className="template-preview-cta" />
+      </div>
+      <div className="template-preview-art" aria-hidden="true">
+        <TemplatePreviewArt category={template.category} />
+      </div>
+    </div>
+  );
+}
 
 export function NewProjectDialog({
   open,
@@ -184,30 +285,9 @@ export function NewProjectDialog({
               ))}
             </div>
             <div className="template-grid">
-              {templates.map((template) => {
-                const palette = template.landing.palette;
-                return (
+              {templates.map((template) => (
                   <article className="template-card" key={template.id}>
-                    <div
-                      className="template-card-preview"
-                      style={
-                        {
-                          "--preview-paper": palette.paper,
-                          "--preview-ink": palette.ink,
-                          "--preview-accent": palette.accent,
-                          "--preview-soft": palette.soft,
-                        } as CSSProperties
-                      }
-                    >
-                      <i />
-                      <div>
-                        <b />
-                        <strong />
-                        <span />
-                        <button type="button" tabIndex={-1} aria-hidden="true" />
-                      </div>
-                      <aside />
-                    </div>
+                    <TemplatePreview template={template} />
                     <div className="template-card-copy">
                       <span>{categoryLabels[template.category]}</span>
                       <h3>{template.name}</h3>
@@ -227,8 +307,7 @@ export function NewProjectDialog({
                       </button>
                     </div>
                   </article>
-                );
-              })}
+                ))}
             </div>
           </div>
         )}

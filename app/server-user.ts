@@ -14,17 +14,19 @@ import {
 } from "./company-data";
 import {
   AUTH_SESSION_COOKIE,
-  googleSignInPath,
   hashOpaqueToken,
   readCookie,
+  safeRelativeReturnPath,
 } from "./google-auth";
 
 export type DatabaseUser = {
   id: string;
   email: string;
+  username?: string | null;
   name: string;
   avatarUrl?: string | null;
   isLocal?: boolean;
+  mustChangePassword?: boolean;
   companyId?: string;
   companyName?: string;
   companyRole?: CompanyRole;
@@ -69,8 +71,10 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
         return withCompany({
           id: user.id,
           email: user.email,
-          name: user.name || user.email,
+          username: user.username,
+          name: user.name || user.username || user.email,
           avatarUrl: user.avatarUrl,
+          mustChangePassword: Boolean(user.mustChangePassword),
         });
       }
     } else if (session) {
@@ -102,9 +106,11 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
       return withCompany({
         id: existing.id,
         email,
+        username: existing.username,
         name,
         avatarUrl: existing.avatarUrl,
         isLocal: true,
+        mustChangePassword: Boolean(existing.mustChangePassword),
       });
     }
 
@@ -123,6 +129,10 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
 
 export async function requireCurrentDatabaseUser(returnTo: string) {
   const user = await getCurrentDatabaseUser();
+  const safeReturnTo = safeRelativeReturnPath(returnTo);
+  if (user?.mustChangePassword) {
+    redirect(`/account/password?returnTo=${encodeURIComponent(safeReturnTo)}`);
+  }
   if (user) return user;
-  redirect(googleSignInPath(returnTo));
+  redirect(`/login?returnTo=${encodeURIComponent(safeReturnTo)}`);
 }

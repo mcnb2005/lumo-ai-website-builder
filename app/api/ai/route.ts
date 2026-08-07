@@ -14,6 +14,12 @@ import {
   type LandingSectionType,
 } from "../../landing-data";
 import { getCurrentDatabaseUser } from "../../server-user";
+import {
+  forbiddenCompanyResponse,
+  getAuthenticatedCompanyContext,
+  unauthorizedCompanyResponse,
+} from "../../company-access";
+import { canCreateLanding } from "../../company-data";
 import { runWebsiteBuilderAgent } from "../../server/agents/website-builder-agent";
 import { isLandingData } from "../../server/skills/landing-builder-skill";
 import { createDemoLanding } from "../../server/tools/demo-landing-tool";
@@ -131,13 +137,15 @@ async function enforceUsageLimit(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentDatabaseUser();
-    if (!user) {
-      return Response.json(
-        { error: "Đăng nhập để sử dụng AI tạo landing page." },
-        { status: 401 }
-      );
+    const auth = await getAuthenticatedCompanyContext();
+    if (!auth) return unauthorizedCompanyResponse();
+    if (
+      auth.user.mustChangePassword ||
+      !canCreateLanding(auth.company.role)
+    ) {
+      return forbiddenCompanyResponse();
     }
+    const user = auth.user;
 
     const payload = (await request.json()) as {
       prompt?: string;

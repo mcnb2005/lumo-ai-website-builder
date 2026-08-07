@@ -21,6 +21,8 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
     qualityEvaluator,
     landingProject,
     pipelineStageError,
+    designSkillDoc,
+    componentCatalog,
   ] = await Promise.all([
     readFile(new URL("../app/server/skills/runtime-skills.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/server/agents/website-builder-agent.ts", import.meta.url), "utf8"),
@@ -69,9 +71,22 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
       new URL("../app/server/agents/pipeline-stage-error.ts", import.meta.url),
       "utf8"
     ),
+    readFile(
+      new URL("../.agents/skills/landing-ui-design/SKILL.md", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "../.agents/skills/landing-ui-design/references/component-catalog.md",
+        import.meta.url
+      ),
+      "utf8"
+    ),
   ]);
 
   assert.match(skills, /export const runtimeSkills/);
+  assert.match(skills, /landingUiDesignSkill/);
+  assert.match(skills, /không sinh HTML, CSS, JSX hoặc React tự do/);
   assert.match(skills, /"edit-landing"/);
   assert.match(skills, /"design-form"/);
   assert.match(skills, /"publish-check"/);
@@ -80,6 +95,7 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(agent, /buildLandingManifest/);
   assert.match(agent, /runPlanningAgent/);
   assert.match(agent, /runLandingCreationPipeline/);
+  assert.match(agent, /intent\.mode === "create"[\s\S]*landingUiDesignSkill/);
   assert.match(agent, /attempt <= 2/);
   assert.match(agent, /validationErrors/);
   assert.match(agent, /applyLandingOperations/);
@@ -90,6 +106,7 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(agent, /intent\.targetField/);
   assert.match(planner, /parseBuilderPlan/);
   assert.match(planner, /confidence dưới 0\.6/);
+  assert.match(planner, /landingUiDesignSkill\.rules/);
   assert.doesNotMatch(planner, /isCreateRequest|isCreationCorrection/);
   assert.match(builderPlan, /mode: "create" \| "edit" \| "clarify"/);
   assert.match(builderPlan, /action: BuilderAction/);
@@ -97,9 +114,12 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(builderPlan, /lowConfidence/);
   assert.match(recipes, /sell_product/);
   assert.match(recipes, /primaryGoal/);
+  assert.match(recipes, /\.\.\.base\.visibleSections/);
+  assert.match(recipes, /\.slice\(0, 2\)/);
   assert.match(blueprint, /createBusinessBrief/);
   assert.match(blueprint, /createLandingBlueprint/);
   assert.match(blueprint, /resolveLandingRecipe/);
+  assert.match(blueprint, /input\.templateLanding\.sectionOrder\.filter/);
   assert.match(blueprint, /section === "hero" && !input\.templateLanding\.heroImage/);
   assert.match(creationPipeline, /runSectionContentAgent/);
   assert.match(creationPipeline, /evaluateLandingQuality/);
@@ -164,4 +184,8 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(generation, /"applying"/);
   assert.match(aiRoute, /text\/event-stream/);
   assert.match(aiRoute, /data: \$\{JSON\.stringify\(event\)\}/);
+  assert.match(designSkillDoc, /controlled data and registered variants/);
+  assert.match(designSkillDoc, /Do not ask the model to emit free-form HTML/);
+  assert.match(componentCatalog, /`product-showcase`/);
+  assert.match(componentCatalog, /`two-columns`/);
 });

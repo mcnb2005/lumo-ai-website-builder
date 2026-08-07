@@ -168,13 +168,19 @@ const recipes: Record<PagePurpose, LandingRecipe> = {
 
 export function resolveLandingRecipe(plan: BuilderPlan) {
   const base = recipes[plan.pagePurpose];
-  const recommended = plan.recommendedSections.length
-    ? plan.recommendedSections
-    : base.visibleSections;
+  const supplementalSections = plan.recommendedSections
+    .filter(
+      (section) =>
+        section !== "hero" &&
+        section !== "finalCta" &&
+        !base.visibleSections.includes(section)
+    )
+    .slice(0, 2);
   const visibleSections = Array.from(
     new Set<LandingSectionType>([
       "hero",
-      ...recommended,
+      ...base.visibleSections,
+      ...supplementalSections,
       "finalCta",
     ])
   );

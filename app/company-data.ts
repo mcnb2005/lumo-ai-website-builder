@@ -1,6 +1,6 @@
 import { getD1 } from "../db";
 
-export type CompanyRole = "owner" | "admin" | "member";
+export type CompanyRole = "owner" | "admin" | "member" | "viewer";
 
 export type CompanyContext = {
   companyId: string;
@@ -29,7 +29,12 @@ type MembershipRow = {
 };
 
 function asRole(value: string): CompanyRole {
-  return value === "owner" || value === "admin" ? value : "member";
+  return value === "owner" ||
+    value === "admin" ||
+    value === "member" ||
+    value === "viewer"
+    ? value
+    : "member";
 }
 
 function toContext(row: MembershipRow): CompanyContext {
@@ -69,7 +74,7 @@ async function readMembership(userId: string) {
       FROM company_members cm
       INNER JOIN companies c ON c.id = cm.company_id
       WHERE cm.user_id = ? AND cm.status = 'active'
-      ORDER BY CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 ELSE 2 END,
+      ORDER BY CASE cm.role WHEN 'owner' THEN 0 WHEN 'admin' THEN 1 WHEN 'member' THEN 2 ELSE 3 END,
         cm.created_at ASC
       LIMIT 1`
     )
@@ -174,12 +179,27 @@ export function canManageCompany(role: CompanyRole) {
   return role === "owner" || role === "admin";
 }
 
+export function canCreateLanding(role: CompanyRole) {
+  return role === "owner" || role === "admin" || role === "member";
+}
+
+export function canEditLanding(role: CompanyRole) {
+  return canCreateLanding(role);
+}
+
+export function canPublishLanding(role: CompanyRole) {
+  return canCreateLanding(role);
+}
+
 export function canManageMember(
   actorRole: CompanyRole,
   targetRole: CompanyRole
 ) {
   if (actorRole === "owner") return targetRole !== "owner";
-  return actorRole === "admin" && targetRole === "member";
+  return (
+    actorRole === "admin" &&
+    (targetRole === "member" || targetRole === "viewer")
+  );
 }
 
 export async function writeCompanyAudit(

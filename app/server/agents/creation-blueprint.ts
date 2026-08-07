@@ -53,17 +53,31 @@ export function createLandingBlueprint(input: {
   templateLanding: LandingData;
 }): LandingBlueprint {
   const recipe = resolveLandingRecipe(input.plan);
+  const recipeSections = new Set(recipe.visibleSections);
+  const templateOrderedSections = input.templateLanding.sectionOrder.filter(
+    (section) =>
+      section !== "hero" &&
+      section !== "finalCta" &&
+      recipeSections.has(section)
+  );
   const visible = Array.from(
-    new Set<LandingSectionType>(["hero", ...recipe.visibleSections, "finalCta"])
+    new Set<LandingSectionType>([
+      "hero",
+      ...templateOrderedSections,
+      ...recipe.visibleSections.filter(
+        (section) => section !== "hero" && section !== "finalCta"
+      ),
+      "finalCta",
+    ])
   );
 
   return {
     templateId: input.templateSelection.id,
     sections: visible.map((section, order) => {
-      const preferred = input.templateLanding.design?.sectionVariants[section];
+      const preferred = input.plan.sectionVariants?.[section] || input.templateLanding.design?.sectionVariants[section];
       const variant =
         section === "hero" && !input.templateLanding.heroImage
-          ? "centered"
+          ? validVariant(section, preferred || "centered")
           : validVariant(section, preferred);
       return {
         id: `${section}-main`,

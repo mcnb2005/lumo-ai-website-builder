@@ -5,17 +5,24 @@ import {
   normalizeLandingData,
   type LandingData,
 } from "../../landing-data";
-import { getCurrentDatabaseUser } from "../../server-user";
+import {
+  forbiddenCompanyResponse,
+  getAuthenticatedCompanyContext,
+  unauthorizedCompanyResponse,
+} from "../../company-access";
+import { canPublishLanding } from "../../company-data";
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentDatabaseUser();
-    if (!user) {
-      return Response.json(
-        { error: "Đăng nhập để xuất bản landing page." },
-        { status: 401 }
-      );
+    const auth = await getAuthenticatedCompanyContext();
+    if (!auth) return unauthorizedCompanyResponse();
+    if (
+      auth.user.mustChangePassword ||
+      !canPublishLanding(auth.company.role)
+    ) {
+      return forbiddenCompanyResponse();
     }
+    const user = auth.user;
 
     const payload = (await request.json()) as {
       id?: string;
@@ -58,6 +65,8 @@ export async function POST(request: Request) {
     const values = {
       id,
       ownerId: user.id,
+      createdById: user.id,
+      companyId: auth.company.companyId,
       name,
       slug,
       data: JSON.stringify(

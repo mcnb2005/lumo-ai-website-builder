@@ -18,18 +18,22 @@ test("requires login for Studio and AI while keeping published pages public", as
 
   assert.match(homePage, /getCurrentDatabaseUser/);
   assert.match(homePage, /if \(!user\) redirect\("\/login"\)/);
+  assert.match(homePage, /canCreateLanding/);
+  assert.match(homePage, /redirect\("\/company"\)/);
   assert.match(loginPage, /getCurrentDatabaseUser/);
-  assert.match(loginPage, /api\/auth\/google\/start\?returnTo=%2F/);
+  assert.match(loginPage, /PasswordLoginForm/);
+  assert.match(loginPage, /api\/auth\/google\/start\?returnTo=/);
   assert.match(loginPage, /Đăng nhập bằng Google/);
 
-  const authGuardIndex = aiApi.indexOf("if (!user)");
+  const authGuardIndex = aiApi.indexOf("getAuthenticatedCompanyContext");
   const parsePayloadIndex = aiApi.indexOf("await request.json()");
   assert.ok(authGuardIndex >= 0, "AI route must reject anonymous users");
   assert.ok(
     authGuardIndex < parsePayloadIndex,
     "AI authentication must run before parsing or processing the prompt"
   );
-  assert.match(aiApi, /status: 401/);
+  assert.match(aiApi, /unauthorizedCompanyResponse/);
+  assert.match(aiApi, /canCreateLanding/);
 
   assert.doesNotMatch(publicPage, /requireCurrentDatabaseUser/);
   assert.doesNotMatch(publicApi, /requireCurrentDatabaseUser/);

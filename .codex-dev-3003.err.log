@@ -1,0 +1,349 @@
+[2mDefault inspector port 9229 not available, using 9232 instead
+[22m
+Error: internal error; reference = vnjnjvk4pfl2aqg9a9vo7upk
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+Error: internal error; reference = 6jlhv160t0d4p4t27ptdp4fq
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+[2m10:08:35 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mError: D1_ERROR: Failed to parse body as JSON, got: Error: internal error; reference = 6jlhv160t0d4p4t27ptdp4fq
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/d1/database.worker.js:191:73)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:377:36)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:538:14)
+    at D1DatabaseSessionAlwaysPrimary._send (about://React/Server/cloudflare-internal:d1-api?10:181:19)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (about://React/Server/cloudflare-internal:d1-api?11:135:25)
+    at <anonymous> (about://React/Server/cloudflare-internal:d1-api?12:90:27)
+    at ensureDatabase (about://React/Server/C:/Users/Dell/Documents/Landing%20page/db/index.ts?13:229:2)
+    at getCurrentDatabaseUser (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/server-user.ts?14:28:2)
+    at Home (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/page.tsx?15:21:15)
+    at resolveErrorDev (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:1739:143)
+    at processFullStringRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2202:18)
+    at processFullBinaryRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2162:4)
+    at processBinaryChunk (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2269:87)
+[2m10:08:35 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mThe above error occurred in a React component:
+
+    at Home [Server] (<anonymous>)
+    at AwaitAppRenderDependencies [Server] (<anonymous>)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at Children (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:64:17)
+    at body (<anonymous>)
+    at html (<anonymous>)
+    at RootLayout [Server] (<anonymous>)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at NavigationCommitSignal (http://localhost:3003/node_modules/vinext/dist/server/app-browser-navigation-controller.js?v=dbd216f1:184:36)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at DevRecoveryBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:268:3)
+    at BrowserRoot (http://localhost:3003/node_modules/vinext/dist/server/app-browser-entry.js?v=dbd216f1:209:24)
+Error: internal error; reference = qijbtqgl1sa0t9e7mi5ic79a
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+[2m10:08:49 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mError: D1_ERROR: Failed to parse body as JSON, got: Error: internal error; reference = qijbtqgl1sa0t9e7mi5ic79a
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/d1/database.worker.js:191:73)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:377:36)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:538:14)
+    at D1DatabaseSessionAlwaysPrimary._send (about://React/Server/cloudflare-internal:d1-api?10:181:19)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (about://React/Server/cloudflare-internal:d1-api?11:135:25)
+    at <anonymous> (about://React/Server/cloudflare-internal:d1-api?16:366:41)
+    at ensureDatabase (about://React/Server/C:/Users/Dell/Documents/Landing%20page/db/index.ts?17:192:18)
+    at getCurrentDatabaseUser (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/server-user.ts?14:28:2)
+    at Home (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/page.tsx?15:21:15)
+    at resolveErrorDev (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:1739:143)
+    at processFullStringRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2202:18)
+    at processFullBinaryRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2162:4)
+    at processBinaryChunk (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2269:87)
+[2m10:08:49 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mThe above error occurred in a React component:
+
+    at Home [Server] (<anonymous>)
+    at AwaitAppRenderDependencies [Server] (<anonymous>)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at Children (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:64:17)
+    at body (<anonymous>)
+    at html (<anonymous>)
+    at RootLayout [Server] (<anonymous>)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at NavigationCommitSignal (http://localhost:3003/node_modules/vinext/dist/server/app-browser-navigation-controller.js?v=dbd216f1:184:36)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at DevRecoveryBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:268:3)
+    at BrowserRoot (http://localhost:3003/node_modules/vinext/dist/server/app-browser-entry.js?v=dbd216f1:209:24)
+Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.
+Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.
+Error: internal error; reference = 5h0uqdajdoteorjjikcqprfo
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+Error: internal error; reference = qibuhlhm5j5d1s3ie7aosoam
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+[2m11:18:27 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mError: D1_ERROR: Failed to parse body as JSON, got: Error: internal error; reference = qibuhlhm5j5d1s3ie7aosoam
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/d1/database.worker.js:191:73)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:377:36)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:538:14)
+    at D1DatabaseSessionAlwaysPrimary._send (about://React/Server/cloudflare-internal:d1-api?10:181:19)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (about://React/Server/cloudflare-internal:d1-api?11:135:25)
+    at <anonymous> (about://React/Server/cloudflare-internal:d1-api?12:366:41)
+    at ensureDatabase (about://React/Server/C:/Users/Dell/Documents/Landing%20page/db/index.ts?13:164:22)
+    at getCurrentDatabaseUser (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/server-user.ts?14:28:2)
+    at Home (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/page.tsx?15:21:15)
+    at resolveErrorDev (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:1739:143)
+    at processFullStringRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2202:18)
+    at processFullBinaryRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2162:4)
+    at processBinaryChunk (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2269:87)
+[2m11:18:27 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mThe above error occurred in a React component:
+
+    at Home [Server] (<anonymous>)
+    at AwaitAppRenderDependencies [Server] (<anonymous>)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at Children (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:64:17)
+    at body (<anonymous>)
+    at html (<anonymous>)
+    at RootLayout [Server] (<anonymous>)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at NavigationCommitSignal (http://localhost:3003/node_modules/vinext/dist/server/app-browser-navigation-controller.js?v=dbd216f1:184:36)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at DevRecoveryBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:268:3)
+    at BrowserRoot (http://localhost:3003/node_modules/vinext/dist/server/app-browser-entry.js?v=dbd216f1:209:24)
+Error: internal error; reference = sea6rrecf11r16i8uubr2h1v
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+Error: internal error; reference = jhhd12b539h01d9plc2j5j09
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+[2m11:18:27 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mError: D1_ERROR: Failed to parse body as JSON, got: Error: internal error; reference = jhhd12b539h01d9plc2j5j09
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/d1/database.worker.js:191:73)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:377:36)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:538:14)
+    at D1DatabaseSessionAlwaysPrimary._send (about://React/Server/cloudflare-internal:d1-api?10:181:19)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (about://React/Server/cloudflare-internal:d1-api?11:135:25)
+    at <anonymous> (about://React/Server/cloudflare-internal:d1-api?16:90:27)
+    at ensureDatabase (about://React/Server/C:/Users/Dell/Documents/Landing%20page/db/index.ts?17:31:2)
+    at getCurrentDatabaseUser (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/server-user.ts?14:28:2)
+    at Home (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/page.tsx?15:21:15)
+    at resolveErrorDev (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:1739:143)
+    at processFullStringRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2202:18)
+    at processFullBinaryRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2162:4)
+    at processBinaryChunk (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2269:87)
+[2m11:18:27 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mThe above error occurred in a React component:
+
+    at Home [Server] (<anonymous>)
+    at AwaitAppRenderDependencies [Server] (<anonymous>)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at Children (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:64:17)
+    at body (<anonymous>)
+    at html (<anonymous>)
+    at RootLayout [Server] (<anonymous>)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at NavigationCommitSignal (http://localhost:3003/node_modules/vinext/dist/server/app-browser-navigation-controller.js?v=dbd216f1:184:36)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at DevRecoveryBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:268:3)
+    at BrowserRoot (http://localhost:3003/node_modules/vinext/dist/server/app-browser-entry.js?v=dbd216f1:209:24)
+Error: internal error; reference = b26cn8hbg39gf9kcsro9qmju
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+Error: internal error; reference = o119s7cgnrd7arrovsfu45ri
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+Error: internal error; reference = lqnqf2vqchqcfhhdj38cqrn5
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/d1/database.worker.ts:228:31)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/router.worker.ts:45:32)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/src/workers/shared/object.worker.ts:150:11)
+[2m11:18:43 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mError: D1_ERROR: Failed to parse body as JSON, got: Error: internal error; reference = o119s7cgnrd7arrovsfu45ri
+    at D1DatabaseObject.queryExecute (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/d1/database.worker.js:191:73)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:377:36)
+    at async D1DatabaseObject.fetch (file:///C:/Users/Dell/Documents/Landing%20page/node_modules/miniflare/dist/src/workers/shared/index.worker.js:538:14)
+    at D1DatabaseSessionAlwaysPrimary._send (about://React/Server/cloudflare-internal:d1-api?10:181:19)
+    at D1DatabaseSessionAlwaysPrimary._sendOrThrow (about://React/Server/cloudflare-internal:d1-api?11:135:25)
+    at <anonymous> (about://React/Server/cloudflare-internal:d1-api?16:90:27)
+    at ensureDatabase (about://React/Server/C:/Users/Dell/Documents/Landing%20page/db/index.ts?17:31:2)
+    at getCurrentDatabaseUser (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/server-user.ts?14:28:2)
+    at Home (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/page.tsx?15:21:15)
+    at resolveErrorDev (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:1739:143)
+    at processFullStringRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2202:18)
+    at processFullBinaryRow (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2162:4)
+    at processBinaryChunk (http://localhost:3003/node_modules/.vite/deps/react-server-dom-webpack_client__browser.js?v=dbd216f1:2269:87)
+[2m11:18:43 AM[22m [31m[1m[vite][22m[39m [31m[2m(client)[22m[39m [2m[console.error] [22mThe above error occurred in a React component:
+
+    at Home [Server] (<anonymous>)
+    at AwaitAppRenderDependencies [Server] (<anonymous>)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at Children (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:64:17)
+    at body (<anonymous>)
+    at html (<anonymous>)
+    at RootLayout [Server] (<anonymous>)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at default (about://React/Server/C:/Users/Dell/Documents/Landing%20page/app/layout.tsx?1:67:26)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at LayoutSegmentProvider (http://localhost:3003/node_modules/vinext/dist/shims/layout-segment-context.js?v=dbd216f1:32:34)
+    at Slot (http://localhost:3003/node_modules/vinext/dist/shims/slot.js?v=dbd216f1:42:17)
+    at NavigationCommitSignal (http://localhost:3003/node_modules/vinext/dist/server/app-browser-navigation-controller.js?v=dbd216f1:184:36)
+    at RedirectErrorBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:56:3)
+    at RedirectBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:86:29)
+    at DevRecoveryBoundary (http://localhost:3003/node_modules/vinext/dist/shims/error-boundary.js?v=dbd216f1:268:3)
+    at BrowserRoot (http://localhost:3003/node_modules/vinext/dist/server/app-browser-entry.js?v=dbd216f1:209:24)
+Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.
+Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.
+[ContentAgent:gallery] validation failed {
+  "attempt": 1,
+  "aiOutput": "{\n  \"draft\": {\n       \"eyebrow\": \"Khám phá sản phẩm\",\n       \"headline\": \"Sản phẩm chăm sóc da chất lượng cao\",\n       \"items\": [\n           {\n               \"alt\": \"Sản phẩm chăm sóc da mặt\",\n               \"caption\": \"Dòng sản phẩm chăm sóc da mặt tự nhiên\"\n           },\n           {\n               \"alt\": \"Sản phẩm chăm sóc da body\",\n               \"caption\": \"Dòng sản phẩm chăm sóc da body mềm mại\"\n           }\n       ]\n   },\n   \"explanation\": \"Tạo gallery để hiển thị các sản phẩm chăm sóc da\"\n}",
+  "draft": {
+    "eyebrow": "Khám phá sản phẩm",
+    "headline": "Sản phẩm chăm sóc da chất lượng cao",
+    "items": [
+      {
+        "alt": "Sản phẩm chăm sóc da mặt",
+        "caption": "Dòng sản phẩm chăm sóc da mặt tự nhiên"
+      },
+      {
+        "alt": "Sản phẩm chăm sóc da body",
+        "caption": "Dòng sản phẩm chăm sóc da body mềm mại"
+      }
+    ]
+  },
+  "parsedOutput": {
+    "draft": {
+      "eyebrow": "Khám phá sản phẩm",
+      "headline": "Sản phẩm chăm sóc da chất lượng cao",
+      "items": [
+        {
+          "alt": "Sản phẩm chăm sóc da mặt",
+          "caption": "Dòng sản phẩm chăm sóc da mặt tự nhiên"
+        },
+        {
+          "alt": "Sản phẩm chăm sóc da body",
+          "caption": "Dòng sản phẩm chăm sóc da body mềm mại"
+        }
+      ]
+    },
+    "explanation": "Tạo gallery để hiển thị các sản phẩm chăm sóc da"
+  },
+  "expectedDraftSchema": "{\"draft\":{\"eyebrow\":\"...\",\"headline\":\"...\",\"items\":[{\"alt\":\"...\",\"caption\":\"...\"}]},\"explanation\":\"...\"}",
+  "sectionManifest": {
+    "id": "gallery",
+    "type": "gallery",
+    "title": "Hình ảnh",
+    "visible": true,
+    "position": 1,
+    "editableFields": [
+      "galleryEyebrow",
+      "galleryHeadline",
+      "gallery.alt",
+      "gallery.caption"
+    ]
+  },
+  "sectionSnapshot": {
+    "eyebrow": "Thư viện hình ảnh",
+    "headline": "Một góc nhìn\nđáng nhớ.",
+    "items": []
+  },
+  "validationError": "draft.items của gallery phải giữ nguyên số lượng ảnh hiện có."
+}
+Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.
+Detected multiple renderers concurrently rendering the same context provider. This is currently unsupported.
+[2m11:56:15 AM[22m [31m[1m[vite][22m[39m [31m[2m(rsc)[22m[39m [31merror while updating dependencies:
+Error: EPERM: operation not permitted, rename 'C:\Users\Dell\Documents\Landing page\node_modules\.vite\deps_rsc_temp_c9dac4f3' -> 'C:\Users\Dell\Documents\Landing page\node_modules\.vite\deps_rsc'[39m
+[2m11:58:07 AM[22m [31m[1m[vite][22m[39m The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.
+[2m11:58:07 AM[22m [31m[1m[vite][22m[39m server restart failed
+[2m11:58:25 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m11:58:25 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m11:58:27 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m11:58:27 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m11:58:36 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m11:58:38 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m11:58:51 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m11:58:52 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m11:59:39 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m11:59:39 AM[22m [31m[1m[vite][22m[39m [31mInternal server error: The file does not exist at "C:/Users/Dell/Documents/Landing page/node_modules/.vite/deps_rsc/react.react-server-B0Qp6gYL.js?v=bd9c71f2" which is in the optimize deps directory. The dependency might be incompatible with the dep optimizer. Try adding it to `optimizeDeps.exclude`.[39m
+      at runInRunnerObject (workers/runner-worker/index.js:107:3)
+      at getWorkerEntryExport (workers/runner-worker/index.js:235:17)
+      at null.<anonymous> (workers/runner-worker/index.js:354:24)
+      at maybeCaptureError (workers/runner-worker/index.js:51:10)
+[2m12:06:27 PM[22m [31m[1m[vite][22m[39m [31m[2m(rsc)[22m[39m [31merror while updating dependencies:
+Error: ENOENT: no such file or directory, rename 'C:\Users\Dell\Documents\Landing page\node_modules\.vite\deps_rsc' -> 'C:\Users\Dell\Documents\Landing page\node_modules\.vite\deps_rsc_temp_d847c0f2'[39m
+[2m12:06:32 PM[22m [31m[1m[vite][22m[39m [31m[2m(ssr)[22m[39m [31merror while updating dependencies:
+Error: EPERM: operation not permitted, rename 'C:\Users\Dell\Documents\Landing page\node_modules\.vite\deps_ssr_temp_ce520e5c' -> 'C:\Users\Dell\Documents\Landing page\node_modules\.vite\deps_ssr'[39m
+[2m12:06:33 PM[22m [31m[1m[vite][22m[39m Unexpected token 'E', "Error: Par"... is not valid JSON
+[2m12:06:33 PM[22m [31m[1m[vite][22m[39m server restart failed
+[2m12:08:12 PM[22m [31m[1m[vite][22m[39m Unexpected token 'E', "Error: Par"... is not valid JSON
+[2m12:08:12 PM[22m [31m[1m[vite][22m[39m server restart failed
+[2m12:08:12 PM[22m [31m[1m[vite][22m[39m Module runner already initialized for environment: "ssr"
+[2m12:08:12 PM[22m [31m[1m[vite][22m[39m server restart failed
+[2m12:08:15 PM[22m [31m[1m[vite][22m[39m Cannot read properties of undefined (reading 'get')
+[2m12:08:15 PM[22m [31m[1m[vite][22m[39m server restart failed

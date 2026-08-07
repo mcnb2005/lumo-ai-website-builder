@@ -62,6 +62,8 @@ export type LandingDesign = {
     heading: "editorial" | "modern" | "friendly";
     body: "sans" | "humanist";
   };
+  radius?: "none" | "sm" | "md" | "lg" | "full";
+  density?: "compact" | "comfortable" | "spacious";
 };
 
 export type LandingSectionColors = {
@@ -164,6 +166,8 @@ export const defaultLanding: LandingData = {
       heading: "editorial",
       body: "sans",
     },
+    radius: "md",
+    density: "comfortable",
   },
   brand: "Morrow",
   navCta: "Nhận tư vấn",
@@ -373,6 +377,20 @@ export function normalizeLandingData(
         ...defaultLanding.design!.typography,
         ...(value.design?.typography || {}),
       },
+      radius:
+        value.design?.radius === "none" ||
+        value.design?.radius === "sm" ||
+        value.design?.radius === "md" ||
+        value.design?.radius === "lg" ||
+        value.design?.radius === "full"
+          ? value.design.radius
+          : defaultLanding.design!.radius,
+      density:
+        value.design?.density === "compact" ||
+        value.design?.density === "comfortable" ||
+        value.design?.density === "spacious"
+          ? value.design.density
+          : defaultLanding.design!.density,
     },
     featuresEyebrow:
       typeof value.featuresEyebrow === "string"

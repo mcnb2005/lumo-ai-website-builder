@@ -70,6 +70,14 @@ export const landingOperationSchemas = {
     optional: ["alt"],
     aliases: { imageUrl: "url", altText: "alt" },
   },
+  set_variant: {
+    required: ["type", "section", "variant"],
+    aliases: { targetSection: "section" },
+  },
+  set_design: {
+    required: ["type"],
+    optional: ["typography", "radius", "density"],
+  },
   replace_landing: {
     required: ["type", "value"],
     aliases: { landing: "value", data: "value" },

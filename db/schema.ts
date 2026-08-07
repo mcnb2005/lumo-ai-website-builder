@@ -9,9 +9,17 @@ import {
 export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email").notNull().unique(),
+  username: text("username").unique(),
   name: text("name"),
   googleSub: text("google_sub").unique(),
   avatarUrl: text("avatar_url"),
+  passwordHash: text("password_hash"),
+  mustChangePassword: integer("must_change_password", {
+    mode: "boolean",
+  })
+    .notNull()
+    .default(false),
+  passwordUpdatedAt: text("password_updated_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });

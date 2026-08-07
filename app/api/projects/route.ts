@@ -13,7 +13,11 @@ import {
   forbiddenCompanyResponse,
   unauthorizedCompanyResponse,
 } from "../../company-access";
-import { writeCompanyAudit } from "../../company-data";
+import {
+  canCreateLanding,
+  canEditLanding,
+  writeCompanyAudit,
+} from "../../company-data";
 
 type ProjectPayload = {
   id?: string;
@@ -103,8 +107,15 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
-    const user = await getCurrentDatabaseUser();
-    if (!user) return unauthorized();
+    const auth = await getAuthenticatedCompanyContext();
+    if (!auth) return unauthorizedCompanyResponse();
+    if (
+      auth.user.mustChangePassword ||
+      !canCreateLanding(auth.company.role)
+    ) {
+      return forbiddenCompanyResponse();
+    }
+    const user = auth.user;
 
     const payload = (await request.json()) as ProjectPayload;
     const id = payload.id?.trim();
@@ -147,7 +158,7 @@ export async function POST(request: Request) {
       id,
       ownerId: user.id,
       createdById: user.id,
-      companyId: user.companyId || existing?.companyId || null,
+      companyId: auth.company.companyId || existing?.companyId || null,
       name,
       slug,
       data: JSON.stringify(payload.data),
@@ -191,8 +202,12 @@ export async function POST(request: Request) {
 
 export async function PATCH(request: Request) {
   try {
-    const user = await getCurrentDatabaseUser();
-    if (!user) return unauthorized();
+    const auth = await getAuthenticatedCompanyContext();
+    if (!auth) return unauthorizedCompanyResponse();
+    if (auth.user.mustChangePassword || !canEditLanding(auth.company.role)) {
+      return forbiddenCompanyResponse();
+    }
+    const user = auth.user;
 
     const payload = (await request.json()) as {
       id?: string;
@@ -266,6 +281,9 @@ export async function DELETE(request: Request) {
   try {
     const auth = await getAuthenticatedCompanyContext();
     if (!auth) return unauthorizedCompanyResponse();
+    if (auth.user.mustChangePassword || !canEditLanding(auth.company.role)) {
+      return forbiddenCompanyResponse();
+    }
     const id = new URL(request.url).searchParams.get("id");
     if (!id) {
       return Response.json({ error: "Thiếu mã dự án." }, { status: 400 });

@@ -59,6 +59,20 @@ export type LandingOperation =
       alt?: string;
     }
   | {
+      type: "set_variant";
+      section: LandingSectionType;
+      variant: string;
+    }
+  | {
+      type: "set_design";
+      typography?: {
+        heading?: "editorial" | "modern" | "friendly";
+        body?: "sans" | "humanist";
+      };
+      radius?: "none" | "sm" | "md" | "lg" | "full";
+      density?: "compact" | "comfortable" | "spacious";
+    }
+  | {
       type: "replace_landing";
       value: LandingData;
     };
@@ -362,7 +376,7 @@ export function validateLandingData(
       errors.push(
         ...validateAllowedKeys(
           value.design,
-          ["templateId", "templateVersion", "sectionVariants", "typography"],
+          ["templateId", "templateVersion", "sectionVariants", "typography", "radius", "density"],
           "design"
         )
       );
@@ -424,6 +438,24 @@ export function validateLandingData(
         ) {
           errors.push("design.typography.body không hợp lệ.");
         }
+      }
+      if (
+        value.design.radius !== undefined &&
+        value.design.radius !== "none" &&
+        value.design.radius !== "sm" &&
+        value.design.radius !== "md" &&
+        value.design.radius !== "lg" &&
+        value.design.radius !== "full"
+      ) {
+        errors.push("design.radius không hợp lệ.");
+      }
+      if (
+        value.design.density !== undefined &&
+        value.design.density !== "compact" &&
+        value.design.density !== "comfortable" &&
+        value.design.density !== "spacious"
+      ) {
+        errors.push("design.density không hợp lệ.");
       }
     }
   }
@@ -824,6 +856,82 @@ export function parseLandingOperationEnvelope(
         });
         return;
       }
+      case "set_variant": {
+        if (!isSection(rawOperation.section)) {
+          errors.push(`${path}.section không hợp lệ.`);
+          return;
+        }
+        if (
+          typeof rawOperation.variant !== "string" ||
+          !landingSectionVariantOptions[rawOperation.section]?.includes(
+            rawOperation.variant
+          )
+        ) {
+          errors.push(`${path}.variant không hợp lệ cho section ${rawOperation.section}.`);
+          return;
+        }
+        operations.push({
+          type: "set_variant",
+          section: rawOperation.section,
+          variant: rawOperation.variant,
+        });
+        return;
+      }
+      case "set_design": {
+        if (rawOperation.typography !== undefined) {
+          if (!isRecord(rawOperation.typography)) {
+            errors.push(`${path}.typography phải là object.`);
+            return;
+          }
+          const { heading, body } = rawOperation.typography;
+          if (
+            heading !== undefined &&
+            heading !== "editorial" &&
+            heading !== "modern" &&
+            heading !== "friendly"
+          ) {
+            errors.push(`${path}.typography.heading không hợp lệ.`);
+            return;
+          }
+          if (
+            body !== undefined &&
+            body !== "sans" &&
+            body !== "humanist"
+          ) {
+            errors.push(`${path}.typography.body không hợp lệ.`);
+            return;
+          }
+        }
+        if (
+          rawOperation.radius !== undefined &&
+          rawOperation.radius !== "none" &&
+          rawOperation.radius !== "sm" &&
+          rawOperation.radius !== "md" &&
+          rawOperation.radius !== "lg" &&
+          rawOperation.radius !== "full"
+        ) {
+          errors.push(`${path}.radius không hợp lệ.`);
+          return;
+        }
+        if (
+          rawOperation.density !== undefined &&
+          rawOperation.density !== "compact" &&
+          rawOperation.density !== "comfortable" &&
+          rawOperation.density !== "spacious"
+        ) {
+          errors.push(`${path}.density không hợp lệ.`);
+          return;
+        }
+        operations.push({
+          type: "set_design",
+          typography: rawOperation.typography as
+            | Extract<LandingOperation, { type: "set_design" }>["typography"]
+            | undefined,
+          radius: rawOperation.radius as any,
+          density: rawOperation.density as any,
+        });
+        return;
+      }
       case "replace_landing": {
         if (options.mode !== "create" && options.source !== "system") {
           errors.push("replace_landing chỉ được dùng khi tạo project mới.");
@@ -1221,6 +1329,34 @@ export function applyLandingOperations(
               ? "portfolio"
               : "gallery"
         );
+        break;
+      case "set_variant":
+        landing = {
+          ...landing,
+          design: {
+            ...landing.design!,
+            sectionVariants: {
+              ...landing.design?.sectionVariants,
+              [operation.section]: operation.variant,
+            },
+          },
+        };
+        changedSections.add(operation.section);
+        break;
+      case "set_design":
+        landing = {
+          ...landing,
+          design: {
+            ...landing.design!,
+            typography: operation.typography ? {
+              ...landing.design!.typography,
+              ...operation.typography,
+            } : landing.design!.typography,
+            ...(operation.radius !== undefined ? { radius: operation.radius } : {}),
+            ...(operation.density !== undefined ? { density: operation.density } : {}),
+          },
+        };
+        landing.sectionOrder.forEach((section) => changedSections.add(section));
         break;
       case "replace_landing":
         landing = normalizeLandingData(operation.value);

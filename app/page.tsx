@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { Studio } from "./Studio";
-import { ensureCompanyForUser } from "./company-data";
+import { canCreateLanding, ensureCompanyForUser } from "./company-data";
 import { getCurrentDatabaseUser } from "./server-user";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +15,12 @@ export const metadata: Metadata = {
 export default async function Home() {
   const user = await getCurrentDatabaseUser();
   if (!user) redirect("/login");
-  await ensureCompanyForUser(user);
+  if (user.mustChangePassword) {
+    redirect("/account/password?returnTo=%2F");
+  }
+  const company = await ensureCompanyForUser(user);
+  if (!canCreateLanding(company.role)) {
+    redirect("/company");
+  }
   return <Studio />;
 }

@@ -221,6 +221,36 @@ test("all list section drafts compile their items to array replace operations", 
   }
 });
 
+test("allows gallery draft generation even when current gallery is empty", async () => {
+  const { parseSectionDraftEnvelope, compileSectionDraftToOperations } =
+    await loadSectionDraftModule();
+  const envelope = parseSectionDraftEnvelope(
+    {
+      draft: {
+        eyebrow: "Thư viện",
+        headline: "Ảnh sản phẩm",
+        items: [
+          { alt: "Ảnh 1", caption: "Mô tả 1" },
+          { alt: "Ảnh 2", caption: "Mô tả 2" },
+        ],
+      },
+    },
+    "gallery",
+    currentLanding
+  );
+
+  const operations = compileSectionDraftToOperations(
+    "gallery",
+    envelope.draft,
+    currentLanding
+  );
+
+  assert.deepEqual(operations, [
+    { type: "update_text", section: "gallery", field: "galleryEyebrow", value: "Thư viện" },
+    { type: "update_text", section: "gallery", field: "galleryHeadline", value: "Ảnh sản phẩm" },
+  ]);
+});
+
 test("creation content agent consumes SectionDraft instead of AI-authored operations", async () => {
   const source = await readFile(
     new URL("../app/server/agents/section-content-agent.ts", import.meta.url),

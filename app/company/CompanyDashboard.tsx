@@ -1,8 +1,9 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
 
-type CompanyRole = "owner" | "admin" | "member";
+type CompanyRole = "owner" | "admin" | "member" | "viewer";
 
 type CompanyInfo = {
   id: string;
@@ -10,6 +11,7 @@ type CompanyInfo = {
   slug: string;
   role: CompanyRole;
   canManage: boolean;
+  canCreateLanding: boolean;
 };
 
 type Member = {
@@ -20,6 +22,7 @@ type Member = {
   joinedAt: string;
   name: string | null;
   email: string;
+  username: string | null;
   avatarUrl: string | null;
   projectCount: number;
 };
@@ -37,34 +40,152 @@ type CompanyProject = {
   createdById: string | null;
   creatorName: string;
   creatorEmail: string | null;
-};
-
-type Invitation = {
-  id: string;
-  email: string;
-  role: CompanyRole;
-  expiresAt: string;
-  createdAt: string;
+  creatorUsername: string | null;
 };
 
 type CompanyResponse = {
   company?: CompanyInfo;
   members?: Member[];
   projects?: CompanyProject[];
-  invitations?: Invitation[];
   error?: string;
 };
 
-type EmailServiceStatus = {
-  configured: boolean;
-  host?: string;
-  port?: number;
-  fromEmail?: string;
+type Credentials = {
+  memberId: string;
+  username: string;
+  name: string;
+  temporaryPassword: string;
 };
+
+type BulkAccountDraft = {
+  username?: string;
+  email?: string;
+  name?: string;
+  role?: "admin" | "member" | "viewer";
+};
+
+type BulkFailure = {
+  index: number;
+  username: string;
+  error: string;
+};
+
+function csvHeaderKey(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+function roleFromCell(value: string): BulkAccountDraft["role"] {
+  const key = csvHeaderKey(value);
+  if (key === "admin" || key === "quan_tri_vien") return "admin";
+  if (key === "viewer" || key === "chi_xem") return "viewer";
+  if (key === "member" || key === "nhan_vien") return "member";
+  return undefined;
+}
+
+function splitCsvLine(line: string) {
+  const delimiter = line.includes(";") && !line.includes(",") ? ";" : ",";
+  const cells: string[] = [];
+  let current = "";
+  let quoted = false;
+  for (let index = 0; index < line.length; index += 1) {
+    const character = line[index];
+    if (character === "\"") {
+      if (quoted && line[index + 1] === "\"") {
+        current += "\"";
+        index += 1;
+      } else {
+        quoted = !quoted;
+      }
+      continue;
+    }
+    if (character === delimiter && !quoted) {
+      cells.push(current.trim());
+      current = "";
+      continue;
+    }
+    current += character;
+  }
+  cells.push(current.trim());
+  return cells;
+}
+
+function parseBulkAccounts(value: string): BulkAccountDraft[] {
+  const rows = value
+    .split(/\r?\n/)
+    .map((line) => splitCsvLine(line.trim().replace(/^\uFEFF/, "")))
+    .filter((cells) => cells.some(Boolean));
+  if (!rows.length) return [];
+
+  const firstRow = rows[0].map(csvHeaderKey);
+  const hasHeader = firstRow.some((cell) =>
+    [
+      "username",
+      "ten_dang_nhap",
+      "tai_khoan",
+      "email",
+      "mail",
+      "name",
+      "ten",
+      "ten_nhan_vien",
+      "ho_ten",
+      "role",
+      "vai_tro",
+    ].includes(cell)
+  );
+  const headers = hasHeader ? firstRow : null;
+  const dataRows = hasHeader ? rows.slice(1) : rows;
+
+  return dataRows
+    .map((cells) => {
+      const account: BulkAccountDraft = {};
+      if (headers) {
+        headers.forEach((header, index) => {
+          const cell = cells[index]?.trim();
+          if (!cell) return;
+          if (
+            header === "username" ||
+            header === "ten_dang_nhap" ||
+            header === "tai_khoan"
+          ) {
+            if (cell.includes("@")) account.email = cell;
+            else account.username = cell;
+          }
+          if (header === "email" || header === "mail") account.email = cell;
+          if (
+            header === "name" ||
+            header === "ten" ||
+            header === "ten_nhan_vien" ||
+            header === "ho_ten"
+          ) {
+            account.name = cell;
+          }
+          if (header === "role" || header === "vai_tro") {
+            account.role = roleFromCell(cell);
+          }
+        });
+        return account;
+      }
+
+      const firstCell = cells[0]?.trim() || "";
+      if (firstCell.includes("@")) account.email = firstCell;
+      else account.username = firstCell;
+      account.name = cells[1]?.trim() || undefined;
+      account.role = roleFromCell(cells[2] || "");
+      return account;
+    })
+    .filter((account) => account.username || account.email);
+}
 
 function roleLabel(role: CompanyRole) {
   if (role === "owner") return "Chủ công ty";
   if (role === "admin") return "Quản trị viên";
+  if (role === "viewer") return "Chỉ xem";
   return "Nhân viên";
 }
 
@@ -93,18 +214,19 @@ export function CompanyDashboard({
   const [company, setCompany] = useState<CompanyInfo | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [projects, setProjects] = useState<CompanyProject[]>([]);
-  const [invitations, setInvitations] = useState<Invitation[]>([]);
-  const [email, setEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
+  const [username, setUsername] = useState("");
+  const [employeeName, setEmployeeName] = useState("");
+  const [inviteRole, setInviteRole] =
+    useState<"admin" | "member" | "viewer">("member");
   const [search, setSearch] = useState("");
   const [selectedMemberId, setSelectedMemberId] = useState("all");
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const [isTestingEmail, setIsTestingEmail] = useState(false);
   const [notice, setNotice] = useState("");
-  const [lastInviteUrl, setLastInviteUrl] = useState("");
-  const [emailService, setEmailService] =
-    useState<EmailServiceStatus>({ configured: false });
+  const [credentials, setCredentials] = useState<Credentials[]>([]);
+  const [bulkAccountsText, setBulkAccountsText] = useState("");
+  const [bulkFileName, setBulkFileName] = useState("");
+  const [bulkFailures, setBulkFailures] = useState<BulkFailure[]>([]);
 
   async function loadCompany() {
     try {
@@ -116,7 +238,6 @@ export function CompanyDashboard({
       setCompany(result.company);
       setMembers(result.members || []);
       setProjects(result.projects || []);
-      setInvitations(result.invitations || []);
     } catch (error) {
       setNotice(
         error instanceof Error
@@ -128,23 +249,11 @@ export function CompanyDashboard({
     }
   }
 
-  async function loadEmailService() {
-    try {
-      const response = await fetch("/api/integrations/email");
-      const result = (await response.json()) as {
-        email?: EmailServiceStatus;
-      };
-      if (response.ok && result.email) {
-        setEmailService(result.email);
-      }
-    } catch {
-      setEmailService({ configured: false });
-    }
-  }
-
   useEffect(() => {
-    void loadCompany();
-    void loadEmailService();
+    const timer = window.setTimeout(() => {
+      void loadCompany();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, []);
 
   const filteredProjects = useMemo(() => {
@@ -161,14 +270,20 @@ export function CompanyDashboard({
         project.name,
         project.slug,
         project.creatorName,
+        project.creatorUsername || "",
         project.creatorEmail || "",
       ].some((value) => value.toLocaleLowerCase("vi").includes(keyword));
     });
   }, [projects, search, selectedMemberId]);
 
+  const bulkAccounts = useMemo(
+    () => parseBulkAccounts(bulkAccountsText).slice(0, 100),
+    [bulkAccountsText]
+  );
+
   async function inviteMember(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!email.trim()) return;
+    if (!username.trim()) return;
     setIsSaving(true);
     setNotice("");
     try {
@@ -176,33 +291,40 @@ export function CompanyDashboard({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
+          username,
+          name: employeeName,
           role: inviteRole,
-          sendEmail: true,
         }),
       });
       const result = (await response.json()) as {
         error?: string;
         message?: string;
-        pending?: boolean;
-        inviteUrl?: string;
-        emailStatus?: "sent" | "not_configured" | "failed";
-        emailError?: string;
+        memberId?: string;
+        username?: string;
+        name?: string;
+        temporaryPassword?: string;
       };
       if (!response.ok) {
         throw new Error(result.error || "Không thể thêm nhân viên.");
       }
-      setEmail("");
-      setLastInviteUrl(
-        result.inviteUrl
-          ? new URL(result.inviteUrl, window.location.origin).toString()
-          : ""
+      setUsername("");
+      setEmployeeName("");
+      setBulkFailures([]);
+      setCredentials(
+        result.temporaryPassword
+          ? [
+              {
+                memberId: result.memberId || "",
+                username: result.username || username,
+                name: result.name || employeeName || result.username || username,
+                temporaryPassword: result.temporaryPassword,
+              },
+            ]
+          : []
       );
       setNotice(
         result.message ||
-          (result.pending
-            ? "Đã tạo lời mời cho nhân viên."
-            : "Đã thêm nhân viên vào công ty.")
+          "Đã cấp tài khoản và mật khẩu tạm cho nhân viên."
       );
       await loadCompany();
     } catch (error) {
@@ -214,30 +336,149 @@ export function CompanyDashboard({
     }
   }
 
-  async function testEmailService() {
-    setIsTestingEmail(true);
+  async function inviteBulkMembers(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!bulkAccounts.length) {
+      setNotice("Chưa có tài khoản nào để tạo.");
+      return;
+    }
+    setIsSaving(true);
     setNotice("");
+    setBulkFailures([]);
     try {
-      const response = await fetch("/api/integrations/email", {
+      const response = await fetch("/api/company", {
         method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          accounts: bulkAccounts,
+          role: inviteRole,
+        }),
       });
-      const result = (await response.json()) as { error?: string };
-      if (!response.ok) {
-        throw new Error(result.error || "Không thể gửi email kiểm tra.");
+      const result = (await response.json()) as {
+        error?: string;
+        message?: string;
+        credentials?: Credentials[];
+        failures?: BulkFailure[];
+      };
+      if (!response.ok && !result.credentials?.length) {
+        throw new Error(result.error || "Không thể tạo nhiều tài khoản.");
       }
-      setNotice(`Đã gửi email kiểm tra đến ${userEmail}.`);
+      setCredentials(result.credentials || []);
+      setBulkFailures(result.failures || []);
+      setBulkAccountsText("");
+      setBulkFileName("");
+      setNotice(
+        result.message ||
+          `Đã cấp ${result.credentials?.length || 0} tài khoản nhân viên.`
+      );
+      await loadCompany();
     } catch (error) {
       setNotice(
-        error instanceof Error
-          ? error.message
-          : "Không thể gửi email kiểm tra."
+        error instanceof Error ? error.message : "Không thể tạo nhiều tài khoản."
       );
     } finally {
-      setIsTestingEmail(false);
+      setIsSaving(false);
     }
   }
 
-  async function updateRole(member: Member, role: "admin" | "member") {
+  async function handleBulkCsvUpload(event: ChangeEvent<HTMLInputElement>) {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    try {
+      const content = await file.text();
+      setBulkFileName(file.name);
+      setBulkAccountsText(content);
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể đọc file CSV."
+      );
+    } finally {
+      input.value = "";
+    }
+  }
+
+  function loginUrl() {
+    if (typeof window === "undefined") return "/login";
+    return `${window.location.origin}/login`;
+  }
+
+  function loginMessage(credential: Credentials) {
+    return [
+      "Chào bạn, bạn đã được cấp tài khoản Lumo.",
+      "",
+      `Link đăng nhập: ${loginUrl()}`,
+      `Tên đăng nhập: ${credential.username}`,
+      `Mật khẩu tạm: ${credential.temporaryPassword}`,
+      "",
+      "Khi đăng nhập lần đầu, hệ thống sẽ yêu cầu bạn đổi mật khẩu.",
+    ].join("\n");
+  }
+
+  async function copyLoginMessage() {
+    if (!credentials.length) return;
+    await navigator.clipboard.writeText(
+      credentials.map(loginMessage).join("\n\n---\n\n")
+    );
+    setNotice(
+      credentials.length > 1
+        ? `Đã sao chép ${credentials.length} tin nhắn đăng nhập.`
+        : "Đã sao chép tin nhắn đăng nhập."
+    );
+  }
+
+  async function resetPassword(member: Member | Credentials) {
+    const memberId = "memberId" in member ? member.memberId : member.id;
+    if (!memberId) return;
+    setIsSaving(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/company", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "resetPassword", memberId }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        message?: string;
+        username?: string;
+        name?: string;
+        temporaryPassword?: string;
+      };
+      if (!response.ok || !result.temporaryPassword) {
+        throw new Error(result.error || "Không thể tạo lại mật khẩu.");
+      }
+      setBulkFailures([]);
+      setCredentials([
+        {
+          memberId,
+          username:
+            result.username ||
+            ("username" in member ? member.username : "") ||
+            ("email" in member ? member.email : ""),
+          name:
+            result.name ||
+            ("name" in member ? member.name || "" : "") ||
+            result.username ||
+            "",
+          temporaryPassword: result.temporaryPassword,
+        },
+      ]);
+      setNotice(result.message || "Đã tạo lại mật khẩu tạm.");
+      await loadCompany();
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể tạo lại mật khẩu."
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function updateRole(
+    member: Member,
+    role: "admin" | "member" | "viewer"
+  ) {
     setIsSaving(true);
     setNotice("");
     try {
@@ -250,7 +491,9 @@ export function CompanyDashboard({
       if (!response.ok) {
         throw new Error(result.error || "Không thể cập nhật vai trò.");
       }
-      setNotice(`Đã đổi vai trò của ${member.name || member.email}.`);
+      setNotice(
+        `Đã đổi vai trò của ${member.name || member.username || member.email}.`
+      );
       await loadCompany();
     } catch (error) {
       setNotice(
@@ -266,7 +509,7 @@ export function CompanyDashboard({
   async function removeMember(member: Member) {
     if (
       !window.confirm(
-        `Gỡ ${member.name || member.email} khỏi công ty? Các project đang sở hữu sẽ được chuyển cho chủ công ty.`
+        `Gỡ ${member.name || member.username || member.email} khỏi công ty? Các project đang sở hữu sẽ được chuyển cho chủ công ty.`
       )
     ) {
       return;
@@ -282,7 +525,9 @@ export function CompanyDashboard({
       if (!response.ok) {
         throw new Error(result.error || "Không thể xóa nhân viên.");
       }
-      setNotice(`Đã gỡ ${member.name || member.email} khỏi công ty.`);
+      setNotice(
+        `Đã gỡ ${member.name || member.username || member.email} khỏi công ty.`
+      );
       await loadCompany();
     } catch (error) {
       setNotice(
@@ -327,33 +572,35 @@ export function CompanyDashboard({
   const publishedProjects = projects.filter(
     (project) => project.status === "published"
   ).length;
+  const viewerMembers = members.filter((member) => member.role === "viewer")
+    .length;
 
   return (
     <main className="company-shell">
       <aside className="company-sidebar">
-        <a className="company-logo" href="/">
+        <Link className="company-logo" href="/">
           <span>✦</span>
           lumo
-        </a>
+        </Link>
         <p>QUẢN TRỊ CÔNG TY</p>
         <nav>
-          <a className="is-active" href="/company">
+          <Link className="is-active" href="/company">
             <span>⌂</span> Tổng quan
-          </a>
+          </Link>
           <a href="#members">
             <span>◎</span> Nhân viên
           </a>
           <a href="#projects">
             <span>▦</span> Project
           </a>
-          <a href="/dashboard">
+          <Link href="/dashboard">
             <span>◉</span> Dữ liệu landing page
-          </a>
+          </Link>
         </nav>
         <div className="company-sidebar-spacer" />
-        <a className="company-back" href="/">
+        <Link className="company-back" href="/">
           ← Về trình tạo trang
-        </a>
+        </Link>
         <div className="company-user">
           <span>{userName.slice(0, 1).toUpperCase()}</span>
           <div>
@@ -372,7 +619,9 @@ export function CompanyDashboard({
               Vai trò của bạn: {company ? roleLabel(company.role) : "Đang tải"}
             </span>
           </div>
-          <a href="/">+ Tạo landing page</a>
+          {company?.canCreateLanding ? (
+            <Link href="/">+ Tạo landing page</Link>
+          ) : null}
         </header>
 
         {notice ? <div className="company-notice">{notice}</div> : null}
@@ -394,9 +643,9 @@ export function CompanyDashboard({
             <small>Landing page đang công khai</small>
           </article>
           <article className="is-accent">
-            <span>Lời mời chờ</span>
-            <strong>{invitations.length}</strong>
-            <small>Chờ đăng nhập Google</small>
+            <span>Chỉ xem</span>
+            <strong>{viewerMembers}</strong>
+            <small>Tài khoản chỉ xem dashboard</small>
           </article>
         </div>
 
@@ -404,45 +653,29 @@ export function CompanyDashboard({
           <section className="company-panel company-invite-panel">
             <div>
               <p>THÊM TÀI KHOẢN</p>
-              <h2>Mời nhân viên vào công ty</h2>
+              <h2>Cấp tài khoản nhân viên</h2>
               <span>
-                Nhân viên mới đăng nhập Google bằng đúng email được mời.
+                Tạo tên đăng nhập và mật khẩu tạm, nhân viên sẽ đổi mật khẩu khi đăng nhập lần đầu.
               </span>
-              <div
-                className={`company-email-status${
-                  emailService.configured ? " is-connected" : ""
-                }`}
-              >
-                <i />
-                {emailService.configured ? (
-                  <>
-                    <span>
-                      SMTP <strong>{emailService.fromEmail}</strong> đã sẵn sàng
-                      gửi email tự động.
-                    </span>
-                    <button
-                      type="button"
-                      onClick={() => void testEmailService()}
-                      disabled={isTestingEmail}
-                    >
-                      {isTestingEmail ? "Đang gửi…" : "Gửi email thử"}
-                    </button>
-                  </>
-                ) : (
-                  <span>
-                    SMTP chưa được cấu hình. Hệ thống vẫn tạo link mời dự phòng.
-                  </span>
-                )}
-              </div>
             </div>
-            <form onSubmit={inviteMember}>
+            <form className="company-account-form" onSubmit={inviteMember}>
               <label>
-                Email nhân viên
+                Tên nhân viên
                 <input
-                  type="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="nhanvien@congty.vn"
+                  type="text"
+                  value={employeeName}
+                  onChange={(event) => setEmployeeName(event.target.value)}
+                  placeholder="Nguyễn Minh Anh"
+                />
+              </label>
+              <label>
+                Tên đăng nhập
+                <input
+                  type="text"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="minhanh"
+                  autoComplete="username"
                   required
                 />
               </label>
@@ -451,36 +684,121 @@ export function CompanyDashboard({
                 <select
                   value={inviteRole}
                   onChange={(event) =>
-                    setInviteRole(event.target.value as "admin" | "member")
+                    setInviteRole(
+                      event.target.value as "admin" | "member" | "viewer"
+                    )
                   }
                 >
                   <option value="member">Nhân viên</option>
                   <option value="admin">Quản trị viên</option>
+                  <option value="viewer">Chỉ xem</option>
                 </select>
               </label>
               <button type="submit" disabled={isSaving}>
-                {isSaving
-                  ? emailService.configured
-                    ? "Đang gửi…"
-                    : "Đang tạo link…"
-                  : emailService.configured
-                    ? "Gửi lời mời qua email"
-                    : "Tạo link mời"}
+                {isSaving ? "Đang cấp..." : "Cấp tài khoản"}
               </button>
             </form>
-            {lastInviteUrl ? (
-              <div className="company-invite-link">
-                <span>Đường dẫn gửi cho nhân viên</span>
-                <input value={lastInviteUrl} readOnly />
-                <button
-                  type="button"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(lastInviteUrl);
-                    setNotice("Đã sao chép đường dẫn lời mời.");
+            <form className="company-bulk-form" onSubmit={inviteBulkMembers}>
+              <label>
+                Nhập nhiều username hoặc CSV
+                <textarea
+                  value={bulkAccountsText}
+                  onChange={(event) => {
+                    setBulkAccountsText(event.target.value);
+                    setBulkFileName("");
                   }}
+                  placeholder={
+                    "minhanh,Nguyễn Minh Anh\nhello123,Lê An\nviewer01,Trần Bình,viewer"
+                  }
+                />
+              </label>
+              <div className="company-bulk-actions">
+                <label className="company-file-button">
+                  Upload CSV
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(event) => void handleBulkCsvUpload(event)}
+                  />
+                </label>
+                <span>
+                  {bulkFileName || `${bulkAccounts.length} tài khoản sẵn sàng`}
+                </span>
+                <button
+                  type="submit"
+                  disabled={isSaving || !bulkAccounts.length}
                 >
-                  Sao chép link
+                  {isSaving ? "Đang tạo..." : "Tạo hàng loạt"}
                 </button>
+              </div>
+            </form>
+            {bulkFailures.length ? (
+              <div className="company-bulk-errors">
+                <strong>{bulkFailures.length} dòng chưa tạo</strong>
+                <ul>
+                  {bulkFailures.slice(0, 5).map((failure) => (
+                    <li key={`${failure.index}-${failure.username}`}>
+                      Dòng {failure.index}: {failure.username} - {failure.error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+            {credentials.length ? (
+              <div className="company-credentials-card">
+                <div>
+                  <p>THÔNG TIN ĐĂNG NHẬP</p>
+                  <h3>
+                    {credentials.length === 1
+                      ? credentials[0].name
+                      : `${credentials.length} tài khoản đã tạo`}
+                  </h3>
+                  <span>Gửi tin nhắn này qua Zalo, Messenger hoặc email.</span>
+                </div>
+                {credentials.length === 1 ? (
+                  <dl>
+                    <div>
+                      <dt>Link đăng nhập</dt>
+                      <dd>{loginUrl()}</dd>
+                    </div>
+                    <div>
+                      <dt>Tên đăng nhập</dt>
+                      <dd>{credentials[0].username}</dd>
+                    </div>
+                    <div>
+                      <dt>Mật khẩu tạm</dt>
+                      <dd>{credentials[0].temporaryPassword}</dd>
+                    </div>
+                  </dl>
+                ) : (
+                  <div className="company-credentials-list">
+                    {credentials.map((credential) => (
+                      <article key={`${credential.memberId}-${credential.username}`}>
+                        <strong>{credential.name}</strong>
+                        <span>@{credential.username}</span>
+                        <code>{credential.temporaryPassword}</code>
+                      </article>
+                    ))}
+                  </div>
+                )}
+                <div className="company-credentials-message">
+                  {credentials.map(loginMessage).join("\n\n---\n\n")}
+                </div>
+                <div className="company-credentials-actions">
+                  <button type="button" onClick={() => void copyLoginMessage()}>
+                    Sao chép tin nhắn
+                  </button>
+                  {credentials.length === 1 ? (
+                    <button
+                      type="button"
+                      className="is-secondary"
+                      disabled={isSaving}
+                      onClick={() => void resetPassword(credentials[0])}
+                    >
+                      Tạo lại mật khẩu
+                    </button>
+                  ) : null}
+                </div>
               </div>
             ) : null}
           </section>
@@ -510,10 +828,14 @@ export function CompanyDashboard({
                   <tr key={member.id}>
                     <td>
                       <div className="company-person">
-                        <b>{(member.name || member.email)[0].toUpperCase()}</b>
+                        <b>
+                          {(member.name || member.username || member.email)[0].toUpperCase()}
+                        </b>
                         <span>
                           <strong>{member.name || "Chưa có tên"}</strong>
-                          <small>{member.email}</small>
+                          <small>
+                            {member.username ? `@${member.username}` : member.email}
+                          </small>
                         </span>
                       </div>
                     </td>
@@ -527,12 +849,16 @@ export function CompanyDashboard({
                           onChange={(event) =>
                             void updateRole(
                               member,
-                              event.target.value as "admin" | "member"
+                              event.target.value as
+                                | "admin"
+                                | "member"
+                                | "viewer"
                             )
                           }
                         >
                           <option value="member">Nhân viên</option>
                           <option value="admin">Quản trị viên</option>
+                          <option value="viewer">Chỉ xem</option>
                         </select>
                       ) : (
                         <span className={`company-role is-${member.role}`}>
@@ -546,14 +872,23 @@ export function CompanyDashboard({
                       <td>
                         {member.role !== "owner" &&
                         member.userId !== currentUserId ? (
-                          <button
-                            className="company-danger-link"
-                            type="button"
-                            disabled={isSaving}
-                            onClick={() => void removeMember(member)}
-                          >
-                            Gỡ khỏi công ty
-                          </button>
+                          <div className="company-member-actions">
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => void resetPassword(member)}
+                            >
+                              Tạo lại mật khẩu
+                            </button>
+                            <button
+                              className="company-danger-link"
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => void removeMember(member)}
+                            >
+                              Gỡ khỏi công ty
+                            </button>
+                          </div>
                         ) : (
                           "—"
                         )}
@@ -592,7 +927,7 @@ export function CompanyDashboard({
                   <option value="all">Tất cả nhân viên</option>
                   {members.map((member) => (
                     <option key={member.id} value={member.userId}>
-                      {member.name || member.email}
+                      {member.name || member.username || member.email}
                     </option>
                   ))}
                 </select>
@@ -622,7 +957,9 @@ export function CompanyDashboard({
                     <td>
                       <strong>{project.creatorName}</strong>
                       <small className="company-project-slug">
-                        {project.creatorEmail || "—"}
+                        {project.creatorUsername
+                          ? `@${project.creatorUsername}`
+                          : project.creatorEmail || "—"}
                       </small>
                     </td>
                     <td>
