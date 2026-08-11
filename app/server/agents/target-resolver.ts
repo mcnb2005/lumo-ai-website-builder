@@ -1,4 +1,8 @@
-import type { LandingData, LandingSectionType } from "../../landing-data";
+import type {
+  LandingData,
+  LandingImageAsset,
+  LandingSectionType,
+} from "../../landing-data";
 import type { LandingEditableField } from "../../landing-manifest";
 import type { BuilderPlan, BuilderTarget } from "./builder-plan";
 
@@ -139,16 +143,28 @@ export function listLandingTextTargets(
   ];
 }
 
+export function listLandingImageAssets(landing: LandingData) {
+  const assets: LandingImageAsset[] = [
+    ...(landing.heroImage
+      ? [{ url: landing.heroImage, alt: landing.brand }]
+      : []),
+    ...landing.gallery
+      .filter((item) => Boolean(item.url))
+      .map((item) => ({ url: item.url, alt: item.alt })),
+    ...landing.portfolio
+      .filter((item) => Boolean(item.imageUrl))
+      .map((item) => ({ url: item.imageUrl, alt: item.title })),
+  ];
+  const seen = new Set<string>();
+  return assets.filter((asset) => {
+    if (seen.has(asset.url)) return false;
+    seen.add(asset.url);
+    return true;
+  });
+}
+
 export function listLandingAssetUrls(landing: LandingData) {
-  return Array.from(
-    new Set(
-      [
-        landing.heroImage,
-        ...landing.gallery.map((item) => item.url),
-        ...landing.portfolio.map((item) => item.imageUrl),
-      ].filter(Boolean)
-    )
-  );
+  return listLandingImageAssets(landing).map((asset) => asset.url);
 }
 
 function normalizeLookup(value: string) {

@@ -306,7 +306,8 @@ export function validateLandingData(
     value.heroImagePosition !== "top" &&
     value.heroImagePosition !== "bottom" &&
     value.heroImagePosition !== "left" &&
-    value.heroImagePosition !== "right"
+    value.heroImagePosition !== "right" &&
+    !/^(\d+(\.\d+)?)% (\d+(\.\d+)?)%$/.test(value.heroImagePosition as string)
   ) {
     errors.push("heroImagePosition không hợp lệ.");
   }
@@ -540,7 +541,8 @@ export function validateLandingData(
         item.imagePosition !== "top" &&
         item.imagePosition !== "bottom" &&
         item.imagePosition !== "left" &&
-        item.imagePosition !== "right"
+        item.imagePosition !== "right" &&
+        !/^(\d+(\.\d+)?)% (\d+(\.\d+)?)%$/.test(item.imagePosition as string)
       ) {
         errors.push(`${key}[${index}].imagePosition không hợp lệ.`);
       }
@@ -1267,7 +1269,7 @@ function applyImageOperation(
             url,
             alt,
             caption: "",
-            imageFit: "smart" as const,
+            imageFit: "cover" as const,
             imagePosition: "center" as const,
           },
         ],
@@ -1292,7 +1294,7 @@ function applyImageOperation(
     portfolio: updateIndexedItem(current.portfolio, index, (item) => ({
       ...item,
       imageUrl: url,
-      imageFit: "smart" as const,
+      imageFit: "cover" as const,
       imagePosition: "center" as const,
     })),
   };

@@ -37,6 +37,7 @@ const sectionRules: Record<LandingSectionType, string[]> = {
   ],
   portfolio: [
     "Viết dự án hoặc trường hợp sử dụng liên quan trực tiếp tới brief.",
+    "Nếu dữ liệu hiện tại đã có ảnh do người dùng đặt, giữ nguyên số lượng item để nội dung tiếp tục khớp với ảnh.",
     "Không thay đổi imageUrl, imageFit hoặc imagePosition.",
   ],
   gallery: [
@@ -73,9 +74,11 @@ export async function runSectionContentAgent(input: {
   const sectionDraftSchema = describeSectionDraftSchema(input.section.type);
   const sectionDraftSystemPrompt = [
     `Bạn là Content Generator chỉ phụ trách section ${input.section.type}.`,
+    "Ngôn ngữ bắt buộc: xác định ngôn ngữ chính từ BusinessBrief.sourcePrompt và viết toàn bộ nội dung người dùng nhìn thấy bằng ngôn ngữ tương đồng. Không mặc định tiếng Việt chỉ vì system prompt dùng tiếng Việt; nếu người dùng chỉ định ngôn ngữ, phải làm đúng ngôn ngữ đó.",
     "Chỉ trả về một JSON object SectionDraft đúng schema được cung cấp.",
     "Không trả về operations, LandingData, JSONPath, markdown hoặc code fence.",
     "Chỉ tạo nội dung; không quyết định template, màu, thứ tự, trạng thái ẩn/hiện hoặc URL ảnh.",
+    "Các ô ảnh trong Hero, Gallery và Portfolio có thể để trống để người dùng tự kéo-thả. Giữ nguyên mọi URL ảnh đang có và tuyệt đối không tạo, sửa, suy đoán hoặc tự gán URL ảnh.",
     `Schema bắt buộc: ${sectionDraftSchema}`,
     ...sectionRules[input.section.type],
   ].join(" ");
@@ -97,6 +100,7 @@ export async function runSectionContentAgent(input: {
       temperature: 0.35,
       systemPrompt: sectionDraftSystemPrompt,
       userPrompt: [
+        `Prompt gốc của người dùng, dùng làm chuẩn ngôn ngữ:\n${input.brief.sourcePrompt}`,
         `BusinessBrief:\n${JSON.stringify(input.brief)}`,
         `LandingBlueprintSection:\n${JSON.stringify(input.section)}`,
         `SectionDraft schema:\n${sectionDraftSchema}`,

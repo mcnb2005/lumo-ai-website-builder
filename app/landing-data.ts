@@ -27,12 +27,8 @@ export type LandingImageAsset = {
 };
 
 export type LandingImageFit = "cover" | "contain" | "smart";
-export type LandingImagePosition =
-  | "center"
-  | "top"
-  | "bottom"
-  | "left"
-  | "right";
+export type LandingImagePosition = string; // "center" | "top" | "bottom" | "left" | "right" | "X% Y%"
+
 
 export type LandingImagePresentation = {
   imageFit?: LandingImageFit;
@@ -277,7 +273,7 @@ export const defaultLanding: LandingData = {
       category: "Sản phẩm số",
       description: "Trải nghiệm học đơn giản, thân thiện và tập trung vào kết quả.",
       imageUrl: "",
-      imageFit: "smart",
+      imageFit: "cover",
       imagePosition: "center",
     },
     {
@@ -285,7 +281,7 @@ export const defaultLanding: LandingData = {
       category: "Trải nghiệm",
       description: "Kết nối câu chuyện thương hiệu giữa trực tuyến và cửa hàng.",
       imageUrl: "",
-      imageFit: "smart",
+      imageFit: "cover",
       imagePosition: "center",
     },
   ],

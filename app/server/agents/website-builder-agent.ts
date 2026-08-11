@@ -1,5 +1,6 @@
 import type {
   LandingData,
+  LandingImageAsset,
   LandingSectionType,
 } from "../../landing-data";
 import {
@@ -52,6 +53,7 @@ type WebsiteBuilderAgentInput = {
     role: "user" | "assistant";
     content: string;
   }>;
+  availableAssets?: LandingImageAsset[];
   providerUrl: string;
   modelName: string;
   apiKey?: string;
@@ -125,12 +127,22 @@ export async function runWebsiteBuilderAgent(
     message: "Đang phân tích yêu cầu và phạm vi cần thay đổi…",
   });
   const currentManifest = buildLandingManifest(input.current);
+  const projectAssets = Array.from(
+    new Map(
+      (input.availableAssets || [])
+        .filter((asset) => asset.url.trim())
+        .map((asset) => [asset.url.trim(), { ...asset, url: asset.url.trim() }])
+    ).values()
+  );
+  const availableAssets = projectAssets.length
+    ? projectAssets.map((asset) => asset.url)
+    : listLandingAssetUrls(input.current);
   let intent = input.apiKey
     ? await runPlanningAgent({
         prompt: input.prompt,
         manifest: currentManifest,
         textTargets: listLandingTextTargets(input.current),
-        availableAssets: listLandingAssetUrls(input.current),
+        availableAssets,
         selectedSection: input.selectedSection,
         history: input.history,
         providerUrl: input.providerUrl,

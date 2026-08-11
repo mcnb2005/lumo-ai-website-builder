@@ -83,6 +83,13 @@ export type BuilderPlan = {
   source: "ai" | "demo";
 };
 
+export const builderPlanSystemPromptRules = [
+  "Ngôn ngữ bắt buộc: các trường free-text summary, businessType, audience, primaryGoal, tone và clarificationQuestion phải dùng cùng ngôn ngữ chính với yêu cầu mới nhất của người dùng. Không mặc định tiếng Việt chỉ vì system prompt viết bằng tiếng Việt; nếu người dùng chỉ định ngôn ngữ, phải làm đúng ngôn ngữ đó.",
+  "Giữ nguyên tên key, mode, action, pagePurpose, section id, field, variant và URL theo schema; không dịch các giá trị enum này.",
+  "availableAssets là thư viện ảnh người dùng đã tải lên. Khi mode=create, không tự chọn, gán hoặc phân bổ bất kỳ ảnh nào từ availableAssets; mọi ô ảnh phải để trống để người dùng tự kéo-thả sau khi trang được tạo.",
+  "Chỉ dùng action=assign_image khi người dùng yêu cầu gán một ảnh cụ thể trong chế độ chỉnh sửa. Không tự tạo, sửa hoặc suy đoán URL ảnh.",
+] as const;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }

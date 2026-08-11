@@ -160,6 +160,33 @@ test("compiler preserves project image fields instead of accepting AI image URLs
     imageFit: "smart",
     imagePosition: "center",
   });
+
+  assert.throws(
+    () =>
+      parseSectionDraftEnvelope(
+        {
+          draft: {
+            eyebrow: "Projects",
+            headline: "Selected work",
+            items: [
+              {
+                title: "First",
+                category: "Brand",
+                description: "First project",
+              },
+              {
+                title: "Second",
+                category: "Product",
+                description: "Second project",
+              },
+            ],
+          },
+        },
+        "portfolio",
+        landingWithPortfolio
+      ),
+    /portfolio.*giữ nguyên số lượng ảnh hiện có/
+  );
 });
 
 test("all list section drafts compile their items to array replace operations", async () => {

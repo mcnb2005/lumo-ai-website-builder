@@ -166,19 +166,6 @@ export function evaluateLandingQuality(
       severity: "error",
     });
   }
-  if (
-    landing.design?.sectionVariants.hero === "image-background" &&
-    !landing.heroImage
-  ) {
-    visualSafety -= 15;
-    issues.push({
-      code: "empty-image-hero",
-      message: "Hero nền ảnh chưa có ảnh và cần chuyển sang bố cục centered.",
-      section: "hero",
-      severity: "warning",
-    });
-  }
-
   businessRelevance = clampScore(businessRelevance);
   contentCompleteness = clampScore(contentCompleteness);
   conversionClarity = clampScore(conversionClarity);

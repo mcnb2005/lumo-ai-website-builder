@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import {
   ensureDatabase,
   getAssetsBucket,
@@ -11,6 +11,7 @@ import {
   defaultLanding,
   landingSectionTypes,
   type LandingData,
+  type LandingImageAsset,
   type LandingSectionType,
 } from "../../landing-data";
 import { getCurrentDatabaseUser } from "../../server-user";
@@ -75,11 +76,29 @@ async function loadReferenceImageDataUrl(userId: string, assetId: string) {
   return `data:${asset.contentType};base64,${toBase64(data)}`;
 }
 
+async function listProjectAssets(
+  userId: string,
+  projectId: string
+): Promise<LandingImageAsset[]> {
+  await ensureDatabase();
+  const rows = await getDb()
+    .select({ id: assets.id, filename: assets.filename })
+    .from(assets)
+    .where(and(eq(assets.projectId, projectId), eq(assets.ownerId, userId)))
+    .orderBy(desc(assets.createdAt));
+  return rows.map((asset) => ({
+    id: asset.id,
+    url: `/api/assets/${asset.id}`,
+    alt: asset.filename.replace(/\.[^.]+$/, ""),
+  }));
+}
+
 function referencePrompt(prompt: string, analysis: string) {
   return [
     "Tạo hoặc cập nhật landing page dựa trên brief ảnh tham chiếu bên dưới.",
     "Chỉ lấy cảm hứng từ bố cục và phong cách; không sao chép logo, nội dung hay tài sản thương hiệu trong ảnh.",
-    prompt,
+    "Ngôn ngữ của toàn bộ nội dung đầu ra phải theo yêu cầu gốc của người dùng, không theo ngôn ngữ của phần hướng dẫn hoặc brief ảnh.",
+    `Yêu cầu gốc của người dùng:\n${prompt}`,
     `Brief anh tham chieu:\n${analysis}`,
   ]
     .filter(Boolean)
@@ -149,6 +168,7 @@ export async function POST(request: Request) {
 
     const payload = (await request.json()) as {
       prompt?: string;
+      projectId?: string;
       referenceAssetId?: string;
       current?: LandingData;
       selectedSection?: LandingSectionType | null;
@@ -159,6 +179,7 @@ export async function POST(request: Request) {
       resume?: PipelineResumeState;
     };
     const prompt = payload.prompt?.trim();
+    const projectId = payload.projectId?.trim();
     const referenceAssetId = payload.referenceAssetId?.trim();
     const current = isLandingData(payload.current)
       ? payload.current
@@ -247,6 +268,9 @@ export async function POST(request: Request) {
     const agentInput = {
       prompt: agentPrompt,
       current,
+      availableAssets: projectId
+        ? await listProjectAssets(user.id, projectId)
+        : [],
       selectedSection,
       history,
       providerUrl,
