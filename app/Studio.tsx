@@ -2,6 +2,7 @@
 
 import {
   FormEvent,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -67,6 +68,13 @@ type ProjectSummary = {
   updatedAt: string;
   publishedAt: string | null;
 };
+type ProjectSaveSnapshot = {
+  id: string;
+  slug: string;
+  landing: LandingData;
+  messages: ChatMessage[];
+  isPublished: boolean;
+};
 const GUEST_DRAFT_KEY = "lumo-guest-draft-v2";
 const SIGN_IN_URL = "/api/auth/google/start?returnTo=%2F";
 const SIGN_OUT_URL = "/api/auth/logout?returnTo=%2F";
@@ -76,6 +84,7 @@ const IMAGE_MIME_EXTENSIONS: Record<string, string> = {
   "image/webp": "webp",
   "image/gif": "gif",
 };
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024;
 
 function supportedImageFiles(files: Iterable<File>) {
   return Array.from(files).filter((file) => file.type in IMAGE_MIME_EXTENSIONS);
@@ -229,6 +238,12 @@ export function Studio() {
   >("create");
   const [editorReady, setEditorReady] = useState(false);
   const saveEnabled = useRef(false);
+  const persistedProjectIdRef = useRef<string | null>(null);
+  const projectSaveRequestRef = useRef<{
+    projectId: string;
+    promise: Promise<void>;
+  } | null>(null);
+  const activeProjectIdRef = useRef(projectId);
   const conversationEnd = useRef<HTMLDivElement>(null);
   const previewScroll = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -240,6 +255,10 @@ export function Studio() {
   useEffect(() => {
     setEditorReady(true);
   }, []);
+
+  useEffect(() => {
+    activeProjectIdRef.current = projectId;
+  }, [projectId]);
 
   useEffect(() => {
     if (window.location.hash) {
@@ -295,10 +314,8 @@ export function Studio() {
       } else {
         restoreGuestOrCreate(false);
       }
+      saveEnabled.current = true;
       setAuthReady(true);
-      window.setTimeout(() => {
-        saveEnabled.current = true;
-      }, 0);
     }
 
     function restoreGuestOrCreate(isSignedIn: boolean) {
@@ -338,6 +355,7 @@ export function Studio() {
 
   async function loadProject(id: string) {
     saveEnabled.current = false;
+    persistedProjectIdRef.current = null;
     const response = await fetch(`/api/projects?id=${encodeURIComponent(id)}`);
     const result = (await response.json()) as {
       project?: {
@@ -352,6 +370,7 @@ export function Studio() {
     if (!response.ok || !result.project) {
       throw new Error(result.error || "Không thể mở dự án.");
     }
+    persistedProjectIdRef.current = result.project.id;
     setProjectId(result.project.id);
     setProjectSlug(result.project.slug);
     setLanding(normalizeLandingData(result.project.data));
@@ -377,6 +396,75 @@ export function Studio() {
     }, 0);
   }
 
+  const persistProject = useCallback(async (snapshot: ProjectSaveSnapshot) => {
+    if (!user) return;
+
+    const activeRequest = projectSaveRequestRef.current;
+    if (activeRequest?.projectId === snapshot.id) {
+      await activeRequest.promise;
+      return;
+    }
+
+    setSaveState("saving");
+    const request = (async () => {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: snapshot.id,
+          name: snapshot.landing.brand,
+          slug: snapshot.slug,
+          data: snapshot.landing,
+          messages: snapshot.messages,
+          status: snapshot.isPublished ? "published" : "draft",
+        }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        updatedAt?: string;
+      };
+      if (!response.ok) {
+        throw new Error(result.error || "Không thể lưu dự án.");
+      }
+      if (activeProjectIdRef.current !== snapshot.id) return;
+
+      persistedProjectIdRef.current = snapshot.id;
+      setSaveState("saved");
+      setProjects((current) => {
+        const existing = current.find((project) => project.id === snapshot.id);
+        const summary: ProjectSummary = {
+          id: snapshot.id,
+          name: snapshot.landing.brand,
+          slug: snapshot.slug,
+          status: snapshot.isPublished ? "published" : "draft",
+          updatedAt: result.updatedAt || new Date().toISOString(),
+          publishedAt: existing?.publishedAt || null,
+        };
+        return existing
+          ? current.map((project) =>
+              project.id === snapshot.id ? summary : project
+            )
+          : [summary, ...current];
+      });
+      window.localStorage.removeItem(GUEST_DRAFT_KEY);
+    })();
+
+    projectSaveRequestRef.current = {
+      projectId: snapshot.id,
+      promise: request,
+    };
+    try {
+      await request;
+    } catch (error) {
+      if (activeProjectIdRef.current === snapshot.id) setSaveState("error");
+      throw error;
+    } finally {
+      if (projectSaveRequestRef.current?.promise === request) {
+        projectSaveRequestRef.current = null;
+      }
+    }
+  }, [user]);
+
   useEffect(() => {
     if (!authReady || !projectId || !saveEnabled.current) return;
 
@@ -394,45 +482,19 @@ export function Studio() {
       return;
     }
 
+    const snapshot: ProjectSaveSnapshot = {
+      id: projectId,
+      slug: projectSlug,
+      landing,
+      messages,
+      isPublished,
+    };
     setSaveState("saving");
     const timer = window.setTimeout(async () => {
       try {
-        const response = await fetch("/api/projects", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id: projectId,
-            name: landing.brand,
-            slug: projectSlug,
-            data: landing,
-            messages,
-            status: isPublished ? "published" : "draft",
-          }),
-        });
-        if (!response.ok) {
-          const result = (await response.json()) as { error?: string };
-          throw new Error(result.error || "Không thể lưu dự án.");
-        }
-        setSaveState("saved");
-        setProjects((current) => {
-          const existing = current.find((project) => project.id === projectId);
-          const summary: ProjectSummary = {
-            id: projectId,
-            name: landing.brand,
-            slug: projectSlug,
-            status: isPublished ? "published" : "draft",
-            updatedAt: new Date().toISOString(),
-            publishedAt: existing?.publishedAt || null,
-          };
-          return existing
-            ? current.map((project) =>
-                project.id === projectId ? summary : project
-              )
-            : [summary, ...current];
-        });
-        window.localStorage.removeItem(GUEST_DRAFT_KEY);
+        await persistProject(snapshot);
       } catch {
-        setSaveState("error");
+        // persistProject already exposes the failed state for the active project.
       }
     }, 800);
     return () => window.clearTimeout(timer);
@@ -443,6 +505,7 @@ export function Studio() {
     messages,
     projectId,
     projectSlug,
+    persistProject,
     user,
   ]);
 
@@ -492,6 +555,29 @@ export function Studio() {
     if (isGenerating) return;
     updateLanding((current) => applyLandingTextEdit(current, edit));
     setNotice("Đã cập nhật nội dung trực tiếp trên bản xem trước.");
+  }
+
+  function handleImagePositionChange(target: string, position: string) {
+    if (isGenerating) return;
+    updateLanding((current) => {
+      const next = { ...current };
+      if (target === "hero") {
+        next.heroImagePosition = position;
+      } else if (target.startsWith("portfolio:")) {
+        const index = parseInt(target.split(":")[1] || "0", 10);
+        if (next.portfolio && next.portfolio[index]) {
+          next.portfolio = [...next.portfolio];
+          next.portfolio[index] = { ...next.portfolio[index], imagePosition: position };
+        }
+      } else if (target.startsWith("gallery:")) {
+        const index = parseInt(target.split(":")[1] || "0", 10);
+        if (next.gallery && next.gallery[index]) {
+          next.gallery = [...next.gallery];
+          next.gallery[index] = { ...next.gallery[index], imagePosition: position };
+        }
+      }
+      return next;
+    });
   }
 
   function setSectionColor(
@@ -573,10 +659,12 @@ export function Studio() {
     projectNotice?: string
   ) {
     saveEnabled.current = false;
+    persistedProjectIdRef.current = null;
     const identity = makeProjectIdentity();
+    const normalizedLanding = normalizeLandingData(nextLanding);
     setProjectId(identity.id);
     setProjectSlug(identity.slug);
-    setLanding(normalizeLandingData(nextLanding));
+    setLanding(normalizedLanding);
     setMessages(starterMessages);
     setIsPublished(false);
     setPublicUrl("");
@@ -590,6 +678,7 @@ export function Studio() {
     setHistory([]);
     setFuture([]);
     setVersion(1);
+    setSaveState(user ? "saving" : "guest");
     if (projectNotice) {
       setNotice(projectNotice);
     } else {
@@ -601,7 +690,15 @@ export function Studio() {
     }
     window.setTimeout(() => {
       saveEnabled.current = true;
-      if (!user) setSaveState("guest");
+      if (user) {
+        void persistProject({
+          id: identity.id,
+          slug: identity.slug,
+          landing: normalizedLanding,
+          messages: starterMessages,
+          isPublished: false,
+        }).catch(() => undefined);
+      }
     }, 0);
   }
 
@@ -751,6 +848,7 @@ export function Studio() {
         },
         body: JSON.stringify({
           prompt,
+          projectId,
           referenceAssetId: imageReference?.id,
           current: sourceLanding,
           selectedSection,
@@ -891,13 +989,26 @@ export function Studio() {
     let targetSection: LandingSectionType = "hero";
     let successMessage = "Đã đặt ảnh vào phần mở đầu.";
     const [primaryAsset, ...remainingAssets] = assets;
-    const remainingGalleryItems = remainingAssets.map((asset) => ({
-      url: asset.url,
-      alt: asset.alt,
-      caption: "",
-      imageFit: "smart" as const,
-      imagePosition: "center" as const,
-    }));
+
+    function galleryItemsForAssets(
+      gallery: LandingData["gallery"],
+      candidates: LandingImageAsset[]
+    ) {
+      const urls = new Set(gallery.map((item) => item.url));
+      return candidates.flatMap((asset) => {
+        if (urls.has(asset.url)) return [];
+        urls.add(asset.url);
+        return [
+          {
+            url: asset.url,
+            alt: asset.alt,
+            caption: "",
+            imageFit: "cover" as const,
+            imagePosition: "center" as const,
+          },
+        ];
+      });
+    }
 
     updateLanding((current) => {
       if (target === "hero") {
@@ -911,7 +1022,7 @@ export function Studio() {
         const next = {
           ...current,
           heroImage: primaryAsset.url,
-          heroImageFit: "smart" as const,
+          heroImageFit: "cover" as const,
           heroImagePosition: "center" as const,
           design: current.design
             ? {
@@ -923,6 +1034,10 @@ export function Studio() {
               }
             : current.design,
         };
+        const remainingGalleryItems = galleryItemsForAssets(
+          current.gallery,
+          remainingAssets
+        );
         if (!remainingGalleryItems.length) return next;
         targetSection = "gallery";
         successMessage = `Đã đặt 1 ảnh vào Hero và thêm ${remainingGalleryItems.length} ảnh vào thư viện.`;
@@ -934,20 +1049,16 @@ export function Studio() {
 
       if (target === "gallery:add") {
         targetSection = "gallery";
-        successMessage = `Đã thêm ${assets.length} ảnh vào thư viện hình ảnh.`;
         const visibleLanding = ensureSectionVisible(current, "gallery");
+        const galleryItems = galleryItemsForAssets(current.gallery, assets);
+        if (!galleryItems.length) {
+          successMessage = "Ảnh này đã có trong thư viện hình ảnh.";
+          return visibleLanding;
+        }
+        successMessage = `Đã thêm ${galleryItems.length} ảnh vào thư viện hình ảnh.`;
         return {
           ...visibleLanding,
-          gallery: [
-            ...current.gallery,
-            ...assets.map((asset) => ({
-              url: asset.url,
-              alt: asset.alt,
-              caption: "",
-              imageFit: "smart" as const,
-              imagePosition: "center" as const,
-            })),
-          ],
+          gallery: [...current.gallery, ...galleryItems],
         };
       }
 
@@ -956,20 +1067,22 @@ export function Studio() {
         targetSection = "gallery";
         successMessage = `Đã thay ảnh thư viện số ${imageIndex + 1}.`;
         const visibleLanding = ensureSectionVisible(current, "gallery");
+        const gallery = current.gallery.map((image, index) =>
+          index === imageIndex
+            ? {
+                ...image,
+                url: primaryAsset.url,
+                alt: primaryAsset.alt,
+              }
+            : image
+        );
+        const remainingGalleryItems = galleryItemsForAssets(
+          gallery,
+          remainingAssets
+        );
         return {
           ...visibleLanding,
-          gallery: [
-            ...current.gallery.map((image, index) =>
-              index === imageIndex
-                ? {
-                    ...image,
-                    url: primaryAsset.url,
-                    alt: primaryAsset.alt,
-                  }
-                : image
-            ),
-            ...remainingGalleryItems,
-          ],
+          gallery: [...gallery, ...remainingGalleryItems],
         };
       }
 
@@ -984,12 +1097,16 @@ export function Studio() {
             ? {
                 ...item,
                 imageUrl: primaryAsset.url,
-                imageFit: "smart" as const,
+                imageFit: "cover" as const,
                 imagePosition: "center" as const,
               }
-            : item
+          : item
         ),
       };
+      const remainingGalleryItems = galleryItemsForAssets(
+        current.gallery,
+        remainingAssets
+      );
       if (!remainingGalleryItems.length) return next;
       successMessage += ` ${remainingGalleryItems.length} ảnh còn lại đã được thêm vào thư viện.`;
       targetSection = "gallery";
@@ -1080,6 +1197,11 @@ export function Studio() {
     target?: LandingImageTarget
   ) {
     if (!files.length) return;
+    const oversizedFile = files.find((file) => file.size > MAX_IMAGE_SIZE);
+    if (oversizedFile) {
+      setNotice(`Ảnh ${oversizedFile.name} vượt quá giới hạn 5 MB.`);
+      return;
+    }
     if (isUploading) {
       setNotice("Ảnh đang được tải lên. Vui lòng chờ một chút.");
       return;
@@ -1091,8 +1213,17 @@ export function Studio() {
     setIsUploading(true);
     setNotice(`Đang tải ${files.length} ảnh lên…`);
     try {
-      if (saveState === "saving") {
-        await new Promise((resolve) => window.setTimeout(resolve, 900));
+      if (!projectId || !projectSlug) {
+        throw new Error("Dự án chưa sẵn sàng để lưu ảnh.");
+      }
+      if (persistedProjectIdRef.current !== projectId) {
+        await persistProject({
+          id: projectId,
+          slug: projectSlug,
+          landing,
+          messages,
+          isPublished,
+        });
       }
 
       const newAssets: LandingImageAsset[] = [];
@@ -1104,12 +1235,22 @@ export function Studio() {
           method: "POST",
           body: form,
         });
-        const result = (await response.json()) as {
+        const responseText = await response.text();
+        let result: {
           asset?: LandingImageAsset;
           error?: string;
         };
+        try {
+          result = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          result = {};
+        }
         if (!response.ok || !result.asset) {
-          throw new Error(result.error || `Không thể tải ảnh ${file.name}.`);
+          const fallbackMessage =
+            response.status === 413
+              ? `Ảnh ${file.name} vượt quá giới hạn tải lên 5 MB.`
+              : `Không thể tải ảnh ${file.name}.`;
+          throw new Error(result.error || fallbackMessage);
         }
         newAssets.push(result.asset);
       }
@@ -1389,20 +1530,10 @@ export function Studio() {
                 void uploadImages(images);
               }}
             >
-              <div className="image-upload-row">
-                <button
-                  type="button"
-                  onClick={() => fileInput.current?.click()}
-                  disabled={isUploading}
-                >
-                  {isUploading ? "Đang tải ảnh…" : "＋ Chọn ảnh và tải lên"}
-                </button>
-                <span>JPG, PNG, WebP, GIF · tối đa 5 MB</span>
-              </div>
               <div className="asset-library">
                 <div className="asset-library-heading">
                   <strong>Ảnh đã tải</strong>
-                  <span>Ctrl + V hoặc thả file vào đây</span>
+                  <span>Kéo thả để tải lên hoặc click [+]</span>
                 </div>
                 {uploadedAssets.length ? (
                   <div className="asset-library-list">
@@ -1445,16 +1576,33 @@ export function Studio() {
                         </button>
                       </div>
                     ))}
+                    <button
+                      type="button"
+                      className="asset-library-add-item"
+                      onClick={() => fileInput.current?.click()}
+                      aria-label="Tải ảnh lên"
+                      title="Tải ảnh lên"
+                      disabled={isUploading}
+                    >
+                      {isUploading ? "…" : "+"}
+                    </button>
                   </div>
                 ) : (
-                  <div className="asset-library-empty">
+                  <button
+                    type="button"
+                    className="asset-library-empty"
+                    onClick={() => fileInput.current?.click()}
+                    disabled={isUploading}
+                  >
                     <strong>
-                      {isAssetDragActive
-                        ? "Thả ảnh để lưu vào thư viện"
-                        : "Dán hoặc kéo ảnh vào đây"}
+                      {isUploading
+                        ? "Đang tải ảnh…"
+                        : isAssetDragActive
+                          ? "Thả ảnh để lưu vào thư viện"
+                          : "+ Click hoặc kéo ảnh vào đây"}
                     </strong>
-                    <span>Sau đó kéo ảnh từ thư viện đến đúng vị trí trên trang.</span>
-                  </div>
+                    <span>JPG, PNG, WebP, GIF · tối đa 5 MB</span>
+                  </button>
                 )}
               </div>
             </div>
@@ -1588,6 +1736,7 @@ export function Studio() {
                   }}
                   onRemoveImage={removePlacedImage}
                   onEditText={editLandingText}
+                  onPositionChange={handleImagePositionChange}
                   isBusy={isGenerating}
                 />
               </div>

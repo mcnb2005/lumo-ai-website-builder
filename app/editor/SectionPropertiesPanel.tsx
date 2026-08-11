@@ -84,6 +84,9 @@ function ImagePresentationFields({
               })
             }
           >
+            {position && !["center", "top", "bottom", "left", "right"].includes(position) && (
+              <option value={position}>Tùy chỉnh (Kéo thả)</option>
+            )}
             <option value="center">Ở giữa</option>
             <option value="top">Phía trên</option>
             <option value="bottom">Phía dưới</option>

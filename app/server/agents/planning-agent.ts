@@ -6,6 +6,7 @@ import {
   type AiChatProvider,
 } from "../tools/ai-chat-tool";
 import {
+  builderPlanSystemPromptRules,
   builderActions,
   parseBuilderPlan,
   pagePurposes,
@@ -46,6 +47,7 @@ const plannerInstructions = [
   "Nếu không thể xác định người dùng muốn đổi nền toàn trang, nền section, chữ, màu nhấn hay đường viền thì chọn clarify và hỏi lại; không trả set_palette thiếu paletteToken.",
   "Nếu cùng một chữ xuất hiện ở nhiều text target mà người dùng không chỉ rõ vị trí, hãy hỏi lại thay vì tự chọn.",
   "Section đang chọn chỉ là tín hiệu hỗ trợ. Yêu cầu mới nhất luôn được ưu tiên.",
+  ...builderPlanSystemPromptRules,
   `pagePurpose chỉ được là: ${pagePurposes.join(", ")}.`,
   "confidence nằm trong khoảng 0 đến 1. Nếu confidence dưới 0.6, chọn clarify.",
   `Khi tạo trang mới, áp dụng skill ${landingUiDesignSkill.name}: ${landingUiDesignSkill.rules.join(" ")}`,

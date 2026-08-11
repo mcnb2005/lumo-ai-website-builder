@@ -8,6 +8,8 @@ import {
   type MouseEvent,
   type ReactNode,
   useState,
+  useRef,
+  useEffect,
 } from "react";
 import {
   DndContext,
@@ -61,6 +63,7 @@ type LandingCanvasProps = {
   ) => void;
   onRemoveImage?: (target: LandingImageTarget) => void;
   onEditText?: (edit: LandingTextEdit) => void;
+  onPositionChange?: (target: LandingImageTarget, position: string) => void;
   isBusy?: boolean;
 };
 
@@ -73,6 +76,18 @@ type ImageDropZoneProps = {
   onDropImage?: LandingCanvasProps["onDropImage"];
   onRemoveImage?: LandingCanvasProps["onRemoveImage"];
 };
+
+function readLandingImageDrop(dataTransfer: DataTransfer) {
+  const files = Array.from(dataTransfer.files).filter((file) =>
+    file.type.startsWith("image/")
+  );
+  if (files.length) return { files };
+
+  return parseLandingImageDragPayload(
+    dataTransfer.getData(LUMO_ASSET_DRAG_TYPE),
+    dataTransfer.getData("text/plain")
+  );
+}
 
 function ImageDropZone({
   target,
@@ -90,18 +105,7 @@ function ImageDropZone({
     event.stopPropagation();
     setIsDragActive(false);
 
-    const files = Array.from(event.dataTransfer.files).filter((file) =>
-      file.type.startsWith("image/")
-    );
-    if (files.length) {
-      onDropImage?.(target, { files });
-      return;
-    }
-
-    const payload = parseLandingImageDragPayload(
-      event.dataTransfer.getData(LUMO_ASSET_DRAG_TYPE),
-      event.dataTransfer.getData("text/plain")
-    );
+    const payload = readLandingImageDrop(event.dataTransfer);
     if (payload) onDropImage?.(target, payload);
   }
 
@@ -227,9 +231,48 @@ function HeroImageBackgroundFrame({
   return (
     <section className={heroFrameClass("image-background", hasImage)}>
       {items[2] ? <div className="hero-background-media">{items[2]}</div> : null}
-      {items[0]}
       <div className="hero-background-copy">{items[1]}</div>
     </section>
+  );
+}
+
+function HeroEditorDropSurface({
+  children,
+  onDropImage,
+}: {
+  children: ReactNode;
+  onDropImage?: LandingCanvasProps["onDropImage"];
+}) {
+  const [isDragActive, setIsDragActive] = useState(false);
+
+  return (
+    <div
+      className={`hero-editor-drop-surface${
+        isDragActive ? " is-drag-active" : ""
+      }`}
+      onDragEnter={(event) => {
+        event.preventDefault();
+        setIsDragActive(true);
+      }}
+      onDragOver={(event) => {
+        event.preventDefault();
+        event.dataTransfer.dropEffect = "copy";
+        setIsDragActive(true);
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+          setIsDragActive(false);
+        }
+      }}
+      onDrop={(event) => {
+        event.preventDefault();
+        setIsDragActive(false);
+        const payload = readLandingImageDrop(event.dataTransfer);
+        if (payload) onDropImage?.("hero", payload);
+      }}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -266,7 +309,12 @@ function HeroVariantFrame({
       : "split";
   const resolved = hasImage ? preferred : "centered";
   const Frame = heroVariantFrames[resolved];
-  return <Frame items={Children.toArray(children)} hasImage={hasImage} />;
+  const items = Children.toArray(children);
+  const frameItems =
+    !hasImage && preferred === "image-background"
+      ? [null, items[1], items[2]]
+      : items;
+  return <Frame items={frameItems} hasImage={hasImage} />;
 }
 
 function fieldName(label: string, index: number) {
@@ -302,6 +350,8 @@ function PresentedImage({
   position,
   fallbackFit = "cover",
   loading,
+  isEditable = false,
+  onPositionChange,
 }: {
   src: string;
   alt: string;
@@ -309,7 +359,90 @@ function PresentedImage({
   position: LandingImagePosition | undefined;
   fallbackFit?: LandingImageFit;
   loading?: "eager" | "lazy";
+  isEditable?: boolean;
+  onPositionChange?: (position: string) => void;
 }) {
+  const [localPos, setLocalPos] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const lastPos = useRef({ x: 0, y: 0 });
+  const currentPercent = useRef({ x: 50, y: 50 });
+
+  useEffect(() => {
+    setLocalPos(null);
+  }, [position]);
+
+  const handlePointerDown = (e: React.PointerEvent<HTMLImageElement>) => {
+    if (!isEditable) return;
+    const resolvedFit = fit || fallbackFit;
+    if (resolvedFit !== "cover") return;
+
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setIsDragging(true);
+    lastPos.current = { x: e.clientX, y: e.clientY };
+
+    let px = 50, py = 50;
+    const posStr = localPos || position || "center";
+    if (posStr === "center") { px = 50; py = 50; }
+    else if (posStr === "top") { px = 50; py = 0; }
+    else if (posStr === "bottom") { px = 50; py = 100; }
+    else if (posStr === "left") { px = 0; py = 50; }
+    else if (posStr === "right") { px = 100; py = 50; }
+    else {
+      const match = posStr.match(/^(\d+(\.\d+)?)% (\d+(\.\d+)?)%$/);
+      if (match) {
+        px = parseFloat(match[1]);
+        py = parseFloat(match[3]);
+      }
+    }
+    currentPercent.current = { x: px, y: py };
+  };
+
+  const handlePointerMove = (e: React.PointerEvent<HTMLImageElement>) => {
+    if (!isDragging) return;
+    const img = e.currentTarget;
+
+    const dw = img.clientWidth;
+    const dh = img.clientHeight;
+    const nw = img.naturalWidth;
+    const nh = img.naturalHeight;
+
+    if (!nw || !nh) return;
+
+    const scale = Math.max(dw / nw, dh / nh);
+    const sw = nw * scale;
+    const sh = nh * scale;
+
+    const dx_max = sw - dw;
+    const dy_max = sh - dh;
+
+    const dx = e.clientX - lastPos.current.x;
+    const dy = e.clientY - lastPos.current.y;
+    lastPos.current = { x: e.clientX, y: e.clientY };
+
+    let dPx = 0;
+    if (dx_max > 0) dPx = -(dx / dx_max) * 100;
+
+    let dPy = 0;
+    if (dy_max > 0) dPy = -(dy / dy_max) * 100;
+
+    let { x, y } = currentPercent.current;
+    x = Math.max(0, Math.min(100, x + dPx));
+    y = Math.max(0, Math.min(100, y + dPy));
+
+    currentPercent.current = { x, y };
+    setLocalPos(`${x.toFixed(2)}% ${y.toFixed(2)}%`);
+  };
+
+  const handlePointerUp = (e: React.PointerEvent<HTMLImageElement>) => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    e.currentTarget.releasePointerCapture(e.pointerId);
+    if (localPos && onPositionChange) {
+      onPositionChange(localPos);
+    }
+  };
+
   if (fit === "smart") {
     return (
       <span className="smart-image-frame">
@@ -333,13 +466,24 @@ function PresentedImage({
     );
   }
 
+  const resolvedFit = fit || fallbackFit;
+  const style = imagePresentationStyle(fit, localPos || position, fallbackFit);
+
   return (
     <img
       src={src}
       alt={alt}
       loading={loading}
       draggable={false}
-      style={imagePresentationStyle(fit, position, fallbackFit)}
+      style={{
+        ...style,
+        cursor: isEditable && resolvedFit === "cover" ? (isDragging ? "grabbing" : "grab") : undefined,
+        touchAction: isEditable && resolvedFit === "cover" ? "none" : undefined,
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
     />
   );
 }
@@ -357,6 +501,7 @@ export function LandingCanvas({
   onDropImage,
   onRemoveImage,
   onEditText,
+  onPositionChange,
   isBusy = false,
 }: LandingCanvasProps) {
   const [formState, setFormState] = useState<
@@ -515,13 +660,16 @@ export function LandingCanvas({
       switch (section) {
       case "hero":
         return (
-          <HeroVariantFrame
-            variant={data.design?.sectionVariants.hero}
-            hasImage={Boolean(data.heroImage)}
-            key={section}
+          <HeroEditorDropSurface
+            onDropImage={mode === "editor" ? onDropImage : undefined}
           >
-            <div className="hero-orbit" aria-hidden="true"><span /><span /><span /></div>
-            <div className="hero-copy">
+            <HeroVariantFrame
+              variant={data.design?.sectionVariants.hero}
+              hasImage={Boolean(data.heroImage)}
+              key={section}
+            >
+              <div className="hero-orbit" aria-hidden="true"><span /><span /><span /></div>
+              <div className="hero-copy">
               <p className="landing-eyebrow">
                 <span />
                 {editableText("hero", data.eyebrow, "Nhãn mở đầu", {
@@ -567,10 +715,10 @@ export function LandingCanvas({
                   })}
                 </p>
               </div>
-            </div>
-            {mode === "editor" ? (
-              <div className="hero-image-wrap">
-                <ImageDropZone
+              </div>
+              {mode === "editor" ? (
+                <div className="hero-image-wrap">
+                  <ImageDropZone
                   target="hero"
                   label={
                     data.heroImage
@@ -596,22 +744,27 @@ export function LandingCanvas({
                       fit={data.heroImageFit}
                       position={data.heroImagePosition}
                       fallbackFit="contain"
+                      isEditable={mode === "editor"}
+                      onPositionChange={(pos) => onPositionChange?.("hero", pos)}
                     />
                   ) : null}
-                </ImageDropZone>
-              </div>
-            ) : data.heroImage ? (
-              <div className="hero-image-wrap">
-                <PresentedImage
+                  </ImageDropZone>
+                </div>
+              ) : data.heroImage ? (
+                <div className="hero-image-wrap">
+                  <PresentedImage
                   src={data.heroImage}
                   alt={`Hình ảnh nổi bật của ${data.brand}`}
                   fit={data.heroImageFit}
                   position={data.heroImagePosition}
                   fallbackFit="contain"
-                />
-              </div>
-            ) : null}
-          </HeroVariantFrame>
+                  isEditable={false}
+                  onPositionChange={(pos) => onPositionChange?.("hero", pos)}
+                  />
+                </div>
+              ) : null}
+            </HeroVariantFrame>
+          </HeroEditorDropSurface>
         );
       case "stats":
         return (
@@ -813,6 +966,8 @@ export function LandingCanvas({
                           loading="lazy"
                           fit={item.imageFit}
                           position={item.imagePosition}
+                          isEditable={mode === "editor"}
+                          onPositionChange={(pos) => onPositionChange?.(`portfolio:${index}`, pos)}
                         />
                       ) : (
                         <div className="portfolio-placeholder" aria-hidden="true">
@@ -827,6 +982,8 @@ export function LandingCanvas({
                       loading="lazy"
                       fit={item.imageFit}
                       position={item.imagePosition}
+                      isEditable={false}
+                      onPositionChange={(pos) => onPositionChange?.(`portfolio:${index}`, pos)}
                     />
                   ) : (
                     <div className="portfolio-placeholder" aria-hidden="true">
@@ -900,6 +1057,8 @@ export function LandingCanvas({
                         loading="lazy"
                         fit={image.imageFit}
                         position={image.imagePosition}
+                        isEditable={mode === "editor"}
+                        onPositionChange={(pos) => onPositionChange?.(`gallery:${index}`, pos)}
                       />
                     </ImageDropZone>
                   ) : (
@@ -909,6 +1068,8 @@ export function LandingCanvas({
                       loading="lazy"
                       fit={image.imageFit}
                       position={image.imagePosition}
+                      isEditable={false}
+                      onPositionChange={(pos) => onPositionChange?.(`gallery:${index}`, pos)}
                     />
                   )}
                   {image.caption || mode === "editor" ? (

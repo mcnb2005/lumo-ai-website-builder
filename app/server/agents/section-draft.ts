@@ -219,12 +219,24 @@ function validateDraft(
       }
       return errors;
     }
-    case "portfolio":
-      return validateHeadingList(
+    case "portfolio": {
+      const errors = validateHeadingList(
         draft,
         ["title", "category", "description"],
         { min: 1, max: 12 }
       );
+      if (
+        isRecord(draft) &&
+        Array.isArray(draft.items) &&
+        current.portfolio?.some((item) => Boolean(item.imageUrl)) &&
+        draft.items.length !== current.portfolio.length
+      ) {
+        errors.push(
+          "draft.items của portfolio phải giữ nguyên số lượng ảnh hiện có."
+        );
+      }
+      return errors;
+    }
     case "gallery": {
       const errors = validateHeadingList(draft, ["alt", "caption"], {
         min: 0,

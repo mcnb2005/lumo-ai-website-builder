@@ -274,6 +274,28 @@ test("AI BuilderPlan resolves create, edit and clarification without keyword int
   assert.deepEqual(createPlan.targetSections, []);
   assert.equal(createPlan.pagePurpose, "sell_product");
 
+  const imageHeroInput = {
+    mode: "create",
+    action: "create_landing",
+    target: {},
+    summary: "Create an event landing page",
+    confidence: 0.98,
+    pagePurpose: "event",
+    businessType: "Conference",
+    audience: "Design leaders",
+    primaryGoal: "Register",
+    tone: "Confident",
+    recommendedSections: ["hero", "finalCta"],
+    sectionVariants: { hero: "image-background" },
+  };
+
+  const imageHeroPlan = parseBuilderPlan(
+    JSON.stringify(imageHeroInput),
+    manifest
+  );
+  assert.equal(imageHeroPlan.sectionVariants?.hero, "image-background");
+  assert.equal("heroImage" in imageHeroPlan, false);
+
   const editPlan = parseBuilderPlan(
     JSON.stringify({
       mode: "edit",
@@ -341,6 +363,90 @@ test("AI BuilderPlan resolves create, edit and clarification without keyword int
   assert.equal(clarifyPlan.mode, "clarify");
   assert.match(clarifyPlan.clarificationQuestion, /sửa nội dung/);
   assert.doesNotMatch(source, /isCreateRequest|isCreationCorrection/);
+});
+
+test("creation keeps uploaded assets manual and makes the whole Hero droppable", async () => {
+  const [
+    canvas,
+    planner,
+    builderPlan,
+    sectionContent,
+    creationPipeline,
+    websiteBuilder,
+    aiRoute,
+    studio,
+  ] = await Promise.all([
+    readFile(new URL("../app/components/LandingCanvas.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/server/agents/planning-agent.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/server/agents/builder-plan.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/server/agents/section-content-agent.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/landing-creation-pipeline.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/website-builder-agent.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(new URL("../app/api/ai/route.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/Studio.tsx", import.meta.url), "utf8"),
+  ]);
+
+  const imageBackgroundFrame = canvas.match(
+    /function HeroImageBackgroundFrame[\s\S]*?\n}\n/
+  )?.[0];
+  assert.ok(imageBackgroundFrame);
+  assert.doesNotMatch(imageBackgroundFrame, /items\[0\]/);
+  assert.match(canvas, /!hasImage && preferred === "image-background"/);
+  assert.match(canvas, /\[null, items\[1\], items\[2\]\]/);
+  assert.match(canvas, /function HeroEditorDropSurface/);
+  assert.match(canvas, /onDropImage\?\.\("hero", payload\)/);
+  assert.match(canvas, /target="hero"/);
+  assert.match(canvas, /target=\{`portfolio:\$\{index\}`\}/);
+  assert.match(canvas, /target="gallery:add"/);
+  assert.match(planner, /builderPlanSystemPromptRules/);
+  assert.match(planner, /input\.availableAssets/);
+  assert.doesNotMatch(planner, /"heroImage":/);
+  assert.match(builderPlan, /mode=create[\s\S]{0,220}availableAssets/);
+  assert.doesNotMatch(builderPlan, /heroImage\?: string/);
+  assert.doesNotMatch(builderPlan, /heroVariantRequiresImage/);
+  assert.match(sectionContent, /BusinessBrief\.sourcePrompt/);
+  assert.match(sectionContent, /Các ô ảnh trong Hero, Gallery và Portfolio có thể để trống/);
+  assert.doesNotMatch(sectionContent, /heroVariantRequiresImage/);
+  assert.doesNotMatch(creationPipeline, /assignProjectAssetsToLanding/);
+  assert.doesNotMatch(creationPipeline, /availableAssets/);
+  assert.doesNotMatch(websiteBuilder, /creationAssets/);
+  assert.match(aiRoute, /listProjectAssets/);
+  assert.match(studio, /function placeUploadedImages/);
+  assert.match(studio, /function galleryItemsForAssets/);
+  assert.match(studio, /Ảnh này đã có trong thư viện hình ảnh/);
+  assert.match(studio, /projectId,/);
+});
+
+test("new projects are persisted before the first asset upload", async () => {
+  const studio = await readFile(
+    new URL("../app/Studio.tsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(studio, /persistedProjectIdRef/);
+  assert.match(studio, /projectSaveRequestRef/);
+  assert.match(studio, /const persistProject = useCallback/);
+  assert.match(
+    studio,
+    /if \(persistedProjectIdRef\.current !== projectId\) \{\s*await persistProject/
+  );
+  assert.doesNotMatch(
+    studio,
+    /saveState === "saving"[\s\S]{0,120}setTimeout\(resolve, 900\)/
+  );
+  assert.match(
+    studio,
+    /setSaveState\(user \? "saving" : "guest"\)/
+  );
 });
 
 test("target resolver asks before ambiguous edits and simple executor handles hero actions", async () => {

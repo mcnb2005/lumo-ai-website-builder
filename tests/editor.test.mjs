@@ -69,11 +69,14 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(studio, /clipboardImageFiles/);
   assert.match(studio, /event\.dataTransfer\.files/);
   assert.match(studio, /asset-upload-zone/);
-  assert.match(studio, /Ctrl \+ V hoặc thả file vào đây/);
+  assert.match(studio, /\+ Click hoặc kéo ảnh vào đây/);
   assert.match(studio, /if \(target\) \{\s*placeUploadedImages\(newAssets, target\)/);
-  assert.match(studio, /Sau đó kéo ảnh từ thư viện đến đúng vị trí trên trang\./);
+  assert.match(studio, /Kéo từng ảnh vào đúng vị trí trên bản xem trước\./);
   assert.doesNotMatch(studio, /onClick=\{\(\) =>\s*placeUploadedImages/);
   assert.match(canvas, /function ImageDropZone/);
+  assert.match(canvas, /function HeroEditorDropSurface/);
+  assert.match(canvas, /onDropImage\?\.\("hero", payload\)/);
+  assert.match(canvas, /readLandingImageDrop/);
   assert.match(canvas, /onDropImage/);
   assert.match(canvas, /gallery:add/);
   assert.match(canvas, /onRemoveImage/);
@@ -151,6 +154,20 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(styles, /\.landing-hero\.variant-image-background/);
   assert.match(styles, /\.landing-hero:not\(\.has-image\)/);
   assert.match(styles, /min-height: 138px/);
+  assert.match(styles, /\.hero-editor-drop-surface\.is-drag-active/);
   assert.match(navigator, /sortableKeyboardCoordinates/);
   assert.match(navigator, /onReorder/);
+});
+
+test("asset uploads honor the advertised 5 MB limit and report readable errors", async () => {
+  const [studio, nextConfig] = await Promise.all([
+    readFile(new URL("../app/Studio.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../next.config.ts", import.meta.url), "utf8"),
+  ]);
+
+  assert.match(nextConfig, /bodySizeLimit:\s*["']6mb["']/);
+  assert.match(studio, /MAX_IMAGE_SIZE\s*=\s*5\s*\*\s*1024\s*\*\s*1024/);
+  assert.match(studio, /const responseText = await response\.text\(\)/);
+  assert.match(studio, /response\.status === 413/);
+  assert.match(studio, /vượt quá giới hạn tải lên 5 MB/);
 });
