@@ -69,6 +69,9 @@ export function getAssetsBucket() {
   if (typeof (binding as AssetBucket & { fetch?: unknown }).fetch === "function") {
     throw new Error("Kho lưu ảnh đang trùng với binding tài nguyên tĩnh.");
   }
+  if (typeof binding.put !== "function" || typeof binding.get !== "function") {
+    throw new Error("Kho lưu ảnh chưa hỗ trợ đầy đủ thao tác đọc và ghi.");
+  }
   return binding;
 }
 

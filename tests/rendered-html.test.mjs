@@ -77,6 +77,8 @@ test("ships production metadata, persistence and image storage", async () => {
   assert.match(database, /if \(!schemaIsCurrent\)/);
   assert.match(database, /UPLOADS\?: AssetBucket/);
   assert.match(database, /getRuntimeEnv\(\)\.UPLOADS/);
+  assert.match(database, /typeof binding\.put !== "function"/);
+  assert.match(database, /typeof binding\.get !== "function"/);
   assert.match(
     companyData,
     /if \(existingMembership\) \{\s*return toContext\(existingMembership\);\s*\}/
