@@ -94,14 +94,6 @@ export async function ensureCompanyForUser(
 ): Promise<CompanyContext> {
   const existingMembership = await readMembership(user.id);
   if (existingMembership) {
-    await getD1()
-      .prepare(
-        `UPDATE projects
-         SET company_id = ?
-         WHERE owner_id = ? AND company_id IS NULL`
-      )
-      .bind(existingMembership.company_id, user.id)
-      .run();
     return toContext(existingMembership);
   }
 

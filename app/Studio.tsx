@@ -67,6 +67,19 @@ type ProjectSummary = {
   updatedAt: string;
   publishedAt: string | null;
 };
+type LoadedProject = {
+  id: string;
+  slug: string;
+  data: LandingData;
+  messages: ChatMessage[];
+  status: string;
+};
+type StudioBootstrapResult = {
+  projects?: ProjectSummary[];
+  project?: LoadedProject | null;
+  assets?: LandingImageAsset[];
+  error?: string;
+};
 type ProjectSaveSnapshot = {
   id: string;
   slug: string;
@@ -204,7 +217,7 @@ function ensureSectionVisible(
   };
 }
 
-export function Studio() {
+export function Studio({ initialUser }: { initialUser: UserInfo }) {
   const [landing, setLanding] = useState<LandingData>(defaultLanding);
   const [messages, setMessages] = useState<ChatMessage[]>(starterMessages);
   const [input, setInput] = useState("");
@@ -217,7 +230,7 @@ export function Studio() {
   const [future, setFuture] = useState<LandingData[]>([]);
   const [version, setVersion] = useState(1);
   const [notice, setNotice] = useState("");
-  const [user, setUser] = useState<UserInfo | null>(null);
+  const [user] = useState<UserInfo | null>(initialUser);
   const [authReady, setAuthReady] = useState(false);
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -243,6 +256,8 @@ export function Studio() {
     promise: Promise<void>;
   } | null>(null);
   const activeProjectIdRef = useRef(projectId);
+  const assetsLoadedProjectIdRef = useRef<string | null>(null);
+  const skipNextSaveRef = useRef(false);
   const conversationEnd = useRef<HTMLDivElement>(null);
   const previewScroll = useRef<HTMLDivElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -252,17 +267,40 @@ export function Studio() {
   const pipelineResumeRef = useRef<PipelineResumeState | null>(null);
 
   useEffect(() => {
-    const readyTimer = window.setTimeout(() => setEditorReady(true), 0);
-    return () => window.clearTimeout(readyTimer);
-  }, []);
-
-  useEffect(() => {
     activeProjectIdRef.current = projectId;
   }, [projectId]);
+
+  const hydrateProject = useCallback(
+    (project: LoadedProject, initialAssets: LandingImageAsset[]) => {
+      persistedProjectIdRef.current = project.id;
+      skipNextSaveRef.current = true;
+      assetsLoadedProjectIdRef.current = project.id;
+      setProjectId(project.id);
+      setProjectSlug(project.slug);
+      setLanding(normalizeLandingData(project.data));
+      setMessages(project.messages.length ? project.messages : starterMessages);
+      setIsPublished(project.status === "published");
+      setPublicUrl(
+        project.status === "published"
+          ? `${window.location.origin}/p/${project.slug}`
+          : ""
+      );
+      setUploadedAssets(initialAssets);
+      setHistory([]);
+      setFuture([]);
+      setReferenceAsset(null);
+      pipelineResumeRef.current = null;
+      setVersion(1);
+      setSaveState("saved");
+    },
+    []
+  );
 
   const loadProject = useCallback(async (id: string) => {
     saveEnabled.current = false;
     persistedProjectIdRef.current = null;
+    assetsLoadedProjectIdRef.current = null;
+    setUploadedAssets([]);
     const response = await fetch(`/api/projects?id=${encodeURIComponent(id)}`);
     const result = (await response.json()) as {
       project?: {
@@ -325,40 +363,27 @@ export function Studio() {
     previewScroll.current?.scrollTo({ top: 0, behavior: "auto" });
 
     async function initialize() {
-      let currentUser: UserInfo | null = null;
       try {
-        const response = await fetch("/api/auth/me");
-        if (response.ok) {
-          const result = (await response.json()) as { user?: UserInfo };
-          currentUser = result.user || null;
-          setUser(currentUser);
+        const response = await fetch("/api/projects?bootstrap=1");
+        const result = (await response.json()) as StudioBootstrapResult;
+        if (!response.ok) {
+          throw new Error(result.error || "Không thể tải dự án.");
+        }
+        const items = result.projects || [];
+        setProjects(items);
+        if (result.project) {
+          hydrateProject(result.project, result.assets || []);
+        } else {
+          restoreGuestOrCreate(true);
         }
       } catch {
-        currentUser = null;
+        restoreGuestOrCreate(true);
+        setSaveState("error");
+      } finally {
+        saveEnabled.current = true;
+        setAuthReady(true);
+        setEditorReady(true);
       }
-
-      if (currentUser) {
-        try {
-          const response = await fetch("/api/projects");
-          const result = (await response.json()) as {
-            projects?: ProjectSummary[];
-          };
-          const items = result.projects || [];
-          setProjects(items);
-          if (items.length) {
-            await loadProject(items[0].id);
-          } else {
-            restoreGuestOrCreate(true);
-          }
-        } catch {
-          restoreGuestOrCreate(true);
-          setSaveState("error");
-        }
-      } else {
-        restoreGuestOrCreate(false);
-      }
-      saveEnabled.current = true;
-      setAuthReady(true);
     }
 
     function restoreGuestOrCreate(isSignedIn: boolean) {
@@ -394,7 +419,7 @@ export function Studio() {
     }
 
     void initialize();
-  }, [loadProject]);
+  }, [hydrateProject]);
 
   const persistProject = useCallback(async (snapshot: ProjectSaveSnapshot) => {
     if (!user) return;
@@ -468,6 +493,11 @@ export function Studio() {
   useEffect(() => {
     if (!authReady || !projectId || !saveEnabled.current) return;
 
+    if (skipNextSaveRef.current) {
+      skipNextSaveRef.current = false;
+      return;
+    }
+
     if (!user) {
       window.localStorage.setItem(
         GUEST_DRAFT_KEY,
@@ -515,6 +545,7 @@ export function Studio() {
     if (!user || !projectId) {
       return;
     }
+    if (assetsLoadedProjectIdRef.current === projectId) return;
 
     let cancelled = false;
     void fetch(`/api/assets?projectId=${encodeURIComponent(projectId)}`)
@@ -523,7 +554,10 @@ export function Studio() {
         return (await response.json()) as { assets?: LandingImageAsset[] };
       })
       .then((result) => {
-        if (!cancelled) setUploadedAssets(result.assets || []);
+        if (!cancelled) {
+          assetsLoadedProjectIdRef.current = projectId;
+          setUploadedAssets(result.assets || []);
+        }
       })
       .catch(() => {
         if (!cancelled) setUploadedAssets([]);
@@ -1714,11 +1748,12 @@ export function Studio() {
                 <span aria-hidden="true">↻</span>
               </div>
               <div className="preview-scroll" ref={previewScroll}>
-                <LandingCanvas
+                {editorReady ? (
+                  <LandingCanvas
                   data={landing}
                   compact
                   slug={projectSlug}
-                  mode={editorReady ? "editor" : "public"}
+                  mode="editor"
                   selectedSection={selectedSection}
                   onSelectSection={selectSection}
                   sectionOrder={landing.sectionOrder.filter(
@@ -1742,7 +1777,13 @@ export function Studio() {
                   onEditText={editLandingText}
                   onPositionChange={handleImagePositionChange}
                   isBusy={isGenerating}
-                />
+                  />
+                ) : (
+                  <div className="preview-loading" role="status">
+                    <span aria-hidden="true" />
+                    <p>Đang tải dự án…</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

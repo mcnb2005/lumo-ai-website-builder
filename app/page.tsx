@@ -18,9 +18,10 @@ export default async function Home() {
   if (user.mustChangePassword) {
     redirect("/account/password?returnTo=%2F");
   }
-  const company = await ensureCompanyForUser(user);
-  if (!canCreateLanding(company.role)) {
+  const companyRole =
+    user.companyRole || (await ensureCompanyForUser(user)).role;
+  if (!canCreateLanding(companyRole)) {
     redirect("/company");
   }
-  return <Studio />;
+  return <Studio initialUser={user} />;
 }

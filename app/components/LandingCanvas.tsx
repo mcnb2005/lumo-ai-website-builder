@@ -611,7 +611,10 @@ export function LandingCanvas({
         multiline={multiline}
         onActivate={() => onSelectSection?.(section)}
         onCommit={
-          mode === "editor" && !isBusy && onEditText
+          mode === "editor" &&
+          selectedSection === section &&
+          !isBusy &&
+          onEditText
             ? (nextValue) =>
                 onEditText({ ...edit, section, value: nextValue })
             : undefined
