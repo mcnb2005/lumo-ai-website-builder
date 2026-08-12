@@ -164,6 +164,17 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   );
   assert.match(styles, /@container landing-preview \(max-width:\s*560px\)/);
   assert.match(styles, /min-height:\s*240px/);
+  const productShowcaseRuleIndex = styles.indexOf(
+    ".landing-hero.variant-product-showcase.has-image"
+  );
+  const publicResponsiveOverrideIndex = styles.lastIndexOf(
+    "@media (max-width: 980px)"
+  );
+  assert.ok(publicResponsiveOverrideIndex > productShowcaseRuleIndex);
+  assert.match(
+    styles.slice(publicResponsiveOverrideIndex),
+    /\.landing-hero\.variant-product-showcase\.has-image[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/
+  );
   assert.match(generationProgress, /GenerationStage/);
   assert.match(styles, /\.landing-hero\.variant-centered/);
   assert.match(styles, /\.landing-hero\.variant-product-showcase/);
