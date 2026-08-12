@@ -14,7 +14,11 @@ test("defines the complete multi-project Lumo studio experience", async () => {
   ]);
 
   assert.match(studio, /Dự án mới/);
-  assert.match(studio, /user\.companyRole !== "member"/);
+  assert.match(
+    studio,
+    /user\.companyRole === "owner" \|\| user\.companyRole === "admin"/
+  );
+  assert.match(studio, /user\.companyRole === "viewer"/);
   assert.match(studio, /Đăng nhập để lưu/);
   assert.match(studio, /Đăng nhập bằng Google/);
   assert.match(studio, /\/api\/ai/);

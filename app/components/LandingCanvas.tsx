@@ -9,7 +9,6 @@ import {
   type ReactNode,
   useState,
   useRef,
-  useEffect,
 } from "react";
 import {
   DndContext,
@@ -278,7 +277,6 @@ function HeroEditorDropSurface({
 
 function HeroMinimalFrame({
   items,
-  hasImage,
 }: {
   items: ReactNode[];
   hasImage: boolean;
@@ -362,14 +360,14 @@ function PresentedImage({
   isEditable?: boolean;
   onPositionChange?: (position: string) => void;
 }) {
-  const [localPos, setLocalPos] = useState<string | null>(null);
+  const [positionDraft, setPositionDraft] = useState<{
+    source: LandingImagePosition | undefined;
+    value: string | null;
+  }>({ source: position, value: null });
   const [isDragging, setIsDragging] = useState(false);
   const lastPos = useRef({ x: 0, y: 0 });
   const currentPercent = useRef({ x: 50, y: 50 });
-
-  useEffect(() => {
-    setLocalPos(null);
-  }, [position]);
+  const localPos = positionDraft.source === position ? positionDraft.value : null;
 
   const handlePointerDown = (e: React.PointerEvent<HTMLImageElement>) => {
     if (!isEditable) return;
@@ -431,7 +429,10 @@ function PresentedImage({
     y = Math.max(0, Math.min(100, y + dPy));
 
     currentPercent.current = { x, y };
-    setLocalPos(`${x.toFixed(2)}% ${y.toFixed(2)}%`);
+    setPositionDraft({
+      source: position,
+      value: `${x.toFixed(2)}% ${y.toFixed(2)}%`,
+    });
   };
 
   const handlePointerUp = (e: React.PointerEvent<HTMLImageElement>) => {
@@ -766,10 +767,11 @@ export function LandingCanvas({
             </HeroVariantFrame>
           </HeroEditorDropSurface>
         );
-      case "stats":
+      case "stats": {
+        const statsTextSizes = data.design?.sectionTextSizes?.stats;
         return (
           <section
-            className={`stats-grid ${variantClass("stats")}`}
+            className={`stats-grid${variantClass("stats")} stats-value-size-${statsTextSizes?.value || "md"} stats-label-size-${statsTextSizes?.label || "md"}`}
             aria-label="Kết quả nổi bật"
             key={section}
           >
@@ -791,6 +793,7 @@ export function LandingCanvas({
             ))}
           </section>
         );
+      }
       case "features":
         return (
           <section className={`feature-section${variantClass("features")}`} id="features" key={section}>
@@ -840,10 +843,23 @@ export function LandingCanvas({
             </div>
           </section>
         );
-      case "pricing":
+      case "pricing": {
         if (!data.pricing.length) return null;
+        const pricingTextSizes = data.design?.sectionTextSizes?.pricing;
+        const pricingTextSizeClasses = [
+          `pricing-heading-size-${pricingTextSizes?.heading || "md"}`,
+          `pricing-name-size-${pricingTextSizes?.name || "md"}`,
+          `pricing-price-size-${pricingTextSizes?.price || "md"}`,
+          `pricing-description-size-${pricingTextSizes?.description || "md"}`,
+          `pricing-features-size-${pricingTextSizes?.features || "md"}`,
+          `pricing-cta-size-${pricingTextSizes?.cta || "md"}`,
+        ].join(" ");
         return (
-          <section className={`content-section pricing-section${variantClass("pricing")}`} id="pricing" key={section}>
+          <section
+            className={`content-section pricing-section${variantClass("pricing")} ${pricingTextSizeClasses}`}
+            id="pricing"
+            key={section}
+          >
             <div className="section-heading">
               <p>
                 {editableText(
@@ -916,6 +932,7 @@ export function LandingCanvas({
             </div>
           </section>
         );
+      }
       case "portfolio":
         if (!data.portfolio.length) return null;
         return (

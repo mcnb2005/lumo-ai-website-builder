@@ -29,6 +29,24 @@ export type LandingImageAsset = {
 export type LandingImageFit = "cover" | "contain" | "smart";
 export type LandingImagePosition = string; // "center" | "top" | "bottom" | "left" | "right" | "X% Y%"
 
+export const landingTextSizes = ["sm", "md", "lg", "xl"] as const;
+export type LandingTextSize = (typeof landingTextSizes)[number];
+
+export type LandingSectionTextSizes = {
+  stats?: {
+    value?: LandingTextSize;
+    label?: LandingTextSize;
+  };
+  pricing?: {
+    heading?: LandingTextSize;
+    name?: LandingTextSize;
+    price?: LandingTextSize;
+    description?: LandingTextSize;
+    features?: LandingTextSize;
+    cta?: LandingTextSize;
+  };
+};
+
 
 export type LandingImagePresentation = {
   imageFit?: LandingImageFit;
@@ -41,7 +59,7 @@ export const landingSectionVariantOptions: Record<
 > = {
   hero: ["split", "centered", "product-showcase", "image-background", "minimal"],
   stats: ["row", "cards"],
-  features: ["numbered", "grid", "bento", "cards", "minimal"],
+  features: ["numbered", "grid", "bento", "cards", "minimal", "alternating"],
   pricing: ["cards", "minimal", "comparison"],
   portfolio: ["grid", "editorial", "masonry"],
   gallery: ["grid", "masonry", "showcase"],
@@ -60,6 +78,7 @@ export type LandingDesign = {
     heading: "editorial" | "modern" | "friendly";
     body: "sans" | "humanist";
   };
+  sectionTextSizes?: LandingSectionTextSizes;
   radius?: "none" | "sm" | "md" | "lg" | "full";
   density?: "compact" | "comfortable" | "spacious";
 };
@@ -167,6 +186,20 @@ export const defaultLanding: LandingData = {
     typography: {
       heading: "editorial",
       body: "sans",
+    },
+    sectionTextSizes: {
+      stats: {
+        value: "md",
+        label: "md",
+      },
+      pricing: {
+        heading: "md",
+        name: "md",
+        price: "md",
+        description: "md",
+        features: "md",
+        cta: "md",
+      },
     },
     radius: "md",
     density: "comfortable",
@@ -365,6 +398,12 @@ function normalizeSectionColors(
   return result;
 }
 
+function normalizeLandingTextSize(value: unknown): LandingTextSize {
+  return landingTextSizes.includes(value as LandingTextSize)
+    ? (value as LandingTextSize)
+    : "md";
+}
+
 export function normalizeLandingData(
   value: Partial<LandingData> | null | undefined
 ): LandingData {
@@ -382,6 +421,42 @@ export function normalizeLandingData(
       typography: {
         ...defaultLanding.design!.typography,
         ...(value.design?.typography || {}),
+      },
+      sectionTextSizes: {
+        ...defaultLanding.design!.sectionTextSizes,
+        ...(value.design?.sectionTextSizes || {}),
+        stats: {
+          ...defaultLanding.design!.sectionTextSizes?.stats,
+          ...(value.design?.sectionTextSizes?.stats || {}),
+          value: normalizeLandingTextSize(
+            value.design?.sectionTextSizes?.stats?.value
+          ),
+          label: normalizeLandingTextSize(
+            value.design?.sectionTextSizes?.stats?.label
+          ),
+        },
+        pricing: {
+          ...defaultLanding.design!.sectionTextSizes?.pricing,
+          ...(value.design?.sectionTextSizes?.pricing || {}),
+          heading: normalizeLandingTextSize(
+            value.design?.sectionTextSizes?.pricing?.heading
+          ),
+          name: normalizeLandingTextSize(
+            value.design?.sectionTextSizes?.pricing?.name
+          ),
+          price: normalizeLandingTextSize(
+            value.design?.sectionTextSizes?.pricing?.price
+          ),
+          description: normalizeLandingTextSize(
+            value.design?.sectionTextSizes?.pricing?.description
+          ),
+          features: normalizeLandingTextSize(
+            value.design?.sectionTextSizes?.pricing?.features
+          ),
+          cta: normalizeLandingTextSize(
+            value.design?.sectionTextSizes?.pricing?.cta
+          ),
+        },
       },
       radius:
         value.design?.radius === "none" ||

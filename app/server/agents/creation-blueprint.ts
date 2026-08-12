@@ -9,10 +9,11 @@ import {
   type BusinessBrief,
   type LandingBlueprint,
 } from "../../landing-project";
+import type { TemplateSelection } from "../../templates/registry";
 import type { BuilderPlan } from "./builder-plan";
-import { resolveLandingRecipe } from "./landing-recipes";
+import type { BlueprintDecision } from "./blueprint-decision";
 
-const sectionPurposes: Record<string, string> = {
+const sectionPurposes: Record<LandingSectionType, string> = {
   hero: "Nêu giá trị chính, đối tượng và hành động ưu tiên.",
   stats: "Đưa ra bằng chứng định lượng ngắn gọn.",
   features: "Giải thích lợi ích và điểm khác biệt cốt lõi.",
@@ -23,7 +24,7 @@ const sectionPurposes: Record<string, string> = {
   faq: "Giải quyết băn khoăn trước khi chuyển đổi.",
   leadForm: "Thu thập đúng thông tin cần thiết cho mục tiêu chuyển đổi.",
   finalCta: "Nhắc lại lợi ích và CTA chính ở cuối trang.",
-  customBlock: "Khối nội dung tùy chỉnh do AI tạo bằng HTML.",
+  customBlock: "Khối nội dung tùy chỉnh chỉ dùng qua thao tác chuyên biệt.",
 };
 
 export function createBusinessBrief(
@@ -47,50 +48,66 @@ function validVariant(section: LandingSectionType, candidate: string | undefined
 }
 
 export function createLandingBlueprint(input: {
-  plan: BuilderPlan;
   brief: BusinessBrief;
+  templateSelection: TemplateSelection;
+  decision: BlueprintDecision;
 }): LandingBlueprint {
-  const recipe = resolveLandingRecipe(input.plan);
-  
-  let middleSections: LandingSectionType[] = [];
-  if (input.plan.recommendedSections && input.plan.recommendedSections.length > 0) {
-    middleSections = input.plan.recommendedSections.filter((s: string) => s !== "hero" && s !== "finalCta") as LandingSectionType[];
-  } else {
-    middleSections = recipe.visibleSections.filter(
-      (section) => section !== "hero" && section !== "finalCta"
-    );
-  }
-
-  const visible = Array.from(
-    new Set<LandingSectionType>([
-      "hero",
-      ...middleSections,
-      "finalCta",
-    ])
-  );
-
   return {
-    templateId: "dynamic",
-    sections: visible.map((section, order) => {
-      const preferred = input.plan.sectionVariants?.[section];
-      const variant =
-        section === "hero"
-          ? validVariant(section, preferred || "centered")
-          : validVariant(section, preferred);
-      return {
-        id: `${section}-main`,
-        type: section,
-        variant,
-        purpose: sectionPurposes[section as string],
-        order,
-      };
-    }),
+    templateId: input.templateSelection.id,
+    creativeFreedom: input.decision.creativeFreedom,
+    templateFit: input.decision.templateFit,
+    deviationReason: input.decision.deviationReason,
+    visualDirection: input.decision.visualDirection,
+    sections: input.decision.sections.map((section, order) => ({
+      id: `${section}-main`,
+      type: section,
+      variant: validVariant(section, input.decision.sectionVariants[section]),
+      purpose:
+        section === "hero" || section === "finalCta"
+          ? `${sectionPurposes[section]} CTA chính: ${input.brief.primaryCta}`
+          : sectionPurposes[section],
+      order,
+    })),
+  };
+}
+
+export function createLandingBlueprintFromLanding(
+  landing: LandingData
+): LandingBlueprint {
+  const visible = landing.sectionOrder.filter(
+    (section) =>
+      section !== "customBlock" && !landing.hiddenSections.includes(section)
+  );
+  return {
+    templateId: landing.design?.templateId || "dynamic",
+    creativeFreedom: "medium",
+    templateFit: "partial",
+    deviationReason: "Khôi phục Blueprint từ checkpoint đã được xác thực.",
+    visualDirection: {
+      mood: ["checkpoint"],
+      typography: landing.design?.typography.heading || "modern",
+      density: "balanced",
+      imageStyle: "Giữ nguyên asset đã có trong checkpoint.",
+      radius: "medium",
+      contrast: "balanced",
+    },
+    sections: visible.map((section, order) => ({
+      id: `${section}-main`,
+      type: section,
+      variant: validVariant(
+        section,
+        landing.design?.sectionVariants[section]
+      ),
+      purpose: sectionPurposes[section],
+      order,
+    })),
   };
 }
 
 export function applyBlueprintToLanding(
   landing: LandingData,
-  blueprint: LandingBlueprint
+  blueprint: LandingBlueprint,
+  decision: BlueprintDecision
 ) {
   const visible = blueprint.sections.map((section) => section.type);
   const sectionVariants = Object.fromEntries(
@@ -98,6 +115,7 @@ export function applyBlueprintToLanding(
   );
   return {
     ...landing,
+    palette: structuredClone(decision.palette),
     design: {
       ...landing.design!,
       templateId: blueprint.templateId,
@@ -105,6 +123,9 @@ export function applyBlueprintToLanding(
         ...landing.design?.sectionVariants,
         ...sectionVariants,
       },
+      typography: decision.typography,
+      density: decision.density,
+      radius: decision.radius,
     },
     sectionOrder: completeSectionOrder(visible),
     hiddenSections: landingSectionTypes.filter(

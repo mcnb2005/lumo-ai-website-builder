@@ -47,7 +47,15 @@ export type SectionDraftByType = {
   >;
 };
 
-export type SectionDraftEnvelope<S extends LandingSectionType> = {
+export type ContentSectionType = keyof SectionDraftByType;
+
+export function isContentSectionType(
+  section: LandingSectionType
+): section is ContentSectionType {
+  return section !== "customBlock";
+}
+
+export type SectionDraftEnvelope<S extends ContentSectionType> = {
   draft: SectionDraftByType[S];
   explanation?: string;
 };
@@ -153,7 +161,7 @@ function validateHeadingList(
 
 function validateDraft(
   draft: unknown,
-  section: LandingSectionType,
+  section: ContentSectionType,
   current: Partial<LandingData>
 ) {
   switch (section) {
@@ -246,7 +254,7 @@ function validateDraft(
         isRecord(draft) &&
         Array.isArray(draft.items) &&
         (current.gallery?.length ?? 0) > 0 &&
-        draft.items.length !== current.gallery.length
+        draft.items.length !== (current.gallery?.length ?? 0)
       ) {
         errors.push(
           "draft.items của gallery phải giữ nguyên số lượng ảnh hiện có."
@@ -301,9 +309,12 @@ function validateDraft(
       ];
     }
   }
+  throw new SectionDraftValidationError([
+    "Section không được Content Agent hỗ trợ.",
+  ]);
 }
 
-export function parseSectionDraftEnvelope<S extends LandingSectionType>(
+export function parseSectionDraftEnvelope<S extends ContentSectionType>(
   value: unknown,
   section: S,
   current: Partial<LandingData>
@@ -361,7 +372,7 @@ function headingOperations(
   ];
 }
 
-export function compileSectionDraftToOperations<S extends LandingSectionType>(
+export function compileSectionDraftToOperations<S extends ContentSectionType>(
   section: S,
   rawDraft: SectionDraftByType[S],
   current: Partial<LandingData>
@@ -461,9 +472,12 @@ export function compileSectionDraftToOperations<S extends LandingSectionType>(
       ];
     }
   }
+  throw new SectionDraftValidationError([
+    "Section không được Content Agent hỗ trợ.",
+  ]);
 }
 
-const sectionDraftSchemas: Record<LandingSectionType, string> = {
+const sectionDraftSchemas: Record<ContentSectionType, string> = {
   hero:
     '{"draft":{"brand":"...","navCta":"...","eyebrow":"...","headline":"...","accentLine":"...","description":"...","primaryCta":"...","secondaryCta":"...","proof":"..."},"explanation":"..."}',
   stats:
@@ -486,6 +500,6 @@ const sectionDraftSchemas: Record<LandingSectionType, string> = {
     '{"draft":{"finalCtaEyebrow":"...","finalCtaHeadline":"...","primaryCta":"..."},"explanation":"..."}',
 };
 
-export function describeSectionDraftSchema(section: LandingSectionType) {
+export function describeSectionDraftSchema(section: ContentSectionType) {
   return sectionDraftSchemas[section];
 }

@@ -8,6 +8,11 @@ import {
   type LandingSectionType,
 } from "./landing-data";
 import type { PagePurpose } from "./server/agents/builder-plan";
+import type {
+  CreativeFreedom,
+  VisualDirection,
+} from "./server/agents/builder-plan";
+import type { TemplateFit } from "./server/agents/blueprint-decision";
 
 export type BusinessBrief = {
   sourcePrompt: string;
@@ -29,6 +34,10 @@ export type LandingBlueprintSection = {
 
 export type LandingBlueprint = {
   templateId: string;
+  creativeFreedom: CreativeFreedom;
+  templateFit: TemplateFit;
+  deviationReason: string;
+  visualDirection: VisualDirection;
   sections: LandingBlueprintSection[];
 };
 

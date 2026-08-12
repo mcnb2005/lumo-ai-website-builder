@@ -79,7 +79,7 @@ export const landingOperationSchemas = {
   },
   set_design: {
     required: ["type"],
-    optional: ["typography", "radius", "density"],
+    optional: ["typography", "sectionTextSizes", "radius", "density"],
   },
   replace_landing: {
     required: ["type", "value"],

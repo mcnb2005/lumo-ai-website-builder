@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 
 type JoinResult = {
@@ -12,23 +13,32 @@ type JoinResult = {
   error?: string;
 };
 
+async function requestJoin(token: string, confirmTransfer: boolean) {
+  const response = await fetch("/api/company/invitations/accept", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token, confirmTransfer }),
+  });
+  const payload = (await response.json()) as JoinResult;
+  return { response, payload };
+}
+
+function redirectAfterJoin(payload: JoinResult) {
+  if (payload.joined) {
+    window.setTimeout(() => window.location.replace("/"), 900);
+  }
+}
+
 export function CompanyJoin({ token }: { token: string }) {
   const [result, setResult] = useState<JoinResult | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  async function accept(confirmTransfer = false) {
+  async function acceptTransfer() {
     setIsLoading(true);
     try {
-      const response = await fetch("/api/company/invitations/accept", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, confirmTransfer }),
-      });
-      const payload = (await response.json()) as JoinResult;
+      const { response, payload } = await requestJoin(token, true);
       setResult(payload);
-      if (response.ok && payload.joined) {
-        window.setTimeout(() => window.location.replace("/"), 900);
-      }
+      if (response.ok) redirectAfterJoin(payload);
     } catch {
       setResult({ error: "Không thể kết nối đến hệ thống." });
     } finally {
@@ -37,16 +47,36 @@ export function CompanyJoin({ token }: { token: string }) {
   }
 
   useEffect(() => {
-    void accept();
-  }, []);
+    let cancelled = false;
+
+    async function acceptInvitation() {
+      try {
+        const { response, payload } = await requestJoin(token, false);
+        if (cancelled) return;
+        setResult(payload);
+        if (response.ok) redirectAfterJoin(payload);
+      } catch {
+        if (!cancelled) {
+          setResult({ error: "Không thể kết nối đến hệ thống." });
+        }
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    void acceptInvitation();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   return (
     <main className="company-join-page">
       <section>
-        <a className="company-logo company-join-logo" href="/">
+        <Link className="company-logo company-join-logo" href="/">
           <span>✦</span>
           lumo
-        </a>
+        </Link>
         <p>LỜI MỜI THÀNH VIÊN</p>
         {isLoading ? (
           <>
@@ -59,9 +89,9 @@ export function CompanyJoin({ token }: { token: string }) {
             <span>
               Tài khoản của bạn đã được cấp quyền trong không gian công ty.
             </span>
-            <a className="company-join-primary" href="/">
+            <Link className="company-join-primary" href="/">
               Bắt đầu tạo landing page
-            </a>
+            </Link>
           </>
         ) : result?.requiresTransfer ? (
           <>
@@ -74,7 +104,7 @@ export function CompanyJoin({ token }: { token: string }) {
             <button
               className="company-join-primary"
               type="button"
-              onClick={() => void accept(true)}
+              onClick={() => void acceptTransfer()}
             >
               Đồng ý chuyển và tham gia
             </button>
@@ -83,9 +113,9 @@ export function CompanyJoin({ token }: { token: string }) {
           <>
             <h1>Không thể nhận lời mời</h1>
             <span>{result?.error || "Lời mời không hợp lệ."}</span>
-            <a className="company-join-secondary" href="/">
+            <Link className="company-join-secondary" href="/">
               Quay về trang chủ
-            </a>
+            </Link>
           </>
         )}
       </section>
