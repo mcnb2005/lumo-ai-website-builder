@@ -16,7 +16,7 @@ type AssetBucket = {
 
 export type RuntimeEnv = {
   DB?: D1Database;
-  ASSETS?: AssetBucket;
+  UPLOADS?: AssetBucket;
   AI_API_KEY?: string;
   AI_PROVIDER_URL?: string;
   AI_MODEL_NAME?: string;
@@ -62,9 +62,12 @@ export function getD1() {
 }
 
 export function getAssetsBucket() {
-  const binding = getRuntimeEnv().ASSETS;
+  const binding = getRuntimeEnv().UPLOADS;
   if (!binding) {
     throw new Error("Kho lưu ảnh chưa được cấu hình.");
+  }
+  if (typeof (binding as AssetBucket & { fetch?: unknown }).fetch === "function") {
+    throw new Error("Kho lưu ảnh đang trùng với binding tài nguyên tĩnh.");
   }
   return binding;
 }

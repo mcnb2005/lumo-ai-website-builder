@@ -652,7 +652,7 @@ test("creation keeps uploaded assets manual and makes the whole Hero droppable",
   ]);
 
   const imageBackgroundFrame = canvas.match(
-    /function HeroImageBackgroundFrame[\s\S]*?\n}\n/
+    /function HeroImageBackgroundFrame[\s\S]*?\r?\n}\r?\n/
   )?.[0];
   assert.ok(imageBackgroundFrame);
   assert.doesNotMatch(imageBackgroundFrame, /items\[0\]/);
