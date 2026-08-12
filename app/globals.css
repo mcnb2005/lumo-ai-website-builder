@@ -2364,6 +2364,8 @@ textarea:focus-visible {
 .preview-scroll {
   height: calc(100% - 34px);
   overflow: auto;
+  container-type: inline-size;
+  container-name: landing-preview;
   scrollbar-width: thin;
   scrollbar-color: rgba(66, 83, 74, 0.25) transparent;
 }
@@ -7390,6 +7392,46 @@ textarea:focus-visible {
 .landing-hero.variant-image-background .landing-actions,
 .landing-hero.variant-image-background .trust-row {
   justify-content: center;
+}
+
+@container landing-preview (max-width: 980px) {
+  .landing-canvas.is-compact .landing-hero.has-image {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+    text-align: center;
+  }
+
+  .landing-canvas.is-compact .landing-hero.has-image .hero-split-copy,
+  .landing-canvas.is-compact .landing-hero.has-image .hero-product-copy,
+  .landing-canvas.is-compact .landing-hero.has-image .hero-split-media,
+  .landing-canvas.is-compact .landing-hero.has-image .hero-product-media {
+    width: 100%;
+  }
+
+  .landing-canvas.is-compact .landing-hero.has-image .landing-eyebrow,
+  .landing-canvas.is-compact .landing-hero.has-image .landing-actions,
+  .landing-canvas.is-compact .landing-hero.has-image .trust-row {
+    justify-content: center;
+  }
+
+  .landing-canvas.is-compact .landing-hero.has-image .landing-description {
+    margin-inline: auto;
+  }
+
+  .landing-canvas.is-compact .landing-hero.variant-product-showcase .hero-product-media {
+    transform: none;
+  }
+}
+
+@container landing-preview (max-width: 560px) {
+  .landing-canvas.is-compact .landing-hero.has-image {
+    gap: 20px;
+  }
+
+  .landing-canvas.is-compact .landing-hero.variant-product-showcase .hero-image-wrap {
+    min-height: 240px;
+    border-radius: 24px 12px 24px 12px;
+  }
 }
 
 .stats-grid.variant-cards {
