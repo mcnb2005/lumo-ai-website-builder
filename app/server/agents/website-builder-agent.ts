@@ -19,6 +19,10 @@ import type {
   PipelineResumeState,
 } from "../../builder-generation";
 import {
+  createLandingFromTemplate,
+  selectTemplateForBrief,
+} from "../../templates/registry";
+import {
   landingBuilderSkill,
   parseLandingOperations,
   preserveInternalAssetUrls,
@@ -64,6 +68,9 @@ type WebsiteBuilderAgentInput = {
 };
 
 export type WebsiteBuilderAgentResult = BuilderAgentResult;
+
+const noLandingChangeMessage =
+  "Không có thay đổi mới để áp dụng vì cấu hình hiện tại đã ở mức được yêu cầu.";
 
 function operationSection(operation: LandingOperation) {
   if ("section" in operation) return operation.section;
@@ -170,7 +177,11 @@ export async function runWebsiteBuilderAgent(
       intent = resolution.plan;
     }
   }
-  const activeLanding = input.current;
+  const templateSelection =
+    intent.mode === "create" ? selectTemplateForBrief(intent) : null;
+  const activeLanding = templateSelection
+    ? createLandingFromTemplate(templateSelection.id)
+    : input.current;
   const activeManifest = buildLandingManifest(activeLanding);
   const runtimeSkill =
     intent.mode === "create"
@@ -282,7 +293,9 @@ export async function runWebsiteBuilderAgent(
     });
     return {
       landing: applied.landing,
-      message: describeSimpleAction(intent),
+      message: applied.changedSections.length
+        ? describeSimpleAction(intent)
+        : noLandingChangeMessage,
       mode: "ai",
       operations: simpleOperations,
       changedSections: applied.changedSections,
@@ -304,10 +317,14 @@ export async function runWebsiteBuilderAgent(
   }
 
   if (intent.mode === "create") {
+    if (!templateSelection) {
+      throw new Error("Không thể chọn template baseline cho yêu cầu tạo trang.");
+    }
     const created = await runLandingCreationPipeline({
       prompt: input.prompt,
       plan: intent,
-      baseLanding: activeLanding,
+      templateSelection,
+      templateLanding: activeLanding,
       providerUrl: input.providerUrl,
       modelName: input.modelName,
       apiKey: input.apiKey,
@@ -316,7 +333,7 @@ export async function runWebsiteBuilderAgent(
       progress: input.progress,
     });
     const warningSuffix = created.warnings.length
-      ? ` ${created.warnings.length} section dùng nội dung mẫu an toàn vì AI chưa trả đúng schema.`
+      ? ` Có ${created.warnings.length} cảnh báo an toàn trong pipeline; template baseline đã được dùng khi cần.`
       : "";
     return {
       landing: created.landing,
@@ -480,9 +497,15 @@ export async function runWebsiteBuilderAgent(
 
   landing = preserveInternalAssetUrls(activeLanding, landing);
 
+  if (JSON.stringify(activeLanding) === JSON.stringify(landing)) {
+    changedSections = [];
+  }
+
   return {
     landing,
-    message: `Mình đã áp dụng ${operations.length} thay đổi đúng phạm vi yêu cầu.`,
+    message: changedSections.length
+      ? "Mình đã áp dụng thay đổi đúng phạm vi yêu cầu."
+      : noLandingChangeMessage,
     mode: "ai",
     operations,
     changedSections,

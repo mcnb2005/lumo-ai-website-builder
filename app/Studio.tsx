@@ -19,7 +19,6 @@ import {
   applyTemplateDesign,
   createBlankLanding,
   createLandingFromTemplate,
-  type TemplateSelection,
 } from "./templates/registry";
 import {
   applyLandingTextEdit,
@@ -58,7 +57,7 @@ type UserInfo = {
   name: string;
   avatarUrl?: string | null;
   isLocal?: boolean;
-  companyRole?: "owner" | "admin" | "member";
+  companyRole?: "owner" | "admin" | "member" | "viewer";
 };
 type ProjectSummary = {
   id: string;
@@ -253,12 +252,56 @@ export function Studio() {
   const pipelineResumeRef = useRef<PipelineResumeState | null>(null);
 
   useEffect(() => {
-    setEditorReady(true);
+    const readyTimer = window.setTimeout(() => setEditorReady(true), 0);
+    return () => window.clearTimeout(readyTimer);
   }, []);
 
   useEffect(() => {
     activeProjectIdRef.current = projectId;
   }, [projectId]);
+
+  const loadProject = useCallback(async (id: string) => {
+    saveEnabled.current = false;
+    persistedProjectIdRef.current = null;
+    const response = await fetch(`/api/projects?id=${encodeURIComponent(id)}`);
+    const result = (await response.json()) as {
+      project?: {
+        id: string;
+        slug: string;
+        data: LandingData;
+        messages: ChatMessage[];
+        status: string;
+      };
+      error?: string;
+    };
+    if (!response.ok || !result.project) {
+      throw new Error(result.error || "Không thể mở dự án.");
+    }
+    persistedProjectIdRef.current = result.project.id;
+    setProjectId(result.project.id);
+    setProjectSlug(result.project.slug);
+    setLanding(normalizeLandingData(result.project.data));
+    setMessages(
+      result.project.messages.length
+        ? result.project.messages
+        : starterMessages
+    );
+    setIsPublished(result.project.status === "published");
+    setPublicUrl(
+      result.project.status === "published"
+        ? `${window.location.origin}/p/${result.project.slug}`
+        : ""
+    );
+    setHistory([]);
+    setFuture([]);
+    setReferenceAsset(null);
+    pipelineResumeRef.current = null;
+    setVersion(1);
+    setSaveState("saved");
+    window.setTimeout(() => {
+      saveEnabled.current = true;
+    }, 0);
+  }, []);
 
   useEffect(() => {
     if (window.location.hash) {
@@ -271,7 +314,7 @@ export function Studio() {
     const currentUrl = new URL(window.location.href);
     const authError = currentUrl.searchParams.get("authError");
     if (authError) {
-      setNotice(authError);
+      window.setTimeout(() => setNotice(authError), 0);
       currentUrl.searchParams.delete("authError");
       window.history.replaceState(
         null,
@@ -351,50 +394,7 @@ export function Studio() {
     }
 
     void initialize();
-  }, []);
-
-  async function loadProject(id: string) {
-    saveEnabled.current = false;
-    persistedProjectIdRef.current = null;
-    const response = await fetch(`/api/projects?id=${encodeURIComponent(id)}`);
-    const result = (await response.json()) as {
-      project?: {
-        id: string;
-        slug: string;
-        data: LandingData;
-        messages: ChatMessage[];
-        status: string;
-      };
-      error?: string;
-    };
-    if (!response.ok || !result.project) {
-      throw new Error(result.error || "Không thể mở dự án.");
-    }
-    persistedProjectIdRef.current = result.project.id;
-    setProjectId(result.project.id);
-    setProjectSlug(result.project.slug);
-    setLanding(normalizeLandingData(result.project.data));
-    setMessages(
-      result.project.messages.length
-        ? result.project.messages
-        : starterMessages
-    );
-    setIsPublished(result.project.status === "published");
-    setPublicUrl(
-      result.project.status === "published"
-        ? `${window.location.origin}/p/${result.project.slug}`
-        : ""
-    );
-    setHistory([]);
-    setFuture([]);
-    setReferenceAsset(null);
-    pipelineResumeRef.current = null;
-    setVersion(1);
-    setSaveState("saved");
-    window.setTimeout(() => {
-      saveEnabled.current = true;
-    }, 0);
-  }
+  }, [loadProject]);
 
   const persistProject = useCallback(async (snapshot: ProjectSaveSnapshot) => {
     if (!user) return;
@@ -478,7 +478,6 @@ export function Studio() {
           messages,
         })
       );
-      setSaveState("guest");
       return;
     }
 
@@ -489,7 +488,6 @@ export function Studio() {
       messages,
       isPublished,
     };
-    setSaveState("saving");
     const timer = window.setTimeout(async () => {
       try {
         await persistProject(snapshot);
@@ -1278,7 +1276,9 @@ export function Studio() {
     }
   }
 
-  uploadImagesRef.current = uploadImages;
+  useEffect(() => {
+    uploadImagesRef.current = uploadImages;
+  });
 
   useEffect(() => {
     function handlePaste(event: ClipboardEvent) {
@@ -1401,7 +1401,7 @@ export function Studio() {
               >
                 Khách hàng
               </a>
-              {user.companyRole !== "member" ? (
+              {user.companyRole === "owner" || user.companyRole === "admin" ? (
                 <a className="leads-button" href="/company">
                   Công ty
                 </a>
@@ -1410,7 +1410,11 @@ export function Studio() {
                 <b>{user.name.slice(0, 1).toUpperCase()}</b>
                 <small>
                   {user.name}
-                  {user.companyRole === "member" ? " · Nhân viên" : ""}
+                  {user.companyRole === "member"
+                    ? " · Nhân viên"
+                    : user.companyRole === "viewer"
+                      ? " · Người xem"
+                      : ""}
                 </small>
               </span>
               {!user.isLocal ? (

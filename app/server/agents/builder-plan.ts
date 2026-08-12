@@ -23,6 +23,10 @@ export const pagePurposes = [
 
 export type PagePurpose = (typeof pagePurposes)[number];
 
+export const creativeFreedomLevels = ["low", "medium", "high"] as const;
+
+export type CreativeFreedom = (typeof creativeFreedomLevels)[number];
+
 export const builderActions = [
   "create_landing",
   "generate_content",
@@ -34,6 +38,7 @@ export const builderActions = [
   "add_section",
   "assign_image",
   "set_palette",
+  "set_design",
   "clarify",
 ] as const;
 
@@ -73,10 +78,14 @@ export type BuilderPlan = {
   audience: string;
   primaryGoal: string;
   tone: string;
+  creativeFreedom: CreativeFreedom;
   visualDirection?: VisualDirection;
   recommendedSections: LandingSectionType[];
   sectionVariants?: Partial<Record<LandingSectionType, string>>;
-  typography?: { heading: string; body: string };
+  typography?: {
+    heading: "editorial" | "modern" | "friendly";
+    body: "sans" | "humanist";
+  };
   radius?: "none" | "sm" | "md" | "lg" | "full";
   density?: "compact" | "comfortable" | "spacious";
   clarificationQuestion?: string;
@@ -88,6 +97,7 @@ export const builderPlanSystemPromptRules = [
   "Giữ nguyên tên key, mode, action, pagePurpose, section id, field, variant và URL theo schema; không dịch các giá trị enum này.",
   "availableAssets là thư viện ảnh người dùng đã tải lên. Khi mode=create, không tự chọn, gán hoặc phân bổ bất kỳ ảnh nào từ availableAssets; mọi ô ảnh phải để trống để người dùng tự kéo-thả sau khi trang được tạo.",
   "Chỉ dùng action=assign_image khi người dùng yêu cầu gán một ảnh cụ thể trong chế độ chỉnh sửa. Không tự tạo, sửa hoặc suy đoán URL ảnh.",
+  "Khi mode=edit và người dùng yêu cầu đổi cỡ chữ, kiểu chữ, bo góc hoặc mật độ bố cục, dùng action=set_design. Nếu yêu cầu chỉ rõ section thì đặt target.section, nhưng không đặt target.field vì đây là style của nhóm nội dung chứ không phải thay text.",
 ] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -208,6 +218,11 @@ export function parseBuilderPlan(
   const purpose = pagePurposes.includes(value.pagePurpose as PagePurpose)
     ? (value.pagePurpose as PagePurpose)
     : "general";
+  const creativeFreedom = creativeFreedomLevels.includes(
+    value.creativeFreedom as CreativeFreedom
+  )
+    ? (value.creativeFreedom as CreativeFreedom)
+    : "medium";
   const rawRecommended = Array.isArray(value.recommendedSections)
     ? value.recommendedSections
     : [];
@@ -229,7 +244,7 @@ export function parseBuilderPlan(
       ) as Partial<Record<LandingSectionType, string>>)
     : undefined;
 
-  const typography =
+  const typography: BuilderPlan["typography"] =
     isRecord(value.typography)
       ? {
           heading: (value.typography.heading === "editorial" || value.typography.heading === "modern" || value.typography.heading === "friendly") 
@@ -257,7 +272,7 @@ export function parseBuilderPlan(
       ? value.density
       : undefined;
 
-  const visualDirection = isRecord(value.visualDirection)
+  const visualDirection: VisualDirection | undefined = isRecord(value.visualDirection)
     ? {
         mood: Array.isArray(value.visualDirection.mood)
           ? value.visualDirection.mood.filter((m): m is string => typeof m === "string")
@@ -320,6 +335,7 @@ export function parseBuilderPlan(
     audience: asText(value.audience, "Khách hàng mục tiêu"),
     primaryGoal: asText(value.primaryGoal, "Thực hiện CTA chính"),
     tone: asText(value.tone, "Rõ ràng, đáng tin cậy"),
+    creativeFreedom,
     visualDirection,
     recommendedSections,
     sectionVariants,
@@ -344,6 +360,7 @@ export function createDemoBuilderPlan(prompt: string): BuilderPlan {
     audience: "Khách hàng mục tiêu",
     primaryGoal: "Liên hệ hoặc đăng ký",
     tone: "Rõ ràng, đáng tin cậy",
+    creativeFreedom: "medium",
     recommendedSections: [],
     source: "demo",
   };

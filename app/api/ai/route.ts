@@ -72,7 +72,7 @@ async function loadReferenceImageDataUrl(userId: string, assetId: string) {
   if (!object) {
     throw new Error("Không thể mở ảnh tham chiếu đã chọn.");
   }
-  const data = new Uint8Array(await object.arrayBuffer());
+  const data = new Uint8Array(await new Response(object.body).arrayBuffer());
   return `data:${asset.contentType};base64,${toBase64(data)}`;
 }
 

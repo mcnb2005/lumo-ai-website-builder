@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { LandingCanvas } from "./components/LandingCanvas";
 import { normalizeLandingData, type LandingData } from "./landing-data";
@@ -34,7 +35,7 @@ export function PublicLanding({ slug }: { slug: string }) {
         <span>404</span>
         <h1>Landing page chưa sẵn sàng</h1>
         <p>{error}</p>
-        <a href="/">Quay lại Lumo</a>
+        <Link href="/">Quay lại Lumo</Link>
       </main>
     );
   }

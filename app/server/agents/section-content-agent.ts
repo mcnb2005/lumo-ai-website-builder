@@ -1,4 +1,4 @@
-import type { LandingData, LandingSectionType } from "../../landing-data";
+import type { LandingData } from "../../landing-data";
 import {
   buildLandingManifest,
   getLandingSectionSnapshot,
@@ -13,10 +13,12 @@ import { extractAiJson } from "../tools/ai-json";
 import {
   compileSectionDraftToOperations,
   describeSectionDraftSchema,
+  isContentSectionType,
   parseSectionDraftEnvelope,
+  type ContentSectionType,
 } from "./section-draft";
 
-const sectionRules: Record<LandingSectionType, string[]> = {
+const sectionRules: Record<ContentSectionType, string[]> = {
   hero: [
     "Headline và accentLine tổng cộng tối đa 12-16 từ.",
     "Description tối đa 35-50 từ.",
@@ -71,7 +73,13 @@ export async function runSectionContentAgent(input: {
   fallbackProviders?: AiChatProvider[];
   repairIssues?: string[];
 }) {
-  const sectionDraftSchema = describeSectionDraftSchema(input.section.type);
+  const sectionType = input.section.type;
+  if (!isContentSectionType(sectionType)) {
+    throw new Error(
+      "customBlock không được tạo qua Content Agent; hãy dùng operation chuyên dụng."
+    );
+  }
+  const sectionDraftSchema = describeSectionDraftSchema(sectionType);
   const sectionDraftSystemPrompt = [
     `Bạn là Content Generator chỉ phụ trách section ${input.section.type}.`,
     "Ngôn ngữ bắt buộc: xác định ngôn ngữ chính từ BusinessBrief.sourcePrompt và viết toàn bộ nội dung người dùng nhìn thấy bằng ngôn ngữ tương đồng. Không mặc định tiếng Việt chỉ vì system prompt dùng tiếng Việt; nếu người dùng chỉ định ngôn ngữ, phải làm đúng ngôn ngữ đó.",
@@ -80,7 +88,7 @@ export async function runSectionContentAgent(input: {
     "Chỉ tạo nội dung; không quyết định template, màu, thứ tự, trạng thái ẩn/hiện hoặc URL ảnh.",
     "Các ô ảnh trong Hero, Gallery và Portfolio có thể để trống để người dùng tự kéo-thả. Giữ nguyên mọi URL ảnh đang có và tuyệt đối không tạo, sửa, suy đoán hoặc tự gán URL ảnh.",
     `Schema bắt buộc: ${sectionDraftSchema}`,
-    ...sectionRules[input.section.type],
+    ...sectionRules[sectionType],
   ].join(" ");
   const manifest = buildLandingManifest(input.landing);
   const sectionManifest = manifest.sections.find(
@@ -122,11 +130,11 @@ export async function runSectionContentAgent(input: {
       );
       const envelope = parseSectionDraftEnvelope(
         parsedOutput,
-        input.section.type,
+        sectionType,
         input.landing
       );
       const operations = compileSectionDraftToOperations(
-        input.section.type,
+        sectionType,
         envelope.draft,
         input.landing
       );

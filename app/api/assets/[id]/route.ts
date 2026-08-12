@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { ensureDatabase, getAssetsBucket, getDb } from "../../../../db";
 import { assets, projects } from "../../../../db/schema";
 import { getCurrentDatabaseUser } from "../../../server-user";

@@ -1,10 +1,13 @@
 import {
+  landingTextSizes,
   landingSectionVariantOptions,
   landingSectionTypes,
   normalizeLandingData,
   type LandingData,
   type LandingImageTarget,
+  type LandingSectionTextSizes,
   type LandingSectionType,
+  type LandingTextSize,
 } from "./landing-data";
 import {
   editableFieldsBySection,
@@ -26,7 +29,7 @@ export type LandingOperation =
     }
   | {
       type: "replace_section";
-      section: Exclude<LandingSectionType, "finalCta">;
+      section: Exclude<LandingSectionType, "customBlock" | "finalCta">;
       value: unknown;
     }
   | {
@@ -69,6 +72,7 @@ export type LandingOperation =
         heading?: "editorial" | "modern" | "friendly";
         body?: "sans" | "humanist";
       };
+      sectionTextSizes?: LandingSectionTextSizes;
       radius?: "none" | "sm" | "md" | "lg" | "full";
       density?: "compact" | "comfortable" | "spacious";
     }
@@ -122,6 +126,10 @@ const indexedFields = new Set<LandingEditableField>([
 const nestedFields = new Set<LandingEditableField>(["pricing.feature"]);
 const paletteTokens = ["ink", "paper", "accent", "soft", "line"] as const;
 const sectionColorTokens = ["background", "text", "accent"] as const;
+const sectionTextSizeFields = {
+  stats: ["value", "label"],
+  pricing: ["heading", "name", "price", "description", "features", "cta"],
+} as const;
 const hexColorPattern = /^#[0-9a-f]{6}$/i;
 const unsafeTextPattern =
   /<\s*script\b|javascript\s*:|on(?:error|load|click)\s*=/i;
@@ -176,6 +184,10 @@ function isSection(value: unknown): value is LandingSectionType {
   );
 }
 
+function isLandingTextSize(value: unknown): value is LandingTextSize {
+  return landingTextSizes.includes(value as LandingTextSize);
+}
+
 function isEditableField(value: unknown): value is LandingEditableField {
   return Object.values(editableFieldsBySection).some((fields) =>
     fields.includes(value as LandingEditableField)
@@ -204,6 +216,51 @@ function validateAllowedKeys(
   return Object.keys(value)
     .filter((key) => !allowed.has(key))
     .map((key) => `${path}.${key} không được hỗ trợ.`);
+}
+
+function validateSectionTextSizes(
+  value: unknown,
+  path: string,
+  requireChange = false
+) {
+  if (!isRecord(value)) return [`${path} phải là object.`];
+
+  const errors = validateAllowedKeys(
+    value,
+    Object.keys(sectionTextSizeFields),
+    path
+  );
+  let hasSectionChange = false;
+
+  Object.entries(sectionTextSizeFields).forEach(([section, fields]) => {
+    const sectionValue = value[section];
+    if (sectionValue === undefined) return;
+    hasSectionChange = true;
+
+    if (!isRecord(sectionValue)) {
+      errors.push(`${path}.${section} phải là object.`);
+      return;
+    }
+
+    errors.push(...validateAllowedKeys(sectionValue, fields, `${path}.${section}`));
+    const suppliedFields = fields.filter(
+      (field) => sectionValue[field] !== undefined
+    );
+    suppliedFields.forEach((field) => {
+      if (!isLandingTextSize(sectionValue[field])) {
+        errors.push(`${path}.${section}.${field} không hợp lệ.`);
+      }
+    });
+
+    if (requireChange && !suppliedFields.length) {
+      errors.push(`${path}.${section} phải có ít nhất một cỡ chữ cần đổi.`);
+    }
+  });
+
+  if (requireChange && !hasSectionChange) {
+    errors.push(`${path} phải có ít nhất một section cần đổi cỡ chữ.`);
+  }
+  return errors;
 }
 
 function currentAssetUrls(landing: LandingData) {
@@ -382,7 +439,15 @@ export function validateLandingData(
       errors.push(
         ...validateAllowedKeys(
           value.design,
-          ["templateId", "templateVersion", "sectionVariants", "typography", "radius", "density"],
+          [
+            "templateId",
+            "templateVersion",
+            "sectionVariants",
+            "typography",
+            "sectionTextSizes",
+            "radius",
+            "density",
+          ],
           "design"
         )
       );
@@ -444,6 +509,14 @@ export function validateLandingData(
         ) {
           errors.push("design.typography.body không hợp lệ.");
         }
+      }
+      if (value.design.sectionTextSizes !== undefined) {
+        errors.push(
+          ...validateSectionTextSizes(
+            value.design.sectionTextSizes,
+            "design.sectionTextSizes"
+          )
+        );
       }
       if (
         value.design.radius !== undefined &&
@@ -735,8 +808,15 @@ export function parseLandingOperationEnvelope(
           errors.push(`${path}.section không hợp lệ.`);
           return;
         }
-        if (rawOperation.section === "finalCta") {
-          errors.push("finalCta không có dữ liệu section riêng để thay thế.");
+        if (
+          rawOperation.section === "customBlock" ||
+          rawOperation.section === "finalCta"
+        ) {
+          errors.push(
+            rawOperation.section === "customBlock"
+              ? "customBlock phải dùng update_custom_block."
+              : "finalCta không có dữ liệu section riêng để thay thế."
+          );
           return;
         }
         if (rawOperation.section === "hero") {
@@ -892,6 +972,15 @@ export function parseLandingOperationEnvelope(
         return;
       }
       case "set_design": {
+        if (
+          rawOperation.typography === undefined &&
+          rawOperation.sectionTextSizes === undefined &&
+          rawOperation.radius === undefined &&
+          rawOperation.density === undefined
+        ) {
+          errors.push(`${path} phải có ít nhất một cấu hình design cần đổi.`);
+          return;
+        }
         if (rawOperation.typography !== undefined) {
           if (!isRecord(rawOperation.typography)) {
             errors.push(`${path}.typography phải là object.`);
@@ -913,6 +1002,17 @@ export function parseLandingOperationEnvelope(
             body !== "humanist"
           ) {
             errors.push(`${path}.typography.body không hợp lệ.`);
+            return;
+          }
+        }
+        if (rawOperation.sectionTextSizes !== undefined) {
+          const sectionTextSizeErrors = validateSectionTextSizes(
+            rawOperation.sectionTextSizes,
+            `${path}.sectionTextSizes`,
+            true
+          );
+          if (sectionTextSizeErrors.length) {
+            errors.push(...sectionTextSizeErrors);
             return;
           }
         }
@@ -941,8 +1041,17 @@ export function parseLandingOperationEnvelope(
           typography: rawOperation.typography as
             | Extract<LandingOperation, { type: "set_design" }>["typography"]
             | undefined,
-          radius: rawOperation.radius as any,
-          density: rawOperation.density as any,
+          sectionTextSizes: rawOperation.sectionTextSizes as
+            | LandingSectionTextSizes
+            | undefined,
+          radius: rawOperation.radius as Extract<
+            LandingOperation,
+            { type: "set_design" }
+          >["radius"],
+          density: rawOperation.density as Extract<
+            LandingOperation,
+            { type: "set_design" }
+          >["density"],
         });
         return;
       }
@@ -1166,7 +1275,7 @@ function applyTextOperation(
 function applyReplaceSection(
   current: LandingData,
   operation: Extract<LandingOperation, { type: "replace_section" }>
-) {
+): LandingData {
   const { section, value } = operation;
   switch (section) {
     case "hero": {
@@ -1393,11 +1502,36 @@ export function applyLandingOperations(
               ...landing.design!.typography,
               ...operation.typography,
             } : landing.design!.typography,
+            sectionTextSizes: operation.sectionTextSizes
+              ? {
+                  ...landing.design!.sectionTextSizes,
+                  stats: operation.sectionTextSizes.stats
+                    ? {
+                        ...landing.design!.sectionTextSizes?.stats,
+                        ...operation.sectionTextSizes.stats,
+                      }
+                    : landing.design!.sectionTextSizes?.stats,
+                  pricing: operation.sectionTextSizes.pricing
+                    ? {
+                        ...landing.design!.sectionTextSizes?.pricing,
+                        ...operation.sectionTextSizes.pricing,
+                      }
+                    : landing.design!.sectionTextSizes?.pricing,
+                }
+              : landing.design!.sectionTextSizes,
             ...(operation.radius !== undefined ? { radius: operation.radius } : {}),
             ...(operation.density !== undefined ? { density: operation.density } : {}),
           },
         };
-        landing.sectionOrder.forEach((section) => changedSections.add(section));
+        if (
+          operation.typography ||
+          operation.radius !== undefined ||
+          operation.density !== undefined
+        ) {
+          landing.sectionOrder.forEach((section) => changedSections.add(section));
+        }
+        if (operation.sectionTextSizes?.stats) changedSections.add("stats");
+        if (operation.sectionTextSizes?.pricing) changedSections.add("pricing");
         break;
       case "update_custom_block":
         landing = {
@@ -1416,9 +1550,14 @@ export function applyLandingOperations(
   const errors = validateLandingData(landing, current);
   if (errors.length) throw new LandingOperationValidationError(errors);
 
+  const normalizedCurrent = normalizeLandingData(current);
+  const normalizedLanding = normalizeLandingData(landing);
+  const hasChanges =
+    JSON.stringify(normalizedCurrent) !== JSON.stringify(normalizedLanding);
+
   return {
-    landing: normalizeLandingData(landing),
-    changedSections: Array.from(changedSections),
+    landing: normalizedLanding,
+    changedSections: hasChanges ? Array.from(changedSections) : [],
   };
 }
 

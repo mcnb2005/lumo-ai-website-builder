@@ -57,6 +57,7 @@ test("uses a controlled template registry for AI, manual and blank project flows
   assert.doesNotMatch(registry, /isCreateRequest|isCreationCorrection/);
   assert.match(data, /type LandingDesign/);
   assert.match(data, /sectionVariants/);
+  assert.match(data, /features: \[[^\]]*"alternating"/);
   assert.match(data, /templateId/);
   assert.match(operations, /landingSectionVariantOptions/);
   assert.match(agent, /selectTemplateForBrief\(intent\)/);
@@ -84,4 +85,5 @@ test("uses a controlled template registry for AI, manual and blank project flows
   assert.match(canvas, /HeroProductShowcaseFrame/);
   assert.match(canvas, /HeroImageBackgroundFrame/);
   assert.match(canvas, /variant=\{data\.design\?\.sectionVariants\.hero\}/);
+  assert.match(styles, /\.feature-section\.variant-alternating/);
 });

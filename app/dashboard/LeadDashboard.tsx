@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   dashboardConfigs,
@@ -32,7 +33,7 @@ type Project = {
 type DashboardUser = {
   email: string;
   name: string;
-  companyRole?: "owner" | "admin" | "member";
+  companyRole?: "owner" | "admin" | "member" | "viewer";
 };
 
 type GoogleConnection = {
@@ -208,9 +209,11 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
 
   useEffect(() => {
     if (!projectId) {
-      setLeads([]);
-      setSelectedLeadId("");
-      return;
+      const resetTimer = window.setTimeout(() => {
+        setLeads([]);
+        setSelectedLeadId("");
+      }, 0);
+      return () => window.clearTimeout(resetTimer);
     }
 
     async function loadLeads() {
@@ -462,10 +465,10 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
   return (
     <main className={`crm-shell crm-type-${resolvedDashboardType}`}>
       <aside className="crm-sidebar">
-        <a className="crm-logo" href="/" aria-label="Lumo — trang tạo landing page">
+        <Link className="crm-logo" href="/" aria-label="Lumo — trang tạo landing page">
           <span aria-hidden="true">✦</span>
           lumo
-        </a>
+        </Link>
         <div className="crm-sidebar-label">Quản lý</div>
         <nav aria-label="Điều hướng quản lý">
           <a href="#overview">
@@ -476,11 +479,11 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
             <span aria-hidden="true">◎</span>
             {dashboard.navLabel}
           </a>
-          {user.companyRole !== "member" ? (
-            <a href="/company">
+          {user.companyRole === "owner" || user.companyRole === "admin" ? (
+            <Link href="/company">
               <span aria-hidden="true">▦</span>
               Công ty & nhân viên
-            </a>
+            </Link>
           ) : null}
         </nav>
         <section className="crm-google-connection" aria-label="Kết nối Google">
@@ -509,10 +512,10 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
           )}
         </section>
         <div className="crm-sidebar-spacer" />
-        <a className="crm-back-link" href="/">
+        <Link className="crm-back-link" href="/">
           <span aria-hidden="true">←</span>
           Về trình tạo trang
-        </a>
+        </Link>
         <div className="crm-user">
           <span>{user.name.slice(0, 1).toLocaleUpperCase("vi")}</span>
           <div>
@@ -670,7 +673,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                 <div className="crm-state">
                   <strong>Chưa có landing page</strong>
                   <span>Hãy tạo và lưu một landing page trước.</span>
-                  <a href="/">Tạo landing page</a>
+                  <Link href="/">Tạo landing page</Link>
                 </div>
               ) : !filteredLeads.length ? (
                 <div className="crm-state">

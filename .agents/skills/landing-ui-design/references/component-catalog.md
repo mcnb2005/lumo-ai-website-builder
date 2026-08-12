@@ -4,16 +4,22 @@ Use only these registered section types and variants. Add a renderer implementat
 
 | Section | Variants |
 | --- | --- |
-| `hero` | `split`, `centered`, `product-showcase`, `image-background` |
+| `hero` | `split`, `centered`, `product-showcase`, `image-background`, `minimal` |
 | `stats` | `row`, `cards` |
-| `features` | `numbered`, `grid`, `bento` |
+| `features` | `numbered`, `grid`, `bento`, `cards`, `minimal`, `alternating` |
 | `pricing` | `cards`, `minimal`, `comparison` |
 | `portfolio` | `grid`, `editorial`, `masonry` |
 | `gallery` | `grid`, `masonry`, `showcase` |
 | `testimonial` | `highlight`, `card`, `minimal` |
-| `faq` | `list`, `two-columns` |
+| `faq` | `list`, `two-columns`, `grid` |
 | `leadForm` | `two-columns`, `centered`, `compact` |
-| `finalCta` | `minimal`, `banner` |
+| `customBlock` | `raw` |
+| `finalCta` | `minimal`, `banner`, `split` |
+
+Semantic brief aliases are normalized before validation:
+
+- `full-bleed` or `full-screen` hero direction maps to `image-background`; use `product-showcase` instead when the brief is specifically product/UI-demo-led.
+- A `Demo` section request maps to `gallery` for a visual showcase or `portfolio` for work and case studies.
 
 Typography tokens:
 

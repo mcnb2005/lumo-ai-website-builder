@@ -17,6 +17,8 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
     recipes,
     creationPipeline,
     blueprint,
+    blueprintPlanner,
+    blueprintDecision,
     sectionContent,
     qualityEvaluator,
     landingProject,
@@ -56,6 +58,14 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
     ),
     readFile(
       new URL("../app/server/agents/creation-blueprint.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/blueprint-planning-agent.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/blueprint-decision.ts", import.meta.url),
       "utf8"
     ),
     readFile(
@@ -112,16 +122,26 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(builderPlan, /action: BuilderAction/);
   assert.match(builderPlan, /target: BuilderTarget/);
   assert.match(builderPlan, /lowConfidence/);
+  assert.match(builderPlan, /creativeFreedom: CreativeFreedom/);
   assert.match(recipes, /sell_product/);
   assert.match(recipes, /primaryGoal/);
   assert.match(recipes, /\.\.\.base\.visibleSections/);
   assert.match(recipes, /\.slice\(0, 2\)/);
   assert.match(blueprint, /createBusinessBrief/);
   assert.match(blueprint, /createLandingBlueprint/);
-  assert.match(blueprint, /resolveLandingRecipe/);
-  assert.match(blueprint, /input\.templateLanding\.sectionOrder\.filter/);
-  assert.match(blueprint, /section === "hero" && !input\.templateLanding\.heroImage/);
+  assert.match(blueprint, /input\.decision\.sections\.map/);
+  assert.match(blueprint, /applyBlueprintToLanding/);
+  assert.match(blueprintPlanner, /Template là baseline, không phải constraint/);
+  assert.match(blueprintPlanner, /Không có quota giới hạn/);
+  assert.match(blueprintPlanner, /resolveLandingRecipe/);
+  assert.match(blueprintPlanner, /runBlueprintPlanningAgent/);
+  assert.match(blueprintPlanner, /createTemplateBaselineDecision/);
+  assert.match(blueprintDecision, /parseBlueprintDecision/);
+  assert.match(blueprintDecision, /normalized === "full-bleed"/);
+  assert.match(blueprintDecision, /alias === "demo"/);
+  assert.match(blueprintDecision, /section !== "customBlock"/);
   assert.match(creationPipeline, /runSectionContentAgent/);
+  assert.match(creationPipeline, /runBlueprintPlanningAgent/);
   assert.match(creationPipeline, /evaluateLandingQuality/);
   assert.match(creationPipeline, /repairAttempt <= 2/);
   assert.match(creationPipeline, /landingProjectFromLanding/);
@@ -188,4 +208,5 @@ test("exposes runtime skills and the validated operation pipeline", async () => 
   assert.match(designSkillDoc, /Do not ask the model to emit free-form HTML/);
   assert.match(componentCatalog, /`product-showcase`/);
   assert.match(componentCatalog, /`two-columns`/);
+  assert.match(componentCatalog, /`alternating`/);
 });

@@ -10,8 +10,10 @@ import {
 import {
   compileLandingProject,
   landingProjectFromLanding,
+  type LandingBlueprint,
   type LandingProject,
 } from "../../landing-project";
+import type { TemplateSelection } from "../../templates/registry";
 import {
   applyLandingOperations,
   type LandingOperation,
@@ -22,7 +24,9 @@ import {
   applyBlueprintToLanding,
   createBusinessBrief,
   createLandingBlueprint,
+  createLandingBlueprintFromLanding,
 } from "./creation-blueprint";
+import { runBlueprintPlanningAgent } from "./blueprint-planning-agent";
 import {
   evaluateLandingQuality,
   type LandingQualityReport,
@@ -64,7 +68,8 @@ function preserveAssets(current: LandingData, next: LandingData) {
 export async function runLandingCreationPipeline(input: {
   prompt: string;
   plan: BuilderPlan;
-  baseLanding: LandingData;
+  templateSelection: TemplateSelection;
+  templateLanding: LandingData;
   providerUrl: string;
   modelName: string;
   apiKey: string;
@@ -73,33 +78,43 @@ export async function runLandingCreationPipeline(input: {
   progress?: BuilderProgressReporter;
 }): Promise<LandingCreationPipelineResult> {
   const brief = createBusinessBrief(input.plan, input.prompt);
-  const blueprint = createLandingBlueprint({
-    plan: input.plan,
-    brief,
-  });
   const canResume =
     input.resume?.prompt.trim() === input.prompt.trim() &&
     Array.isArray(input.resume.completedSections);
-  let landing = canResume
-    ? normalizeLandingData(input.resume?.landing)
-    : normalizeLandingData(
-        applyBlueprintToLanding(input.baseLanding, blueprint)
-      );
-
-  if (!canResume && (input.plan.typography || input.plan.radius || input.plan.density) && landing.design) {
-    landing.design = {
-      ...landing.design,
-      typography: input.plan.typography ? {
-        ...landing.design.typography,
-        ...input.plan.typography,
-      } : landing.design.typography,
-      ...(input.plan.radius ? { radius: input.plan.radius } : {}),
-      ...(input.plan.density ? { density: input.plan.density } : {}),
-    };
+  const warnings: string[] = [];
+  let blueprint: LandingBlueprint;
+  let landing: LandingData;
+  if (canResume) {
+    landing = normalizeLandingData(input.resume?.landing);
+    blueprint = createLandingBlueprintFromLanding(landing);
+  } else {
+    const planned = await runBlueprintPlanningAgent({
+      prompt: input.prompt,
+      plan: input.plan,
+      brief,
+      templateSelection: input.templateSelection,
+      templateLanding: input.templateLanding,
+      providerUrl: input.providerUrl,
+      modelName: input.modelName,
+      apiKey: input.apiKey,
+      fallbackProviders: input.fallbackProviders,
+    });
+    if (planned.warning) warnings.push(planned.warning);
+    blueprint = createLandingBlueprint({
+      brief,
+      templateSelection: input.templateSelection,
+      decision: planned.decision,
+    });
+    landing = normalizeLandingData(
+      applyBlueprintToLanding(
+        input.templateLanding,
+        blueprint,
+        planned.decision
+      )
+    );
   }
   const operations: LandingOperation[] = [];
   const changedSections = new Set<LandingSectionType>();
-  const warnings: string[] = [];
   const completedSections = new Set<LandingSectionType>(
     canResume
       ? input.resume!.completedSections.filter((section) =>
@@ -117,7 +132,7 @@ export async function runLandingCreationPipeline(input: {
   input.progress?.({
     type: "status",
     stage: "planning",
-    message: `Đã lập blueprint động gồm ${blueprint.sections.length} section.`,
+    message: `Đã lập Blueprint ${blueprint.creativeFreedom} từ baseline ${input.templateSelection.name}, gồm ${blueprint.sections.length} section.`,
   });
 
   for (let index = 0; index < blueprint.sections.length; index += 1) {

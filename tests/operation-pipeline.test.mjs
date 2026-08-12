@@ -44,6 +44,22 @@ async function loadLandingValidationModules() {
   return { ...dataModule, ...operationsModule };
 }
 
+async function loadBlueprintDecisionModule() {
+  const [dataSource, decisionSource] = await Promise.all([
+    readFile(new URL("../app/landing-data.ts", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/server/agents/blueprint-decision.ts", import.meta.url),
+      "utf8"
+    ),
+  ]);
+  const dataUrl = toModuleUrl(compileModule(dataSource));
+  const resolvedDecisionSource = decisionSource.replace(
+    '"../../landing-data"',
+    JSON.stringify(dataUrl)
+  );
+  return import(toModuleUrl(compileModule(resolvedDecisionSource)));
+}
+
 test("operation engine rejects unsafe or out-of-schema changes before applying", async () => {
   const source = await readFile(
     new URL("../app/landing-operations.ts", import.meta.url),
@@ -58,6 +74,79 @@ test("operation engine rejects unsafe or out-of-schema changes before applying",
   assert.match(source, /operations\.length > 50/);
   assert.match(source, /const errors = validateLandingData\(landing, current\)/);
   assert.match(source, /normalizeLandingOperationInput\(rawValue, options\)/);
+});
+
+test("custom blocks use their dedicated operation instead of replace_section", async () => {
+  const {
+    defaultLanding,
+    normalizeLandingData,
+    parseLandingOperationEnvelope,
+  } = await loadLandingValidationModules();
+  const current = normalizeLandingData(defaultLanding);
+
+  assert.throws(
+    () =>
+      parseLandingOperationEnvelope(
+        {
+          operations: [
+            {
+              type: "replace_section",
+              section: "customBlock",
+              value: { htmlCode: "<section>Không hợp lệ</section>" },
+            },
+          ],
+        },
+        { mode: "edit", current, source: "ai" }
+      ),
+    /update_custom_block/
+  );
+});
+
+test("blueprint decisions normalize semantic aliases into registered catalog values", async () => {
+  const { parseBlueprintDecision } = await loadBlueprintDecisionModule();
+  const decision = parseBlueprintDecision(
+    {
+      creativeFreedom: "high",
+      templateFit: "weak",
+      deviationReason: "The brief is demo-led and needs a more visual journey.",
+      sections: ["hero", "Demo", "features", "finalCta"],
+      sectionVariants: {
+        hero: "full-screen",
+        Demo: "showcase",
+        features: "alternating",
+        finalCta: "split",
+      },
+      typography: { heading: "modern", body: "sans" },
+      density: "spacious",
+      radius: "lg",
+      palette: {
+        ink: "#101828",
+        paper: "#ffffff",
+        accent: "#7c3aed",
+        soft: "#f1edff",
+        line: "#d8d1ef",
+      },
+      visualDirection: {
+        mood: ["futuristic", "cinematic"],
+        typography: "Bold modern display headings",
+        density: "airy",
+        imageStyle: "Product footage and UI stills",
+        radius: "large",
+        contrast: "high",
+      },
+    },
+    "high"
+  );
+
+  assert.deepEqual(decision.sections, [
+    "hero",
+    "gallery",
+    "features",
+    "finalCta",
+  ]);
+  assert.equal(decision.sectionVariants.hero, "image-background");
+  assert.equal(decision.sectionVariants.gallery, "showcase");
+  assert.equal(decision.sectionVariants.features, "alternating");
 });
 
 test("operation engine accepts and validates per-section color overrides", async () => {
@@ -86,6 +175,171 @@ test("operation engine accepts and validates per-section color overrides", async
     validateLandingData(invalidColorLanding).join("\n"),
     /sectionColors\.hero\.background.*hex/i
   );
+});
+
+test("set_design applies controlled stats text sizes without changing unrelated sections", async () => {
+  const {
+    defaultLanding,
+    normalizeLandingData,
+    parseLandingOperationEnvelope,
+    applyLandingOperations,
+    validateLandingData,
+  } = await loadLandingValidationModules();
+  const current = normalizeLandingData(defaultLanding);
+  const envelope = parseLandingOperationEnvelope(
+    {
+      operations: [
+        {
+          type: "set_design",
+          sectionTextSizes: {
+            stats: { value: "xl", label: "lg" },
+          },
+        },
+      ],
+    },
+    { mode: "edit", current, source: "ai" }
+  );
+  const applied = applyLandingOperations(current, envelope.operations);
+
+  assert.equal(applied.landing.design.sectionTextSizes.stats.value, "xl");
+  assert.equal(applied.landing.design.sectionTextSizes.stats.label, "lg");
+  assert.deepEqual(applied.changedSections, ["stats"]);
+  assert.deepEqual(validateLandingData(applied.landing), []);
+
+  assert.throws(
+    () =>
+      parseLandingOperationEnvelope(
+        {
+          operations: [
+            {
+              type: "set_design",
+              sectionTextSizes: { stats: { value: "huge" } },
+            },
+          ],
+        },
+        { mode: "edit", current, source: "ai" }
+      ),
+    /sectionTextSizes\.stats\.value/
+  );
+});
+
+test("set_design applies controlled pricing text sizes and detects no-op changes", async () => {
+  const {
+    defaultLanding,
+    normalizeLandingData,
+    parseLandingOperationEnvelope,
+    applyLandingOperations,
+    validateLandingData,
+  } = await loadLandingValidationModules();
+  const current = normalizeLandingData(defaultLanding);
+  const envelope = parseLandingOperationEnvelope(
+    {
+      operations: [
+        {
+          type: "set_design",
+          sectionTextSizes: {
+            pricing: {
+              heading: "lg",
+              name: "lg",
+              price: "xl",
+              description: "lg",
+              features: "lg",
+              cta: "lg",
+            },
+          },
+        },
+      ],
+    },
+    { mode: "edit", current, source: "ai" }
+  );
+  const applied = applyLandingOperations(current, envelope.operations);
+
+  assert.deepEqual(applied.landing.design.sectionTextSizes.pricing, {
+    heading: "lg",
+    name: "lg",
+    price: "xl",
+    description: "lg",
+    features: "lg",
+    cta: "lg",
+  });
+  assert.deepEqual(applied.changedSections, ["pricing"]);
+  assert.deepEqual(validateLandingData(applied.landing), []);
+
+  const noOpEnvelope = parseLandingOperationEnvelope(
+    {
+      operations: [
+        {
+          type: "set_design",
+          sectionTextSizes: {
+            pricing: { heading: "md" },
+          },
+        },
+      ],
+    },
+    { mode: "edit", current, source: "ai" }
+  );
+  const noOp = applyLandingOperations(current, noOpEnvelope.operations);
+  assert.deepEqual(noOp.changedSections, []);
+
+  assert.throws(
+    () =>
+      parseLandingOperationEnvelope(
+        {
+          operations: [
+            {
+              type: "set_design",
+              sectionTextSizes: { pricing: { price: "huge" } },
+            },
+          ],
+        },
+        { mode: "edit", current, source: "ai" }
+      ),
+    /sectionTextSizes\.pricing\.price/
+  );
+});
+
+test("section typography tokens preserve responsive editor rendering and prompt mapping", async () => {
+  const [canvas, styles, skill, builderPlan, websiteBuilderAgent] = await Promise.all([
+    readFile(
+      new URL("../app/components/LandingCanvas.tsx", import.meta.url),
+      "utf8"
+    ),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
+    readFile(
+      new URL("../app/server/skills/landing-builder-skill.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/builder-plan.ts", import.meta.url),
+      "utf8"
+    ),
+    readFile(
+      new URL("../app/server/agents/website-builder-agent.ts", import.meta.url),
+      "utf8"
+    ),
+  ]);
+
+  assert.match(canvas, /stats-value-size-/);
+  assert.match(canvas, /stats-label-size-/);
+  assert.match(canvas, /pricing-heading-size-/);
+  assert.match(canvas, /pricing-price-size-/);
+  assert.match(canvas, /pricing-cta-size-/);
+  assert.match(styles, /\.landing-canvas\.is-compact \.stat-card > span/);
+  assert.doesNotMatch(
+    styles,
+    /\.landing-canvas\.is-compact \.stat-card span\s*\{/
+  );
+  assert.match(styles, /--pricing-heading-font-size/);
+  assert.match(styles, /--pricing-price-font-delta/);
+  assert.match(styles, /\.pricing-section\.pricing-price-size-xl/);
+  assert.match(skill, /sectionTextSizes\.stats\.value/);
+  assert.match(skill, /sectionTextSizes\.stats\.label/);
+  assert.match(skill, /sectionTextSizes\.pricing\.heading/);
+  assert.match(skill, /'Toàn bộ\/chữ phần bảng giá'/);
+  assert.match(builderPlan, /"set_design"/);
+  assert.match(builderPlan, /đổi cỡ chữ/);
+  assert.match(websiteBuilderAgent, /noLandingChangeMessage/);
+  assert.match(websiteBuilderAgent, /changedSections\.length/);
 });
 
 test("AI operation normalizer is schema-driven and preserves ambiguous unknown fields", async () => {
@@ -375,6 +629,7 @@ test("creation keeps uploaded assets manual and makes the whole Hero droppable",
     websiteBuilder,
     aiRoute,
     studio,
+    styles,
   ] = await Promise.all([
     readFile(new URL("../app/components/LandingCanvas.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/server/agents/planning-agent.ts", import.meta.url), "utf8"),
@@ -393,6 +648,7 @@ test("creation keeps uploaded assets manual and makes the whole Hero droppable",
     ),
     readFile(new URL("../app/api/ai/route.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/Studio.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   const imageBackgroundFrame = canvas.match(
@@ -404,6 +660,18 @@ test("creation keeps uploaded assets manual and makes the whole Hero droppable",
   assert.match(canvas, /\[null, items\[1\], items\[2\]\]/);
   assert.match(canvas, /function HeroEditorDropSurface/);
   assert.match(canvas, /onDropImage\?\.\("hero", payload\)/);
+  assert.match(
+    styles,
+    /\.hero-editor-drop-surface\s*\{[\s\S]*?width:\s*100%;[\s\S]*?display:\s*block;/
+  );
+  assert.match(
+    styles,
+    /\.hero-editor-drop-surface \.hero-image-wrap\s*\{[\s\S]*?display:\s*grid;/
+  );
+  assert.match(
+    styles,
+    /\.hero-editor-drop-surface \.hero-image-wrap > \.image-drop-zone\s*\{[\s\S]*?align-self:\s*stretch;/
+  );
   assert.match(canvas, /target="hero"/);
   assert.match(canvas, /target=\{`portfolio:\$\{index\}`\}/);
   assert.match(canvas, /target="gallery:add"/);
