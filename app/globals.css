@@ -1522,6 +1522,7 @@ textarea:focus-visible {
   height: 100%;
   max-height: 730px;
   overflow: hidden;
+  contain: layout paint;
   border: 1px solid #d3d8d4;
   border-radius: 11px;
   background: white;
@@ -2365,6 +2366,31 @@ textarea:focus-visible {
   overflow: auto;
   scrollbar-width: thin;
   scrollbar-color: rgba(66, 83, 74, 0.25) transparent;
+}
+
+.preview-loading {
+  min-height: 100%;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: #607067;
+  background: #f7f4ea;
+}
+
+.preview-loading span {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #d8e2da;
+  border-top-color: #3d7853;
+  border-radius: 50%;
+  animation: crm-spin 800ms linear infinite;
+}
+
+.preview-loading p {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .preview-footer {

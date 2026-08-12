@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
-import { projects } from "../../../db/schema";
+import { assets, projects } from "../../../db/schema";
 import {
   inferDashboardType,
   isDashboardType,
@@ -54,8 +54,8 @@ export async function GET(request: Request) {
     const user = await getCurrentDatabaseUser();
     if (!user) return unauthorized();
 
-    await ensureDatabase();
-    const id = new URL(request.url).searchParams.get("id");
+    const requestUrl = new URL(request.url);
+    const id = requestUrl.searchParams.get("id");
     if (id) {
       const [row] = await getDb()
         .select()
@@ -85,13 +85,54 @@ export async function GET(request: Request) {
       .from(projects)
       .where(and(eq(projects.ownerId, user.id), isNull(projects.deletedAt)))
       .orderBy(desc(projects.updatedAt));
+    const projectSummaries = rows.map(({ data, ...row }) => ({
+      ...row,
+      resolvedDashboardType:
+        row.dashboardType === "auto"
+          ? inferDashboardType(JSON.parse(data))
+          : row.dashboardType,
+    }));
+    if (requestUrl.searchParams.get("bootstrap") !== "1" || !rows.length) {
+      return Response.json({ projects: projectSummaries });
+    }
+
+    const activeProjectId = rows[0].id;
+    const [activeProject, projectAssets] = await Promise.all([
+      getDb()
+        .select()
+        .from(projects)
+        .where(
+          and(
+            eq(projects.id, activeProjectId),
+            eq(projects.ownerId, user.id),
+            isNull(projects.deletedAt)
+          )
+        )
+        .limit(1),
+      getDb()
+        .select({
+          id: assets.id,
+          filename: assets.filename,
+          createdAt: assets.createdAt,
+        })
+        .from(assets)
+        .where(
+          and(
+            eq(assets.projectId, activeProjectId),
+            eq(assets.ownerId, user.id)
+          )
+        )
+        .orderBy(desc(assets.createdAt)),
+    ]);
+
     return Response.json({
-      projects: rows.map(({ data, ...row }) => ({
-        ...row,
-        resolvedDashboardType:
-          row.dashboardType === "auto"
-            ? inferDashboardType(JSON.parse(data))
-            : row.dashboardType,
+      projects: projectSummaries,
+      project: activeProject[0] ? parseProject(activeProject[0]) : null,
+      assets: projectAssets.map((asset) => ({
+        id: asset.id,
+        url: `/api/assets/${asset.id}`,
+        alt: asset.filename.replace(/\.[^.]+$/, ""),
+        createdAt: asset.createdAt,
       })),
     });
   } catch (error) {

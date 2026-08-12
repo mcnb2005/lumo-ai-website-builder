@@ -182,6 +182,8 @@ test("ships company-scoped RBAC and administration", async () => {
   assert.match(invitationApi, /status = 'active'/);
   assert.match(joinPage, /requireCurrentDatabaseUser/);
   assert.match(serverUser, /getExistingCompanyForUser/);
+  assert.match(serverUser, /INNER JOIN users user ON user\.id = session\.user_id/);
+  assert.match(serverUser, /LEFT JOIN company_members membership/);
   assert.match(serverUser, /mustChangePassword/);
   assert.match(serverUser, /\/login\?returnTo=/);
   assert.doesNotMatch(serverUser, /ensureCompanyForUser/);

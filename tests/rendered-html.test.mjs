@@ -26,6 +26,9 @@ test("defines the complete multi-project Lumo studio experience", async () => {
   assert.match(studio, /selectedSection/);
   assert.match(studio, /\/api\/publish/);
   assert.match(studio, /\/api\/assets/);
+  assert.match(studio, /\/api\/projects\?bootstrap=1/);
+  assert.doesNotMatch(studio, /fetch\("\/api\/auth\/me"\)/);
+  assert.match(studio, /preview-loading/);
   assert.match(landing, /pricing-section/);
   assert.match(landing, /portfolio-section/);
   assert.match(landing, /gallery-section/);
@@ -40,23 +43,28 @@ test("defines the complete multi-project Lumo studio experience", async () => {
     /<a href="#features">Giáº£i phÃ¡p<\/a>/
   );
   assert.match(projects, /projects\.ownerId/);
+  assert.match(projects, /searchParams\.get\("bootstrap"\)/);
+  assert.match(projects, /assets\.projectId/);
   assert.match(publish, /projects\.ownerId/);
   assert.doesNotMatch(studio, /codex-preview|react-loading-skeleton/i);
 });
 
 test("ships production metadata, persistence and image storage", async () => {
-  const [layout, page, packageJson, css, schema, hosting] = await Promise.all([
+  const [layout, page, packageJson, css, schema, database, companyData, hosting] =
+    await Promise.all([
     readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
     readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
+    readFile(new URL("../db/index.ts", import.meta.url), "utf8"),
+    readFile(new URL("../app/company-data.ts", import.meta.url), "utf8"),
     readFile(new URL("../.openai/hosting.json", import.meta.url), "utf8"),
   ]);
 
   assert.match(layout, /Lumo/);
   assert.match(layout, /\/og\.png/);
-  assert.match(page, /<Studio \/>/);
+  assert.match(page, /<Studio initialUser=\{user\} \/>/);
   assert.match(packageJson, /"name": "lumo-ai-landing-studio"/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.match(css, /"Times New Roman", Times, "Noto Serif", serif/);
@@ -64,6 +72,13 @@ test("ships production metadata, persistence and image storage", async () => {
   assert.match(schema, /ownerId: text\("owner_id"\)/);
   assert.match(schema, /export const assets/);
   assert.match(schema, /export const leads/);
+  assert.match(database, /let databaseReady: Promise<void> \| null = null/);
+  assert.match(database, /databaseSchemaIsCurrent/);
+  assert.match(database, /if \(!schemaIsCurrent\)/);
+  assert.match(
+    companyData,
+    /if \(existingMembership\) \{\s*return toContext\(existingMembership\);\s*\}/
+  );
   assert.match(hosting, /"r2": "ASSETS"/);
   await assert.rejects(
     access(new URL("../app/_sites-preview/SkeletonPreview.tsx", import.meta.url))

@@ -56,27 +56,66 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
     const sessionHash = await hashOpaqueToken(sessionToken);
     const session = await getD1()
       .prepare(
-        "SELECT user_id, expires_at FROM auth_sessions WHERE id = ? LIMIT 1"
+        `SELECT
+          session.expires_at,
+          user.id,
+          user.email,
+          user.username,
+          user.name,
+          user.avatar_url,
+          user.must_change_password,
+          company.id AS company_id,
+          company.name AS company_name,
+          membership.role AS company_role
+         FROM auth_sessions session
+         INNER JOIN users user ON user.id = session.user_id
+         LEFT JOIN company_members membership
+           ON membership.user_id = user.id AND membership.status = 'active'
+         LEFT JOIN companies company ON company.id = membership.company_id
+         WHERE session.id = ?
+         ORDER BY
+           CASE membership.role
+             WHEN 'owner' THEN 0
+             WHEN 'admin' THEN 1
+             WHEN 'member' THEN 2
+             ELSE 3
+           END,
+           membership.created_at ASC
+         LIMIT 1`
       )
       .bind(sessionHash)
-      .first<{ user_id: string; expires_at: string }>();
+      .first<{
+        expires_at: string;
+        id: string;
+        email: string;
+        username: string | null;
+        name: string | null;
+        avatar_url: string | null;
+        must_change_password: number;
+        company_id: string | null;
+        company_name: string | null;
+        company_role: string | null;
+      }>();
 
     if (session?.expires_at && session.expires_at > now) {
-      const [user] = await getDb()
-        .select()
-        .from(users)
-        .where(eq(users.id, session.user_id))
-        .limit(1);
-      if (user) {
-        return withCompany({
-          id: user.id,
-          email: user.email,
-          username: user.username,
-          name: user.name || user.username || user.email,
-          avatarUrl: user.avatarUrl,
-          mustChangePassword: Boolean(user.mustChangePassword),
-        });
-      }
+      const companyRole =
+        session.company_role === "owner" ||
+        session.company_role === "admin" ||
+        session.company_role === "member" ||
+        session.company_role === "viewer"
+          ? session.company_role
+          : undefined;
+      return {
+        id: session.id,
+        email: session.email,
+        username: session.username,
+        name: session.name || session.username || session.email,
+        avatarUrl: session.avatar_url,
+        mustChangePassword: Boolean(session.must_change_password),
+        companyId: session.company_id || undefined,
+        companyName: session.company_name || undefined,
+        companyRole,
+      };
     } else if (session) {
       await getD1()
         .prepare("DELETE FROM auth_sessions WHERE id = ?")

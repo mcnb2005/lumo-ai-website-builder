@@ -99,6 +99,7 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(canvas, /mode === "editor"/);
   assert.match(canvas, /function editableText/);
   assert.match(canvas, /onEditText/);
+  assert.match(canvas, /selectedSection === section/);
   assert.match(studio, /applyLandingTextEdit/);
   assert.match(studio, /onEditText=\{editLandingText\}/);
   assert.match(inlineComponent, /contentEditable/);
@@ -148,6 +149,8 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(styles, /\.section-color-field__control input\[type="color"\]/);
   assert.match(styles, /\.section-color-panel__contrast\.is-warning/);
   assert.match(styles, /\.section-color-panel__visibility/);
+  assert.match(styles, /\.preview-loading\s*\{/);
+  assert.match(styles, /contain: layout paint/);
   assert.match(generationProgress, /GenerationStage/);
   assert.match(styles, /\.landing-hero\.variant-centered/);
   assert.match(styles, /\.landing-hero\.variant-product-showcase/);

@@ -69,8 +69,84 @@ export function getAssetsBucket() {
   return binding;
 }
 
-export async function ensureDatabase() {
-  const binding = getD1();
+let databaseReady: Promise<void> | null = null;
+
+const REQUIRED_INDEXES = [
+  "projects_slug_idx",
+  "users_google_sub_idx",
+  "users_username_idx",
+  "auth_sessions_user_idx",
+  "auth_sessions_expiry_idx",
+  "auth_states_expiry_idx",
+  "projects_owner_idx",
+  "projects_company_idx",
+  "projects_creator_idx",
+  "companies_owner_idx",
+  "company_members_company_user_idx",
+  "company_members_user_idx",
+  "company_invitations_email_idx",
+  "company_audit_company_idx",
+  "assets_project_idx",
+  "leads_project_idx",
+  "leads_status_idx",
+  "orders_project_idx",
+  "orders_status_idx",
+  "ai_usage_period_idx",
+] as const;
+
+async function databaseSchemaIsCurrent(binding: D1Database) {
+  await binding
+    .prepare(
+      `SELECT
+        u.username,
+        u.google_sub,
+        u.avatar_url,
+        u.password_hash,
+        u.must_change_password,
+        u.password_updated_at,
+        auth_state.purpose,
+        auth_state.user_id,
+        project.owner_id,
+        project.created_by_id,
+        project.company_id,
+        project.dashboard_type,
+        project.deleted_at,
+        lead.status,
+        lead.notes,
+        lead.updated_at,
+        order_row.confirmation_email_sent_at,
+        order_row.calendar_event_id
+       FROM users u
+       CROSS JOIN auth_states auth_state
+       CROSS JOIN projects project
+       CROSS JOIN leads lead
+       CROSS JOIN orders order_row
+       CROSS JOIN companies company
+       CROSS JOIN company_members company_member
+       CROSS JOIN company_invitations company_invitation
+       CROSS JOIN company_audit_logs company_audit
+       CROSS JOIN auth_sessions auth_session
+       CROSS JOIN google_connections google_connection
+       CROSS JOIN assets asset
+       CROSS JOIN ai_usage usage
+       LIMIT 0`
+    )
+    .all();
+
+  const placeholders = REQUIRED_INDEXES.map(() => "?").join(", ");
+  const indexResult = await binding
+    .prepare(
+      `SELECT COUNT(*) AS index_count
+       FROM sqlite_master
+       WHERE type = 'index' AND name IN (${placeholders})`
+    )
+    .bind(...REQUIRED_INDEXES)
+    .first<{ index_count: number }>();
+
+  return Number(indexResult?.index_count || 0) === REQUIRED_INDEXES.length;
+}
+
+async function initializeDatabaseCompatibility(binding: D1Database) {
 
   await binding.batch([
     binding.prepare(
@@ -419,6 +495,32 @@ export async function ensureDatabase() {
       "CREATE INDEX IF NOT EXISTS ai_usage_period_idx ON ai_usage (period)"
     ),
   ]);
+}
+
+export async function ensureDatabase() {
+  if (!databaseReady) {
+    const binding = getD1();
+    const initialization = (async () => {
+      let schemaIsCurrent = false;
+      try {
+        schemaIsCurrent = await databaseSchemaIsCurrent(binding);
+      } catch {
+        // A new or older database falls back to the compatibility initializer.
+      }
+      if (!schemaIsCurrent) {
+        await initializeDatabaseCompatibility(binding);
+      }
+    })();
+    databaseReady = initialization;
+  }
+
+  const initialization = databaseReady;
+  try {
+    await initialization;
+  } catch (error) {
+    if (databaseReady === initialization) databaseReady = null;
+    throw error;
+  }
 }
 
 export function getDb() {
