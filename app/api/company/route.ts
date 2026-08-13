@@ -15,6 +15,7 @@ import {
   generateTemporaryPassword,
   hashPassword,
 } from "../../password-auth";
+import { readCompanyNotificationEmailSettings } from "../../server/company-notification-email";
 
 function validManagedRole(
   value: unknown
@@ -263,6 +264,10 @@ export async function GET() {
     await ensureDatabase();
     const { company } = auth;
     const manager = canManageCompany(company.role);
+    const canManageNotificationEmail = company.role === "owner";
+    const notificationEmail = canManageNotificationEmail
+      ? await readCompanyNotificationEmailSettings(company.companyId)
+      : null;
 
     const members = manager
       ? await getD1()
@@ -381,6 +386,8 @@ export async function GET() {
         role: company.role,
         canManage: manager,
         canCreateLanding: canCreateLanding(company.role),
+        canManageNotificationEmail,
+        notificationEmail,
       },
       members: members.results || [],
       projects: projectRows.results || [],

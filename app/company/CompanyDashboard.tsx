@@ -1,9 +1,25 @@
 "use client";
 
 import Link from "next/link";
-import { ChangeEvent, FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 type CompanyRole = "owner" | "admin" | "member" | "viewer";
+
+type CompanyNotificationEmailSettings = {
+  email: string | null;
+  verifiedAt: string | null;
+  pendingEmail: string | null;
+  verificationExpiresAt: string | null;
+  resendAvailableAt: string | null;
+  verificationAttemptCount: number;
+};
 
 type CompanyInfo = {
   id: string;
@@ -12,6 +28,8 @@ type CompanyInfo = {
   role: CompanyRole;
   canManage: boolean;
   canCreateLanding: boolean;
+  canManageNotificationEmail: boolean;
+  notificationEmail: CompanyNotificationEmailSettings | null;
 };
 
 type Member = {
@@ -227,8 +245,17 @@ export function CompanyDashboard({
   const [bulkAccountsText, setBulkAccountsText] = useState("");
   const [bulkFileName, setBulkFileName] = useState("");
   const [bulkFailures, setBulkFailures] = useState<BulkFailure[]>([]);
+  const [notificationEmailAddress, setNotificationEmailAddress] = useState("");
+  const [notificationVerificationCode, setNotificationVerificationCode] =
+    useState("");
+  const [notificationEmailAction, setNotificationEmailAction] = useState("");
+  const [notificationEmailFeedback, setNotificationEmailFeedback] = useState<{
+    tone: "success" | "error";
+    message: string;
+  } | null>(null);
+  const [notificationClock, setNotificationClock] = useState(() => Date.now());
 
-  async function loadCompany() {
+  const loadCompany = useCallback(async () => {
     try {
       const response = await fetch("/api/company");
       const result = (await response.json()) as CompanyResponse;
@@ -238,6 +265,14 @@ export function CompanyDashboard({
       setCompany(result.company);
       setMembers(result.members || []);
       setProjects(result.projects || []);
+      if (result.company.canManageNotificationEmail) {
+        const settings = result.company.notificationEmail;
+        setNotificationEmailAddress(
+          settings?.pendingEmail ||
+            settings?.email ||
+            (userEmail.endsWith("@lumo.local") ? "" : userEmail)
+        );
+      }
     } catch (error) {
       setNotice(
         error instanceof Error
@@ -247,14 +282,161 @@ export function CompanyDashboard({
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [userEmail]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
       void loadCompany();
     }, 0);
     return () => window.clearTimeout(timer);
-  }, []);
+  }, [loadCompany]);
+
+  const notificationSettings = company?.notificationEmail || null;
+  const resendWaitSeconds = notificationSettings?.resendAvailableAt
+    ? Math.max(
+        0,
+        Math.ceil(
+          (new Date(notificationSettings.resendAvailableAt).getTime() -
+            notificationClock) /
+            1000
+        )
+      )
+    : 0;
+
+  useEffect(() => {
+    if (!notificationSettings?.resendAvailableAt || resendWaitSeconds <= 0) {
+      return;
+    }
+    const timer = window.setInterval(
+      () => setNotificationClock(Date.now()),
+      1000
+    );
+    return () => window.clearInterval(timer);
+  }, [notificationSettings?.resendAvailableAt, resendWaitSeconds]);
+
+  function applyNotificationEmailSettings(
+    settings: CompanyNotificationEmailSettings
+  ) {
+    setCompany((current) =>
+      current ? { ...current, notificationEmail: settings } : current
+    );
+  }
+
+  async function requestNotificationEmailVerification(
+    event: FormEvent<HTMLFormElement>
+  ) {
+    event.preventDefault();
+    if (!notificationEmailAddress.trim()) return;
+    setNotificationEmailAction("requestVerification");
+    setNotificationEmailFeedback(null);
+    try {
+      const response = await fetch("/api/company/notification-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "requestVerification",
+          email: notificationEmailAddress,
+        }),
+      });
+      const result = (await response.json()) as {
+        settings?: CompanyNotificationEmailSettings;
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.settings) {
+        throw new Error(result.error || "Không thể gửi mã xác minh.");
+      }
+      applyNotificationEmailSettings(result.settings);
+      setNotificationVerificationCode("");
+      setNotificationClock(Date.now());
+      setNotificationEmailFeedback({
+        tone: "success",
+        message: result.message || "Đã gửi mã xác minh.",
+      });
+    } catch (error) {
+      setNotificationEmailFeedback({
+        tone: "error",
+        message:
+          error instanceof Error
+            ? error.message
+            : "Không thể gửi mã xác minh.",
+      });
+    } finally {
+      setNotificationEmailAction("");
+    }
+  }
+
+  async function verifyNotificationEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setNotificationEmailAction("verify");
+    setNotificationEmailFeedback(null);
+    try {
+      const response = await fetch("/api/company/notification-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "verify",
+          code: notificationVerificationCode,
+        }),
+      });
+      const result = (await response.json()) as {
+        settings?: CompanyNotificationEmailSettings;
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok || !result.settings) {
+        throw new Error(result.error || "Không thể xác minh email.");
+      }
+      applyNotificationEmailSettings(result.settings);
+      setNotificationEmailAddress(result.settings.email || "");
+      setNotificationVerificationCode("");
+      setNotificationEmailFeedback({
+        tone: "success",
+        message: result.message || "Email nhận thông báo đã được xác minh.",
+      });
+    } catch (error) {
+      setNotificationEmailFeedback({
+        tone: "error",
+        message:
+          error instanceof Error ? error.message : "Không thể xác minh email.",
+      });
+    } finally {
+      setNotificationEmailAction("");
+    }
+  }
+
+  async function sendNotificationEmailTest() {
+    setNotificationEmailAction("sendTest");
+    setNotificationEmailFeedback(null);
+    try {
+      const response = await fetch("/api/company/notification-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sendTest" }),
+      });
+      const result = (await response.json()) as {
+        settings?: CompanyNotificationEmailSettings;
+        message?: string;
+        error?: string;
+      };
+      if (!response.ok) {
+        throw new Error(result.error || "Không thể gửi email thử.");
+      }
+      if (result.settings) applyNotificationEmailSettings(result.settings);
+      setNotificationEmailFeedback({
+        tone: "success",
+        message: result.message || "Đã gửi email thử.",
+      });
+    } catch (error) {
+      setNotificationEmailFeedback({
+        tone: "error",
+        message:
+          error instanceof Error ? error.message : "Không thể gửi email thử.",
+      });
+    } finally {
+      setNotificationEmailAction("");
+    }
+  }
 
   const filteredProjects = useMemo(() => {
     const keyword = search.trim().toLocaleLowerCase("vi");
@@ -648,6 +830,159 @@ export function CompanyDashboard({
             <small>Tài khoản chỉ xem dashboard</small>
           </article>
         </div>
+
+        {company?.canManageNotificationEmail ? (
+          <section
+            className="company-panel company-notification-panel"
+            id="notification-email"
+          >
+            <div className="company-notification-heading">
+              <div>
+                <p>THÔNG BÁO KHÁCH HÀNG</p>
+                <h2>Email nhận lead và đơn hàng</h2>
+                <span>
+                  Email này độc lập với tài khoản đăng nhập và chỉ được sử dụng
+                  sau khi xác minh.
+                </span>
+              </div>
+              <strong
+                className={`company-notification-badge ${
+                  notificationSettings?.pendingEmail
+                    ? "is-pending"
+                    : notificationSettings?.email &&
+                        notificationSettings.verifiedAt
+                      ? "is-verified"
+                      : "is-empty"
+                }`}
+              >
+                {notificationSettings?.pendingEmail
+                  ? "Đang chờ xác minh"
+                  : notificationSettings?.email &&
+                      notificationSettings.verifiedAt
+                    ? "Đã xác minh"
+                    : "Chưa thiết lập"}
+              </strong>
+            </div>
+
+            {notificationSettings?.email && notificationSettings.verifiedAt ? (
+              <div className="company-notification-current">
+                <div>
+                  <span>Email đang nhận thông báo</span>
+                  <strong>{notificationSettings.email}</strong>
+                  <small>
+                    Xác minh lúc {formatDate(notificationSettings.verifiedAt)}
+                  </small>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => void sendNotificationEmailTest()}
+                  disabled={Boolean(notificationEmailAction)}
+                >
+                  {notificationEmailAction === "sendTest"
+                    ? "Đang gửi…"
+                    : "Gửi email thử"}
+                </button>
+              </div>
+            ) : null}
+
+            <form
+              className="company-notification-request"
+              onSubmit={requestNotificationEmailVerification}
+            >
+              <label htmlFor="company-notification-email">
+                {notificationSettings?.email
+                  ? "Thay đổi email nhận thông báo"
+                  : "Email nhận thông báo"}
+                <input
+                  id="company-notification-email"
+                  type="email"
+                  value={notificationEmailAddress}
+                  onChange={(event) =>
+                    setNotificationEmailAddress(event.target.value)
+                  }
+                  placeholder="thongbao@congty.vn"
+                  autoComplete="email"
+                  maxLength={254}
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                disabled={
+                  Boolean(notificationEmailAction) || resendWaitSeconds > 0
+                }
+              >
+                {notificationEmailAction === "requestVerification"
+                  ? "Đang gửi…"
+                  : resendWaitSeconds > 0
+                    ? `Gửi lại sau ${resendWaitSeconds}s`
+                    : notificationSettings?.pendingEmail
+                      ? "Gửi lại mã"
+                      : "Gửi mã xác minh"}
+              </button>
+            </form>
+
+            {notificationSettings?.pendingEmail ? (
+              <div className="company-notification-verification">
+                <div>
+                  <span>Mã đã gửi tới</span>
+                  <strong>{notificationSettings.pendingEmail}</strong>
+                  {notificationSettings.verificationExpiresAt ? (
+                    <small>
+                      Hết hạn lúc {formatDate(notificationSettings.verificationExpiresAt)}
+                    </small>
+                  ) : null}
+                </div>
+                <form onSubmit={verifyNotificationEmail}>
+                  <label htmlFor="company-notification-code">
+                    Mã gồm 6 chữ số
+                    <input
+                      id="company-notification-code"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="one-time-code"
+                      pattern="[0-9]{6}"
+                      maxLength={6}
+                      value={notificationVerificationCode}
+                      onChange={(event) =>
+                        setNotificationVerificationCode(
+                          event.target.value.replace(/\D/g, "").slice(0, 6)
+                        )
+                      }
+                      placeholder="000000"
+                      required
+                    />
+                  </label>
+                  <button
+                    type="submit"
+                    disabled={
+                      Boolean(notificationEmailAction) ||
+                      notificationVerificationCode.length !== 6
+                    }
+                  >
+                    {notificationEmailAction === "verify"
+                      ? "Đang xác minh…"
+                      : "Xác minh email"}
+                  </button>
+                </form>
+              </div>
+            ) : null}
+
+            {notificationEmailFeedback ? (
+              <div
+                className={`company-notification-feedback is-${notificationEmailFeedback.tone}`}
+                role={
+                  notificationEmailFeedback.tone === "error"
+                    ? "alert"
+                    : "status"
+                }
+                aria-live="polite"
+              >
+                {notificationEmailFeedback.message}
+              </div>
+            ) : null}
+          </section>
+        ) : null}
 
         {company?.canManage ? (
           <section className="company-panel company-invite-panel">

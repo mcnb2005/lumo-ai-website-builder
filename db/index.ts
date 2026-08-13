@@ -88,6 +88,7 @@ const REQUIRED_INDEXES = [
   "projects_company_idx",
   "projects_creator_idx",
   "companies_owner_idx",
+  "company_notification_email_verifications_expiry_idx",
   "company_members_company_user_idx",
   "company_members_user_idx",
   "company_invitations_email_idx",
@@ -97,6 +98,8 @@ const REQUIRED_INDEXES = [
   "leads_status_idx",
   "orders_project_idx",
   "orders_status_idx",
+  "record_notifications_record_idx",
+  "record_notifications_project_idx",
   "ai_usage_period_idx",
 ] as const;
 
@@ -110,6 +113,14 @@ async function databaseSchemaIsCurrent(binding: D1Database) {
         u.password_hash,
         u.must_change_password,
         u.password_updated_at,
+        company.notification_email,
+        company.notification_email_verified_at,
+        company_email_verification.email,
+        company_email_verification.code_hash,
+        company_email_verification.attempt_count,
+        company_email_verification.expires_at,
+        company_email_verification.last_sent_at,
+        company_email_verification.requested_by,
         auth_state.purpose,
         auth_state.user_id,
         project.owner_id,
@@ -121,19 +132,29 @@ async function databaseSchemaIsCurrent(binding: D1Database) {
         lead.notes,
         lead.updated_at,
         order_row.confirmation_email_sent_at,
-        order_row.calendar_event_id
+        order_row.calendar_event_id,
+        notification.record_type,
+        notification.record_id,
+        notification.recipient_email,
+        notification.status,
+        notification.attempt_count,
+        notification.last_error,
+        notification.last_attempt_at,
+        notification.sent_at
        FROM users u
        CROSS JOIN auth_states auth_state
        CROSS JOIN projects project
        CROSS JOIN leads lead
        CROSS JOIN orders order_row
        CROSS JOIN companies company
+       CROSS JOIN company_notification_email_verifications company_email_verification
        CROSS JOIN company_members company_member
        CROSS JOIN company_invitations company_invitation
        CROSS JOIN company_audit_logs company_audit
        CROSS JOIN auth_sessions auth_session
        CROSS JOIN google_connections google_connection
        CROSS JOIN assets asset
+       CROSS JOIN record_notifications notification
        CROSS JOIN ai_usage usage
        LIMIT 0`
     )
@@ -186,6 +207,21 @@ async function initializeDatabaseCompatibility(binding: D1Database) {
         name TEXT NOT NULL,
         slug TEXT NOT NULL UNIQUE,
         owner_id TEXT NOT NULL,
+        notification_email TEXT,
+        notification_email_verified_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
+      `CREATE TABLE IF NOT EXISTS company_notification_email_verifications (
+        company_id TEXT PRIMARY KEY NOT NULL,
+        email TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        expires_at TEXT NOT NULL,
+        last_sent_at TEXT NOT NULL,
+        requested_by TEXT NOT NULL,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`
@@ -305,6 +341,22 @@ async function initializeDatabaseCompatibility(binding: D1Database) {
       )`
     ),
     binding.prepare(
+      `CREATE TABLE IF NOT EXISTS record_notifications (
+        id TEXT PRIMARY KEY NOT NULL,
+        project_id TEXT NOT NULL,
+        record_type TEXT NOT NULL,
+        record_id TEXT NOT NULL,
+        recipient_email TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        attempt_count INTEGER NOT NULL DEFAULT 0,
+        last_error TEXT,
+        last_attempt_at TEXT,
+        sent_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
       `CREATE TABLE IF NOT EXISTS ai_usage (
         key TEXT PRIMARY KEY NOT NULL,
         period TEXT NOT NULL,
@@ -360,6 +412,25 @@ async function initializeDatabaseCompatibility(binding: D1Database) {
   }
   if (!authStateColumnNames.has("user_id")) {
     await binding.prepare("ALTER TABLE auth_states ADD COLUMN user_id TEXT").run();
+  }
+
+  const companyColumns = await binding
+    .prepare("PRAGMA table_info(companies)")
+    .all<{ name: string }>();
+  const companyColumnNames = new Set(
+    companyColumns.results?.map((column) => column.name) || []
+  );
+  if (!companyColumnNames.has("notification_email")) {
+    await binding
+      .prepare("ALTER TABLE companies ADD COLUMN notification_email TEXT")
+      .run();
+  }
+  if (!companyColumnNames.has("notification_email_verified_at")) {
+    await binding
+      .prepare(
+        "ALTER TABLE companies ADD COLUMN notification_email_verified_at TEXT"
+      )
+      .run();
   }
 
   const columns = await binding
@@ -471,6 +542,9 @@ async function initializeDatabaseCompatibility(binding: D1Database) {
       "CREATE INDEX IF NOT EXISTS companies_owner_idx ON companies (owner_id)"
     ),
     binding.prepare(
+      "CREATE INDEX IF NOT EXISTS company_notification_email_verifications_expiry_idx ON company_notification_email_verifications (expires_at)"
+    ),
+    binding.prepare(
       "CREATE UNIQUE INDEX IF NOT EXISTS company_members_company_user_idx ON company_members (company_id, user_id)"
     ),
     binding.prepare(
@@ -496,6 +570,12 @@ async function initializeDatabaseCompatibility(binding: D1Database) {
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS orders_status_idx ON orders (project_id, status)"
+    ),
+    binding.prepare(
+      "CREATE UNIQUE INDEX IF NOT EXISTS record_notifications_record_idx ON record_notifications (record_type, record_id)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS record_notifications_project_idx ON record_notifications (project_id, status)"
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS ai_usage_period_idx ON ai_usage (period)"

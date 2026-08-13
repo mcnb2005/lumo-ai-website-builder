@@ -27,6 +27,10 @@ test("ships company-scoped RBAC and administration", async () => {
     passwordChangeApi,
     accountPasswordPage,
     usernameMigration,
+    notificationEmailService,
+    notificationEmailApi,
+    notificationEmailMigration,
+    styles,
   ] = await Promise.all([
     readFile(new URL("../db/schema.ts", import.meta.url), "utf8"),
     readFile(new URL("../db/index.ts", import.meta.url), "utf8"),
@@ -87,12 +91,36 @@ test("ships company-scoped RBAC and administration", async () => {
       new URL("../drizzle/0010_username_accounts.sql", import.meta.url),
       "utf8"
     ),
+    readFile(
+      new URL(
+        "../app/server/company-notification-email.ts",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "../app/api/company/notification-email/route.ts",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+    readFile(
+      new URL(
+        "../drizzle/0012_company_notification_email.sql",
+        import.meta.url
+      ),
+      "utf8"
+    ),
+    readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
   ]);
 
   assert.match(schema, /export const companies/);
   assert.match(schema, /export const companyMembers/);
   assert.match(schema, /export const companyInvitations/);
   assert.match(schema, /export const companyAuditLogs/);
+  assert.match(schema, /export const companyNotificationEmailVerifications/);
+  assert.match(schema, /notificationEmail: text\("notification_email"\)/);
   assert.match(schema, /passwordHash: text\("password_hash"\)/);
   assert.match(schema, /username: text\("username"\)\.unique\(\)/);
   assert.match(schema, /mustChangePassword/);
@@ -108,6 +136,8 @@ test("ships company-scoped RBAC and administration", async () => {
   assert.match(usernameMigration, /ALTER TABLE `users` ADD COLUMN `username` text/);
   assert.match(usernameMigration, /users_username_idx/);
   assert.match(database, /ALTER TABLE projects ADD COLUMN company_id/);
+  assert.match(database, /ALTER TABLE companies ADD COLUMN notification_email TEXT/);
+  assert.match(database, /company_notification_email_verifications_expiry_idx/);
   assert.match(companyData, /ensureCompanyForUser/);
   assert.match(companyData, /getExistingCompanyForUser/);
   assert.match(companyData, /canManageCompany/);
@@ -139,6 +169,8 @@ test("ships company-scoped RBAC and administration", async () => {
   assert.match(companyApi, /member\.account_created/);
   assert.match(companyApi, /must_change_password = 1/);
   assert.match(companyApi, /ON CONFLICT\(company_id, user_id\) DO UPDATE/);
+  assert.match(companyApi, /canManageNotificationEmail/);
+  assert.match(companyApi, /readCompanyNotificationEmailSettings/);
   assert.match(companyPage, /requireCurrentDatabaseUser/);
   assert.match(companyPage, /ensureCompanyForUser/);
   assert.doesNotMatch(companyPage, /canManageCompany/);
@@ -163,6 +195,11 @@ test("ships company-scoped RBAC and administration", async () => {
   assert.match(companyDashboard, /canCreateLanding/);
   assert.match(companyDashboard, /viewer/);
   assert.match(companyDashboard, /filteredProjects/);
+  assert.match(companyDashboard, /Email nhận lead và đơn hàng/);
+  assert.match(companyDashboard, /requestNotificationEmailVerification/);
+  assert.match(companyDashboard, /verifyNotificationEmail/);
+  assert.match(companyDashboard, /sendNotificationEmailTest/);
+  assert.match(companyDashboard, /autoComplete="one-time-code"/);
   assert.doesNotMatch(companyDashboard, /Email nhân viên/);
   assert.doesNotMatch(companyDashboard, /setEmail/);
   assert.doesNotMatch(companyDashboard, /inviteUrl/);
@@ -175,6 +212,19 @@ test("ships company-scoped RBAC and administration", async () => {
   assert.match(smtpEmail, /AUTH LOGIN/);
   assert.match(emailApi, /export async function POST/);
   assert.match(emailApi, /Kiểm tra SMTP từ Lumo/);
+  assert.match(notificationEmailService, /VERIFICATION_CODE_TTL_MS/);
+  assert.match(notificationEmailService, /MAX_VERIFICATION_ATTEMPTS = 5/);
+  assert.match(notificationEmailService, /VERIFICATION_RESEND_DELAY_MS = 60 \* 1000/);
+  assert.match(notificationEmailService, /hashOpaqueToken/);
+  assert.match(notificationEmailService, /email\.endsWith\("@lumo\.local"\)/);
+  assert.match(notificationEmailService, /notification_email_verified_at/);
+  assert.match(notificationEmailApi, /auth\.company\.role !== "owner"/);
+  assert.match(notificationEmailApi, /company\.notification_email_verified/);
+  assert.match(notificationEmailApi, /sendCompanyNotificationEmailTest/);
+  assert.match(notificationEmailMigration, /ALTER TABLE `companies` ADD `notification_email` text/);
+  assert.match(notificationEmailMigration, /company_notification_email_verifications/);
+  assert.match(styles, /\.company-notification-panel/);
+  assert.match(styles, /\.company-notification-feedback\.is-error/);
   assert.match(invitationApi, /confirmTransfer/);
   assert.match(invitationApi, /tokenHash/);
   assert.match(invitationApi, /member\.joined/);

@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  index,
   integer,
   sqliteTable,
   text,
@@ -31,9 +32,35 @@ export const companies = sqliteTable("companies", {
   ownerId: text("owner_id")
     .notNull()
     .references(() => users.id),
+  notificationEmail: text("notification_email"),
+  notificationEmailVerifiedAt: text("notification_email_verified_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const companyNotificationEmailVerifications = sqliteTable(
+  "company_notification_email_verifications",
+  {
+    companyId: text("company_id")
+      .primaryKey()
+      .references(() => companies.id),
+    email: text("email").notNull(),
+    codeHash: text("code_hash").notNull(),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    expiresAt: text("expires_at").notNull(),
+    lastSentAt: text("last_sent_at").notNull(),
+    requestedBy: text("requested_by")
+      .notNull()
+      .references(() => users.id),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("company_notification_email_verifications_expiry_idx").on(
+      table.expiresAt
+    ),
+  ]
+);
 
 export const companyMembers = sqliteTable(
   "company_members",
@@ -181,6 +208,36 @@ export const orders = sqliteTable("orders", {
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const recordNotifications = sqliteTable(
+  "record_notifications",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id),
+    recordType: text("record_type").notNull(),
+    recordId: text("record_id").notNull(),
+    recipientEmail: text("recipient_email"),
+    status: text("status").notNull().default("pending"),
+    attemptCount: integer("attempt_count").notNull().default(0),
+    lastError: text("last_error"),
+    lastAttemptAt: text("last_attempt_at"),
+    sentAt: text("sent_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("record_notifications_record_idx").on(
+      table.recordType,
+      table.recordId
+    ),
+    index("record_notifications_project_idx").on(
+      table.projectId,
+      table.status
+    ),
+  ]
+);
 
 export const aiUsage = sqliteTable("ai_usage", {
   key: text("key").primaryKey(),

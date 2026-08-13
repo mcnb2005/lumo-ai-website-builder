@@ -17,6 +17,16 @@ type Lead = {
   notes: string;
   createdAt: string;
   updatedAt: string;
+  notification: RecordNotification | null;
+};
+
+type RecordNotification = {
+  status: "pending" | "sent" | "failed";
+  recipientEmail: string | null;
+  attemptCount: number;
+  lastError: string | null;
+  lastAttemptAt: string | null;
+  sentAt: string | null;
 };
 
 type Project = {
@@ -119,6 +129,13 @@ function csvCell(value: unknown) {
   return `"${String(value ?? "").replaceAll('"', '""')}"`;
 }
 
+function notificationStatusLabel(notification: RecordNotification | null) {
+  if (!notification) return "Chưa gửi";
+  if (notification.status === "sent") return "Đã gửi";
+  if (notification.status === "pending") return "Đang gửi";
+  return "Gửi thất bại";
+}
+
 export function LeadDashboard({ user }: { user: DashboardUser }) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState("");
@@ -135,6 +152,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
   const [googleConnection, setGoogleConnection] =
     useState<GoogleConnection | null>(null);
   const [isUpdatingGoogle, setIsUpdatingGoogle] = useState(false);
+  const [retryingNotificationId, setRetryingNotificationId] = useState("");
   const [notice, setNotice] = useState("");
   const selectedDashboardType =
     projects.find((project) => project.id === projectId)
@@ -399,6 +417,47 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
     );
   }
 
+  async function retryNotification(lead: Lead) {
+    setRetryingNotificationId(lead.id);
+    setNotice("");
+    try {
+      const response = await fetch("/api/notifications", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          recordType: resolvedDashboardType === "orders" ? "order" : "lead",
+          recordId: lead.id,
+        }),
+      });
+      const result = (await response.json()) as {
+        notification?: RecordNotification;
+        error?: string;
+      };
+      if (result.notification) {
+        setLeads((current) =>
+          current.map((item) =>
+            item.id === lead.id
+              ? { ...item, notification: result.notification! }
+              : item
+          )
+        );
+      }
+      if (!response.ok || !result.notification) {
+        throw new Error(result.error || "Không thể gửi lại email thông báo.");
+      }
+      setNotice("Đã gửi email thông báo cho chủ trang.");
+    } catch (error) {
+      setNotice(
+        error instanceof Error
+          ? error.message
+          : "Không thể gửi lại email thông báo."
+      );
+    } finally {
+      setRetryingNotificationId("");
+    }
+  }
+
   function exportCsv() {
     if (!filteredLeads.length) {
       setNotice(`Không có ${dashboard.recordPlural} phù hợp để xuất.`);
@@ -478,6 +537,14 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
           <a className="is-active" href="#records">
             <span aria-hidden="true">◎</span>
             {dashboard.navLabel}
+            {metrics.fresh > 0 ? (
+              <strong
+                className="crm-nav-badge"
+                aria-label={`${metrics.fresh} ${dashboard.recordPlural} mới`}
+              >
+                {metrics.fresh > 99 ? "99+" : metrics.fresh}
+              </strong>
+            ) : null}
           </a>
           {user.companyRole === "owner" || user.companyRole === "admin" ? (
             <Link href="/company">
@@ -697,6 +764,7 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                       <th>{dashboard.needLabel}</th>
                       <th>Ngày gửi</th>
                       <th>Trạng thái</th>
+                      <th>Thông báo</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -741,6 +809,13 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                             {dashboard.statuses[lead.status]}
                           </span>
                         </td>
+                        <td>
+                          <span
+                            className={`crm-notification-status is-${lead.notification?.status || "none"}`}
+                          >
+                            {notificationStatusLabel(lead.notification)}
+                          </span>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -773,6 +848,57 @@ export function LeadDashboard({ user }: { user: DashboardUser }) {
                       </a>
                     ) : null}
                   </div>
+
+                  <section
+                    className={`crm-notification-card is-${selectedLead.notification?.status || "none"}`}
+                    aria-label="Trạng thái email thông báo"
+                  >
+                    <header>
+                      <div>
+                        <span>Email cho chủ trang</span>
+                        <strong>
+                          {notificationStatusLabel(selectedLead.notification)}
+                        </strong>
+                      </div>
+                      <i aria-hidden="true" />
+                    </header>
+                    {selectedLead.notification?.recipientEmail ? (
+                      <p>
+                        Người nhận: {selectedLead.notification.recipientEmail}
+                      </p>
+                    ) : (
+                      <p>Chưa xác định được email nhận thông báo.</p>
+                    )}
+                    {selectedLead.notification?.sentAt ? (
+                      <small>
+                        Gửi lúc {formatDate(selectedLead.notification.sentAt)}
+                      </small>
+                    ) : selectedLead.notification?.lastAttemptAt ? (
+                      <small>
+                        Lần thử gần nhất {formatDate(selectedLead.notification.lastAttemptAt)}
+                        {` · ${selectedLead.notification.attemptCount} lần thử`}
+                      </small>
+                    ) : null}
+                    {selectedLead.notification?.lastError ? (
+                      <div className="crm-notification-error" role="alert">
+                        {selectedLead.notification.lastError}
+                      </div>
+                    ) : null}
+                    {selectedLead.notification?.status !== "sent" &&
+                    selectedLead.notification?.status !== "pending" ? (
+                      <button
+                        type="button"
+                        onClick={() => void retryNotification(selectedLead)}
+                        disabled={retryingNotificationId === selectedLead.id}
+                      >
+                        {retryingNotificationId === selectedLead.id
+                          ? "Đang gửi…"
+                          : selectedLead.notification
+                            ? "Gửi lại thông báo"
+                            : "Gửi thông báo"}
+                      </button>
+                    ) : null}
+                  </section>
 
                   <label className="crm-detail-field">
                     <span>Trạng thái xử lý</span>
