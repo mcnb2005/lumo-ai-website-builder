@@ -64,6 +64,8 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
           user.name,
           user.avatar_url,
           user.must_change_password,
+          user.deleted_at,
+          session.last_seen_at,
           company.id AS company_id,
           company.name AS company_name,
           membership.role AS company_role
@@ -72,7 +74,7 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
          LEFT JOIN company_members membership
            ON membership.user_id = user.id AND membership.status = 'active'
          LEFT JOIN companies company ON company.id = membership.company_id
-         WHERE session.id = ?
+         WHERE session.id = ? AND user.deleted_at IS NULL
          ORDER BY
            CASE membership.role
              WHEN 'owner' THEN 0
@@ -92,12 +94,23 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
         name: string | null;
         avatar_url: string | null;
         must_change_password: number;
+        deleted_at: string | null;
+        last_seen_at: string | null;
         company_id: string | null;
         company_name: string | null;
         company_role: string | null;
       }>();
 
     if (session?.expires_at && session.expires_at > now) {
+      const lastSeenAt = session.last_seen_at
+        ? new Date(session.last_seen_at).getTime()
+        : 0;
+      if (Date.now() - lastSeenAt > 5 * 60 * 1000) {
+        await getD1()
+          .prepare("UPDATE auth_sessions SET last_seen_at = ? WHERE id = ?")
+          .bind(now, sessionHash)
+          .run();
+      }
       const companyRole =
         session.company_role === "owner" ||
         session.company_role === "admin" ||
@@ -136,6 +149,7 @@ export async function getCurrentDatabaseUser(): Promise<DatabaseUser | null> {
       .limit(1);
     const now = new Date().toISOString();
     if (existing) {
+      if (existing.deletedAt) return null;
       if (existing.name !== name) {
         await db
           .update(users)

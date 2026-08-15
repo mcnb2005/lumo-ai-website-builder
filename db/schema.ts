@@ -21,6 +21,7 @@ export const users = sqliteTable("users", {
     .notNull()
     .default(false),
   passwordUpdatedAt: text("password_updated_at"),
+  deletedAt: text("deleted_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
@@ -133,7 +134,34 @@ export const authSessions = sqliteTable("auth_sessions", {
     .notNull()
     .references(() => users.id),
   expiresAt: text("expires_at").notNull(),
+  userAgent: text("user_agent"),
+  lastSeenAt: text("last_seen_at"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const passwordResetTokens = sqliteTable(
+  "password_reset_tokens",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    expiresAt: text("expires_at").notNull(),
+    usedAt: text("used_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("password_reset_tokens_user_idx").on(table.userId),
+    index("password_reset_tokens_expiry_idx").on(table.expiresAt),
+  ]
+);
+
+export const authLoginAttempts = sqliteTable("auth_login_attempts", {
+  key: text("key").primaryKey(),
+  attemptCount: integer("attempt_count").notNull().default(0),
+  windowStartedAt: text("window_started_at").notNull(),
+  lockedUntil: text("locked_until"),
+  updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 export const googleConnections = sqliteTable("google_connections", {
@@ -159,11 +187,47 @@ export const projects = sqliteTable("projects", {
   messages: text("messages").notNull().default("[]"),
   status: text("status").notNull().default("draft"),
   dashboardType: text("dashboard_type").notNull().default("auto"),
+  publishSettings: text("publish_settings").notNull().default("{}"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
   publishedAt: text("published_at"),
   deletedAt: text("deleted_at"),
 });
+
+export const projectSlugRedirects = sqliteTable("project_slug_redirects", {
+  slug: text("slug").primaryKey(),
+  projectId: text("project_id")
+    .notNull()
+    .references(() => projects.id),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+});
+
+export const projectVersions = sqliteTable(
+  "project_versions",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => projects.id),
+    versionNumber: integer("version_number").notNull(),
+    reason: text("reason").notNull().default("autosave"),
+    data: text("data").notNull(),
+    messages: text("messages").notNull().default("[]"),
+    publishSettings: text("publish_settings").notNull().default("{}"),
+    createdById: text("created_by_id").references(() => users.id),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    uniqueIndex("project_versions_project_number_idx").on(
+      table.projectId,
+      table.versionNumber
+    ),
+    index("project_versions_project_created_idx").on(
+      table.projectId,
+      table.createdAt
+    ),
+  ]
+);
 
 export const assets = sqliteTable("assets", {
   id: text("id").primaryKey(),

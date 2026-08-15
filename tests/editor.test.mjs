@@ -101,7 +101,10 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(canvas, /onEditText/);
   assert.match(canvas, /selectedSection === section/);
   assert.match(studio, /applyLandingTextEdit/);
-  assert.match(studio, /onEditText=\{editLandingText\}/);
+  assert.match(
+    studio,
+    /onEditText=\{previewVersion \? undefined : editLandingText\}/
+  );
   assert.match(inlineComponent, /contentEditable/);
   assert.match(inlineComponent, /suppressContentEditableWarning/);
   assert.match(inlineComponent, /event\.key === "Escape"/);

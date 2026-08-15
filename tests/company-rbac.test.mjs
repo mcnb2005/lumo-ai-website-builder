@@ -256,5 +256,5 @@ test("ships company-scoped RBAC and administration", async () => {
   assert.match(projectsApi, /canCreateLanding/);
   assert.match(projectsApi, /canEditLanding/);
   assert.match(projectsApi, /status: "archived"/);
-  assert.match(publicApi, /isNull\(projects\.deletedAt\)/);
+  assert.match(publicApi, /getPublishedProjectBySlug/);
 });

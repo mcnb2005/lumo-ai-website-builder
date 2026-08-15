@@ -8,6 +8,12 @@ import {
   serializeCookie,
 } from "../../../../google-auth";
 import { verifyPassword } from "../../../../password-auth";
+import {
+  clearLoginFailures,
+  loginRetryAfter,
+  recordLoginFailure,
+  sessionUserAgent,
+} from "../../../../server/account-security";
 
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
@@ -32,12 +38,27 @@ export async function POST(request: Request) {
       .toLowerCase();
     const password = payload.password || "";
     if (!identifier || !password) return invalidCredentials();
+    if (identifier.length > 254 || password.length > 512) {
+      return invalidCredentials();
+    }
+    const retryAfter = await loginRetryAfter(request, identifier);
+    if (retryAfter) {
+      return Response.json(
+        {
+          error: `Bạn đã thử đăng nhập quá nhiều lần. Hãy thử lại sau ${Math.ceil(
+            retryAfter / 60
+          )} phút.`,
+        },
+        { status: 429, headers: { "Retry-After": String(retryAfter) } }
+      );
+    }
 
     const user = await getD1()
       .prepare(
         `SELECT id, password_hash, must_change_password
          FROM users
-         WHERE lower(username) = ? OR lower(email) = ?
+         WHERE deleted_at IS NULL
+           AND (lower(username) = ? OR lower(email) = ?)
          LIMIT 1`
       )
       .bind(identifier, identifier)
@@ -50,8 +71,10 @@ export async function POST(request: Request) {
       !user?.password_hash ||
       !(await verifyPassword(password, user.password_hash))
     ) {
+      await recordLoginFailure(request, identifier);
       return invalidCredentials();
     }
+    await clearLoginFailures(request, identifier);
 
     const now = new Date().toISOString();
     const sessionToken = createOpaqueToken();
@@ -65,9 +88,17 @@ export async function POST(request: Request) {
       .run();
     await getD1()
       .prepare(
-        "INSERT INTO auth_sessions (id, user_id, expires_at) VALUES (?, ?, ?)"
+        `INSERT INTO auth_sessions
+          (id, user_id, expires_at, user_agent, last_seen_at)
+         VALUES (?, ?, ?, ?, ?)`
       )
-      .bind(sessionHash, user.id, sessionExpiresAt)
+      .bind(
+        sessionHash,
+        user.id,
+        sessionExpiresAt,
+        sessionUserAgent(request),
+        now
+      )
       .run();
 
     const returnTo = safeRelativeReturnPath(payload.returnTo);

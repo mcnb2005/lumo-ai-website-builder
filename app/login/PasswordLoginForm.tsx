@@ -96,6 +96,9 @@ export function PasswordLoginForm({ returnTo }: { returnTo: string }) {
           </svg>
         </button>
       </div>
+      <a className="forgot-password-link" href="/forgot-password">
+        Quên mật khẩu?
+      </a>
       <button type="submit" disabled={isSubmitting}>
         {isSubmitting ? "Đang đăng nhập..." : "Đăng nhập"}
       </button>

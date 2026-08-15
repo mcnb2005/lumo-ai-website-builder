@@ -366,6 +366,32 @@ export async function GET() {
       ? await projectStatement.bind(company.companyId).all()
       : await projectStatement.bind(company.companyId, auth.user.id).all();
 
+    const archivedProjectQuery = manager
+      ? `SELECT
+          p.id, p.name, p.slug, p.status,
+          p.updated_at AS updatedAt, p.deleted_at AS deletedAt,
+          p.owner_id AS ownerId,
+          COALESCE(creator.name, creator.username, creator.email, 'Thành viên đã rời công ty') AS creatorName
+         FROM projects p
+         LEFT JOIN users creator ON creator.id = p.created_by_id
+         WHERE p.company_id = ? AND p.deleted_at IS NOT NULL
+         ORDER BY p.deleted_at DESC
+         LIMIT 50`
+      : `SELECT
+          p.id, p.name, p.slug, p.status,
+          p.updated_at AS updatedAt, p.deleted_at AS deletedAt,
+          p.owner_id AS ownerId,
+          COALESCE(creator.name, creator.username, creator.email, 'Thành viên') AS creatorName
+         FROM projects p
+         LEFT JOIN users creator ON creator.id = p.created_by_id
+         WHERE p.company_id = ? AND p.owner_id = ? AND p.deleted_at IS NOT NULL
+         ORDER BY p.deleted_at DESC
+         LIMIT 50`;
+    const archivedStatement = getD1().prepare(archivedProjectQuery);
+    const archivedProjectRows = manager
+      ? await archivedStatement.bind(company.companyId).all()
+      : await archivedStatement.bind(company.companyId, auth.user.id).all();
+
     const invitations = manager
       ? await getD1()
           .prepare(
@@ -391,6 +417,7 @@ export async function GET() {
       },
       members: members.results || [],
       projects: projectRows.results || [],
+      archivedProjects: archivedProjectRows.results || [],
       invitations: invitations.results || [],
     });
   } catch (error) {

@@ -61,10 +61,18 @@ type CompanyProject = {
   creatorUsername: string | null;
 };
 
+type ArchivedProject = Pick<
+  CompanyProject,
+  "id" | "name" | "slug" | "status" | "updatedAt" | "ownerId" | "creatorName"
+> & {
+  deletedAt: string;
+};
+
 type CompanyResponse = {
   company?: CompanyInfo;
   members?: Member[];
   projects?: CompanyProject[];
+  archivedProjects?: ArchivedProject[];
   error?: string;
 };
 
@@ -232,6 +240,7 @@ export function CompanyDashboard({
   const [company, setCompany] = useState<CompanyInfo | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [projects, setProjects] = useState<CompanyProject[]>([]);
+  const [archivedProjects, setArchivedProjects] = useState<ArchivedProject[]>([]);
   const [username, setUsername] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [inviteRole, setInviteRole] =
@@ -265,6 +274,7 @@ export function CompanyDashboard({
       setCompany(result.company);
       setMembers(result.members || []);
       setProjects(result.projects || []);
+      setArchivedProjects(result.archivedProjects || []);
       if (result.company.canManageNotificationEmail) {
         const settings = result.company.notificationEmail;
         setNotificationEmailAddress(
@@ -744,6 +754,32 @@ export function CompanyDashboard({
     } catch (error) {
       setNotice(
         error instanceof Error ? error.message : "Không thể xóa project."
+      );
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function restoreProject(project: ArchivedProject) {
+    setIsSaving(true);
+    setNotice("");
+    try {
+      const response = await fetch("/api/projects", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "restoreDeleted", id: project.id }),
+      });
+      const result = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(result.error || "Không thể khôi phục project.");
+      }
+      setNotice(
+        `Đã khôi phục project ${project.name} thành bản nháp. Hãy kiểm tra trước khi xuất bản lại.`
+      );
+      await loadCompany();
+    } catch (error) {
+      setNotice(
+        error instanceof Error ? error.message : "Không thể khôi phục project."
       );
     } finally {
       setIsSaving(false);
@@ -1341,6 +1377,59 @@ export function CompanyDashboard({
             </table>
           </div>
         </section>
+
+        {archivedProjects.length ? (
+          <section className="company-panel company-archive-panel" id="archive">
+            <div className="company-panel-heading">
+              <div>
+                <p>THÙNG RÁC DỰ ÁN</p>
+                <h2>Dự án đã xóa</h2>
+              </div>
+              <span>{archivedProjects.length} dự án có thể khôi phục</span>
+            </div>
+            <div className="company-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Project</th>
+                    <th>Người tạo</th>
+                    <th>Đã xóa</th>
+                    <th>Thao tác</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {archivedProjects.map((project) => (
+                    <tr key={project.id}>
+                      <td>
+                        <strong>{project.name}</strong>
+                        <small className="company-project-slug">
+                          /p/{project.slug}
+                        </small>
+                      </td>
+                      <td>{project.creatorName}</td>
+                      <td>{formatDate(project.deletedAt)}</td>
+                      <td>
+                        {company?.canCreateLanding &&
+                        (company.canManage || project.ownerId === currentUserId) ? (
+                          <button
+                            className="company-restore-button"
+                            type="button"
+                            disabled={isSaving}
+                            onClick={() => void restoreProject(project)}
+                          >
+                            Khôi phục bản nháp
+                          </button>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
       </section>
     </main>
   );
