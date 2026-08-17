@@ -11,8 +11,14 @@ import {
 import { arrayMove } from "@dnd-kit/sortable";
 import { LandingCanvas } from "./components/LandingCanvas";
 import { GenerationProgress } from "./editor/GenerationProgress";
+import { AiUsageMeter } from "./editor/AiUsageMeter";
 import { SectionColorPanel } from "./editor/SectionColorPanel";
 import { SectionNavigator } from "./editor/SectionNavigator";
+import { PublishSettingsDialog } from "./editor/PublishSettingsDialog";
+import {
+  VersionHistoryPanel,
+  type ProjectVersionDetail,
+} from "./editor/VersionHistoryPanel";
 import { sectionRegistry } from "./editor/section-registry";
 import { NewProjectDialog } from "./templates/NewProjectDialog";
 import {
@@ -48,6 +54,11 @@ import {
   createLandingImageDragPayload,
   LUMO_ASSET_DRAG_TYPE,
 } from "./image-drag-payload";
+import {
+  defaultPublishSettings,
+  normalizeProjectSlug,
+  type ProjectPublishSettings,
+} from "./publish-settings";
 
 type Device = "desktop" | "tablet" | "mobile";
 type SaveState = "guest" | "saving" | "saved" | "error";
@@ -73,6 +84,7 @@ type LoadedProject = {
   data: LandingData;
   messages: ChatMessage[];
   status: string;
+  publishSettings: ProjectPublishSettings;
 };
 type StudioBootstrapResult = {
   projects?: ProjectSummary[];
@@ -86,6 +98,7 @@ type ProjectSaveSnapshot = {
   landing: LandingData;
   messages: ChatMessage[];
   isPublished: boolean;
+  publishSettings: ProjectPublishSettings;
 };
 const GUEST_DRAFT_KEY = "lumo-guest-draft-v2";
 const SIGN_IN_URL = "/api/auth/google/start?returnTo=%2F";
@@ -235,6 +248,15 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
   const [projects, setProjects] = useState<ProjectSummary[]>([]);
   const [projectId, setProjectId] = useState("");
   const [projectSlug, setProjectSlug] = useState("");
+  const [draftPublishSlug, setDraftPublishSlug] = useState("");
+  const [publishSettings, setPublishSettings] = useState<ProjectPublishSettings>(
+    defaultPublishSettings
+  );
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  const [versionHistoryOpen, setVersionHistoryOpen] = useState(false);
+  const [previewVersion, setPreviewVersion] =
+    useState<ProjectVersionDetail | null>(null);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [isAssetDragActive, setIsAssetDragActive] = useState(false);
   const [uploadedAssets, setUploadedAssets] = useState<LandingImageAsset[]>([]);
@@ -244,6 +266,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
     useState<GenerationStage | null>(null);
   const [generationMessage, setGenerationMessage] = useState("");
   const [generationErrors, setGenerationErrors] = useState<string[]>([]);
+  const [aiUsageRefreshKey, setAiUsageRefreshKey] = useState(0);
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [templateDialogMode, setTemplateDialogMode] = useState<
     "create" | "switch"
@@ -277,6 +300,8 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
       assetsLoadedProjectIdRef.current = project.id;
       setProjectId(project.id);
       setProjectSlug(project.slug);
+      setDraftPublishSlug(project.slug);
+      setPublishSettings(project.publishSettings || defaultPublishSettings);
       setLanding(normalizeLandingData(project.data));
       setMessages(project.messages.length ? project.messages : starterMessages);
       setIsPublished(project.status === "published");
@@ -288,6 +313,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
       setUploadedAssets(initialAssets);
       setHistory([]);
       setFuture([]);
+      setPreviewVersion(null);
       setReferenceAsset(null);
       pipelineResumeRef.current = null;
       setVersion(1);
@@ -309,6 +335,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
         data: LandingData;
         messages: ChatMessage[];
         status: string;
+        publishSettings: ProjectPublishSettings;
       };
       error?: string;
     };
@@ -318,6 +345,10 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
     persistedProjectIdRef.current = result.project.id;
     setProjectId(result.project.id);
     setProjectSlug(result.project.slug);
+    setDraftPublishSlug(result.project.slug);
+    setPublishSettings(
+      result.project.publishSettings || defaultPublishSettings
+    );
     setLanding(normalizeLandingData(result.project.data));
     setMessages(
       result.project.messages.length
@@ -332,6 +363,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
     );
     setHistory([]);
     setFuture([]);
+    setPreviewVersion(null);
     setReferenceAsset(null);
     pipelineResumeRef.current = null;
     setVersion(1);
@@ -395,6 +427,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
             slug?: string;
             landing?: Partial<LandingData>;
             messages?: ChatMessage[];
+            publishSettings?: ProjectPublishSettings;
           };
           const identity =
             saved.id && saved.slug
@@ -402,8 +435,10 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
               : makeProjectIdentity();
           setProjectId(identity.id);
           setProjectSlug(identity.slug);
+          setDraftPublishSlug(identity.slug);
           setLanding(normalizeLandingData(saved.landing));
           setMessages(saved.messages?.length ? saved.messages : starterMessages);
+          setPublishSettings(saved.publishSettings || defaultPublishSettings);
           setSaveState(isSignedIn ? "saving" : "guest");
           return;
         }
@@ -413,8 +448,10 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
       const identity = makeProjectIdentity();
       setProjectId(identity.id);
       setProjectSlug(identity.slug);
+      setDraftPublishSlug(identity.slug);
       setLanding(structuredClone(defaultLanding));
       setMessages(starterMessages);
+      setPublishSettings(defaultPublishSettings);
       setSaveState(isSignedIn ? "saving" : "guest");
     }
 
@@ -427,7 +464,6 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
     const activeRequest = projectSaveRequestRef.current;
     if (activeRequest?.projectId === snapshot.id) {
       await activeRequest.promise;
-      return;
     }
 
     setSaveState("saving");
@@ -441,6 +477,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
           slug: snapshot.slug,
           data: snapshot.landing,
           messages: snapshot.messages,
+          publishSettings: snapshot.publishSettings,
           status: snapshot.isPublished ? "published" : "draft",
         }),
       });
@@ -506,6 +543,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
           slug: projectSlug,
           landing,
           messages,
+          publishSettings,
         })
       );
       return;
@@ -517,6 +555,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
       landing,
       messages,
       isPublished,
+      publishSettings,
     };
     const timer = window.setTimeout(async () => {
       try {
@@ -531,6 +570,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
     isPublished,
     landing,
     messages,
+    publishSettings,
     projectId,
     projectSlug,
     persistProject,
@@ -571,6 +611,13 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
   const previewClass = useMemo(
     () => `preview-frame preview-${device}`,
     [device]
+  );
+  const previewLanding = useMemo(
+    () =>
+      previewVersion
+        ? normalizeLandingData(previewVersion.data)
+        : landing,
+    [landing, previewVersion]
   );
 
   function updateLanding(updater: (current: LandingData) => LandingData) {
@@ -696,6 +743,9 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
     const normalizedLanding = normalizeLandingData(nextLanding);
     setProjectId(identity.id);
     setProjectSlug(identity.slug);
+    setDraftPublishSlug(identity.slug);
+    setPublishSettings(defaultPublishSettings);
+    setPreviewVersion(null);
     setLanding(normalizedLanding);
     setMessages(starterMessages);
     setIsPublished(false);
@@ -729,6 +779,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
           landing: normalizedLanding,
           messages: starterMessages,
           isPublished: false,
+          publishSettings: defaultPublishSettings,
         }).catch(() => undefined);
       }
     }, 0);
@@ -872,6 +923,33 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
     let receivedCheckpoint = false;
 
     try {
+      if (user && projectId) {
+        await persistProject({
+          id: projectId,
+          slug: projectSlug,
+          landing: sourceLanding,
+          messages: sourceMessages,
+          isPublished,
+          publishSettings,
+        });
+        const snapshotResponse = await fetch(
+          `/api/projects/${encodeURIComponent(projectId)}/versions`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ action: "snapshot" }),
+          }
+        );
+        if (!snapshotResponse.ok) {
+          const snapshotResult = (await snapshotResponse.json().catch(() => null)) as {
+            error?: string;
+          } | null;
+          throw new Error(
+            snapshotResult?.error ||
+              "Chưa thể lưu bản an toàn trước khi AI chỉnh sửa."
+          );
+        }
+      }
       const response = await fetch("/api/ai", {
         method: "POST",
         headers: {
@@ -956,6 +1034,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
         ),
       ]);
       if (imageReference) setReferenceAsset(null);
+      setAiUsageRefreshKey((current) => current + 1);
       if (result.intent.mode === "clarify") {
         setNotice("Lumo cần bạn làm rõ yêu cầu trước khi sửa trang.");
       } else if (result.mode === "demo") {
@@ -1255,6 +1334,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
           landing,
           messages,
           isPublished,
+          publishSettings,
         });
       }
 
@@ -1333,6 +1413,12 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
       window.location.href = SIGN_IN_URL;
       return;
     }
+    const nextSlug = normalizeProjectSlug(draftPublishSlug || projectSlug);
+    if (!nextSlug) {
+      setNotice("Đường dẫn xuất bản chưa hợp lệ.");
+      return;
+    }
+    setIsPublishing(true);
     setNotice("Đang xuất bản landing page…");
     try {
       const response = await fetch("/api/publish", {
@@ -1341,21 +1427,41 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
         body: JSON.stringify({
           id: projectId,
           name: landing.brand,
-          slug: projectSlug,
+          slug: nextSlug,
           data: landing,
           messages,
+          publishSettings,
         }),
       });
       const result = (await response.json()) as {
         url?: string;
+        slug?: string;
+        publishSettings?: ProjectPublishSettings;
         error?: string;
       };
       if (!response.ok || !result.url) {
         throw new Error(result.error || "Không thể xuất bản.");
       }
       const url = new URL(result.url, window.location.origin).toString();
+      const publishedSlug = result.slug || nextSlug;
+      setProjectSlug(publishedSlug);
+      setDraftPublishSlug(publishedSlug);
+      if (result.publishSettings) setPublishSettings(result.publishSettings);
       setPublicUrl(url);
       setIsPublished(true);
+      setPublishDialogOpen(false);
+      setProjects((current) =>
+        current.map((project) =>
+          project.id === projectId
+            ? {
+                ...project,
+                slug: publishedSlug,
+                status: "published",
+                publishedAt: new Date().toISOString(),
+              }
+            : project
+        )
+      );
       setNotice("Đã xuất bản. Landing page của bạn đang trực tuyến.");
     } catch (error) {
       setNotice(
@@ -1363,7 +1469,31 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
           ? error.message
           : "Không thể xuất bản lúc này."
       );
+    } finally {
+      setIsPublishing(false);
     }
+  }
+
+  function applyRestoredVersion(restored: ProjectVersionDetail) {
+    skipNextSaveRef.current = true;
+    setLanding(normalizeLandingData(restored.data));
+    setMessages(restored.messages.length ? restored.messages : starterMessages);
+    setPublishSettings(restored.publishSettings || defaultPublishSettings);
+    setHistory([]);
+    setFuture([]);
+    setPreviewVersion(null);
+    setSelectedSection(null);
+    setIsPublished(false);
+    setPublicUrl("");
+    setVersion(restored.versionNumber);
+    setNotice("Đã khôi phục thành bản nháp. Hãy kiểm tra rồi xuất bản lại.");
+    setProjects((current) =>
+      current.map((project) =>
+        project.id === projectId
+          ? { ...project, status: "draft", publishedAt: null }
+          : project
+      )
+    );
   }
 
   return (
@@ -1423,7 +1553,14 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
               Xem trang
             </a>
           ) : null}
-          <button className="publish-button" type="button" onClick={publish}>
+          <button
+            className="publish-button"
+            type="button"
+            onClick={() => {
+              setDraftPublishSlug(projectSlug);
+              setPublishDialogOpen(true);
+            }}
+          >
             <span aria-hidden="true">↗</span>
             Xuất bản
           </button>
@@ -1440,7 +1577,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
                   Công ty
                 </a>
               ) : null}
-              <span className="account-chip" title={user.email}>
+              <a className="account-chip" title={user.email} href="/account">
                 <b>{user.name.slice(0, 1).toUpperCase()}</b>
                 <small>
                   {user.name}
@@ -1450,7 +1587,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
                       ? " · Người xem"
                       : ""}
                 </small>
-              </span>
+              </a>
               {!user.isLocal ? (
                 <a className="signout-link" href={SIGN_OUT_URL}>Thoát</a>
               ) : null}
@@ -1475,6 +1612,10 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
             </div>
             <button type="button" aria-label="Tùy chọn hội thoại">•••</button>
           </div>
+
+          {authReady && user ? (
+            <AiUsageMeter refreshKey={aiUsageRefreshKey} />
+          ) : null}
 
           <div className="conversation" aria-live="polite">
             <div className="day-label">Hôm nay</div>
@@ -1708,11 +1849,24 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
               <button className={device === "tablet" ? "is-active" : ""} type="button" onClick={() => setDevice("tablet")} aria-label="Xem trên máy tính bảng">▯</button>
               <button className={device === "mobile" ? "is-active" : ""} type="button" onClick={() => setDevice("mobile")} aria-label="Xem trên điện thoại">▯</button>
             </div>
-            <div className="version-pill"><span>Phiên bản {version}</span><i /></div>
+            <button
+              className="version-pill"
+              type="button"
+              onClick={() => setVersionHistoryOpen(true)}
+              disabled={!user || !projectId}
+              aria-label="Mở lịch sử phiên bản"
+            >
+              <span>
+                {previewVersion
+                  ? `Đang xem phiên bản ${previewVersion.versionNumber}`
+                  : `Phiên bản ${version}`}
+              </span>
+              <i />
+            </button>
           </div>
 
           <div className="preview-stage">
-            {editorReady ? (
+            {editorReady && !previewVersion ? (
               <div className="editor-sidebar">
                 <SectionNavigator
                   sectionOrder={landing.sectionOrder}
@@ -1748,19 +1902,30 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
                 <span aria-hidden="true">↻</span>
               </div>
               <div className="preview-scroll" ref={previewScroll}>
+                {previewVersion ? (
+                  <div className="version-preview-banner" role="status">
+                    <span>
+                      Đang xem phiên bản {previewVersion.versionNumber}. Đây là
+                      bản xem trước chỉ đọc.
+                    </span>
+                    <button type="button" onClick={() => setPreviewVersion(null)}>
+                      Quay lại bản hiện tại
+                    </button>
+                  </div>
+                ) : null}
                 {editorReady ? (
                   <LandingCanvas
-                  data={landing}
+                  data={previewLanding}
                   compact
                   slug={projectSlug}
-                  mode="editor"
-                  selectedSection={selectedSection}
-                  onSelectSection={selectSection}
-                  sectionOrder={landing.sectionOrder.filter(
-                    (section) => !landing.hiddenSections.includes(section)
+                  mode={previewVersion ? "public" : "editor"}
+                  selectedSection={previewVersion ? null : selectedSection}
+                  onSelectSection={previewVersion ? undefined : selectSection}
+                  sectionOrder={previewLanding.sectionOrder.filter(
+                    (section) => !previewLanding.hiddenSections.includes(section)
                   )}
-                  onReorderSections={reorderSections}
-                  onDropImage={(target, payload) => {
+                  onReorderSections={previewVersion ? undefined : reorderSections}
+                  onDropImage={previewVersion ? undefined : (target, payload) => {
                     if (payload.files?.length) {
                       void uploadImages(payload.files, target);
                     } else if (
@@ -1773,9 +1938,11 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
                       placeUploadedImages([payload.asset], target);
                     }
                   }}
-                  onRemoveImage={removePlacedImage}
-                  onEditText={editLandingText}
-                  onPositionChange={handleImagePositionChange}
+                  onRemoveImage={previewVersion ? undefined : removePlacedImage}
+                  onEditText={previewVersion ? undefined : editLandingText}
+                  onPositionChange={
+                    previewVersion ? undefined : handleImagePositionChange
+                  }
                   isBusy={isGenerating}
                   />
                 ) : (
@@ -1794,6 +1961,33 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
           </footer>
         </section>
       </div>
+
+      <PublishSettingsDialog
+        open={publishDialogOpen}
+        landing={landing}
+        slug={draftPublishSlug}
+        settings={publishSettings}
+        assets={uploadedAssets}
+        isPublishing={isPublishing}
+        onClose={() => setPublishDialogOpen(false)}
+        onSlugChange={(value) =>
+          setDraftPublishSlug(
+            value.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 80)
+          )
+        }
+        onSettingsChange={(patch) =>
+          setPublishSettings((current) => ({ ...current, ...patch }))
+        }
+        onPublish={() => void publish()}
+      />
+
+      <VersionHistoryPanel
+        open={versionHistoryOpen}
+        projectId={projectId}
+        onClose={() => setVersionHistoryOpen(false)}
+        onPreview={setPreviewVersion}
+        onRestored={applyRestoredVersion}
+      />
 
       <NewProjectDialog
         key={`${templateDialogMode}-${newProjectDialogOpen ? "open" : "closed"}`}

@@ -1,5 +1,5 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
-import { ensureDatabase, getDb } from "../../../db";
+import { ensureDatabase, getD1, getDb } from "../../../db";
 import { assets, projects } from "../../../db/schema";
 import {
   inferDashboardType,
@@ -16,8 +16,15 @@ import {
 import {
   canCreateLanding,
   canEditLanding,
+  canManageCompany,
   writeCompanyAudit,
 } from "../../company-data";
+import {
+  normalizeProjectSlug,
+  normalizePublishSettings,
+  parseStoredPublishSettings,
+} from "../../publish-settings";
+import { createProjectSnapshot } from "../../server/project-versions";
 
 type ProjectPayload = {
   id?: string;
@@ -27,6 +34,7 @@ type ProjectPayload = {
   messages?: unknown;
   status?: string;
   dashboardType?: DashboardType;
+  publishSettings?: unknown;
 };
 
 function parseProject(row: typeof projects.$inferSelect) {
@@ -35,11 +43,34 @@ function parseProject(row: typeof projects.$inferSelect) {
     ...row,
     data,
     messages: JSON.parse(row.messages),
+    publishSettings: parseStoredPublishSettings(row.publishSettings),
     resolvedDashboardType:
       row.dashboardType === "auto"
         ? inferDashboardType(data)
         : row.dashboardType,
   };
+}
+
+async function validatePublishAssets(
+  projectId: string,
+  ownerId: string,
+  publishSettings: ReturnType<typeof normalizePublishSettings>
+) {
+  const ids = [publishSettings.ogAssetId, publishSettings.faviconAssetId].filter(
+    (value): value is string => Boolean(value)
+  );
+  if (!ids.length) return;
+  const placeholders = ids.map(() => "?").join(", ");
+  const result = await getD1()
+    .prepare(
+      `SELECT id FROM assets
+       WHERE project_id = ? AND owner_id = ? AND id IN (${placeholders})`
+    )
+    .bind(projectId, ownerId, ...ids)
+    .all<{ id: string }>();
+  if ((result.results || []).length !== new Set(ids).size) {
+    throw new Error("Ảnh SEO phải thuộc đúng dự án hiện tại.");
+  }
 }
 
 function unauthorized() {
@@ -161,12 +192,7 @@ export async function POST(request: Request) {
     const payload = (await request.json()) as ProjectPayload;
     const id = payload.id?.trim();
     const name = payload.name?.trim();
-    const slug = payload.slug
-      ?.trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
+    const slug = normalizeProjectSlug(payload.slug);
 
     if (!id || !name || !slug || !payload.data) {
       return Response.json(
@@ -182,6 +208,7 @@ export async function POST(request: Request) {
         ownerId: projects.ownerId,
         companyId: projects.companyId,
         dashboardType: projects.dashboardType,
+        publishSettings: projects.publishSettings,
         deletedAt: projects.deletedAt,
       })
       .from(projects)
@@ -192,6 +219,19 @@ export async function POST(request: Request) {
         { error: "Bạn không có quyền sửa dự án này." },
         { status: 403 }
       );
+    }
+
+    const publishSettings =
+      payload.publishSettings === undefined && existing
+        ? parseStoredPublishSettings(existing.publishSettings)
+        : normalizePublishSettings(payload.publishSettings);
+    await validatePublishAssets(id, user.id, publishSettings);
+    if (existing) {
+      await createProjectSnapshot({
+        projectId: id,
+        userId: user.id,
+        reason: "autosave",
+      });
     }
 
     const now = new Date().toISOString();
@@ -208,6 +248,7 @@ export async function POST(request: Request) {
       dashboardType: isDashboardType(payload.dashboardType)
         ? payload.dashboardType
         : existing?.dashboardType || "auto",
+      publishSettings: JSON.stringify(publishSettings),
       updatedAt: now,
     };
 
@@ -224,6 +265,12 @@ export async function POST(request: Request) {
         );
     } else {
       await db.insert(projects).values(values);
+      await createProjectSnapshot({
+        projectId: id,
+        userId: user.id,
+        reason: "initial",
+        force: true,
+      });
     }
 
     return Response.json({ saved: true, updatedAt: now });
@@ -251,18 +298,63 @@ export async function PATCH(request: Request) {
     const user = auth.user;
 
     const payload = (await request.json()) as {
+      action?: unknown;
       id?: string;
       dashboardType?: unknown;
     };
     const id = payload.id?.trim();
-    if (!id || !isDashboardType(payload.dashboardType)) {
+    if (!id) {
+      return Response.json({ error: "Thiếu mã dự án." }, { status: 400 });
+    }
+
+    await ensureDatabase();
+    if (payload.action === "restoreDeleted") {
+      const project = await getD1()
+        .prepare(
+          `SELECT id, owner_id, company_id, name, deleted_at
+           FROM projects WHERE id = ? LIMIT 1`
+        )
+        .bind(id)
+        .first<{
+          id: string;
+          owner_id: string | null;
+          company_id: string | null;
+          name: string;
+          deleted_at: string | null;
+        }>();
+      const canRestore =
+        project?.deleted_at &&
+        (project.owner_id === user.id ||
+          (project.company_id === auth.company.companyId &&
+            canManageCompany(auth.company.role)));
+      if (!project || !canRestore) return forbiddenCompanyResponse();
+      const now = new Date().toISOString();
+      await getD1()
+        .prepare(
+          `UPDATE projects
+           SET deleted_at = NULL, status = 'draft', published_at = NULL,
+               updated_at = ?
+           WHERE id = ?`
+        )
+        .bind(now, id)
+        .run();
+      await writeCompanyAudit(
+        auth.company,
+        "project.restored",
+        "project",
+        id,
+        { name: project.name }
+      );
+      return Response.json({ restored: true, updatedAt: now });
+    }
+
+    if (!isDashboardType(payload.dashboardType)) {
       return Response.json(
         { error: "Loại quản lý chưa hợp lệ." },
         { status: 400 }
       );
     }
 
-    await ensureDatabase();
     const db = getDb();
     const [project] = await db
       .select({ id: projects.id, data: projects.data })

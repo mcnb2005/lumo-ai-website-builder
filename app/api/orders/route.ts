@@ -1,9 +1,13 @@
 import { and, desc, eq } from "drizzle-orm";
 import { ensureDatabase, getDb } from "../../../db";
-import { orders, projects } from "../../../db/schema";
+import { orders, projects, recordNotifications } from "../../../db/schema";
 import { inferDashboardType } from "../../dashboard-config";
 import { getCurrentDatabaseUser } from "../../server-user";
 import { runOrderWorkflow } from "../../server/google-workflow";
+import {
+  notificationSummaryFromColumns,
+  sendOwnerRecordNotification,
+} from "../../server/owner-notifications";
 
 const workflowStatuses = [
   "new",
@@ -56,7 +60,20 @@ function orderProduct(landing: {
   };
 }
 
-function serializeOrder(row: typeof orders.$inferSelect) {
+type SerializedOrderRow = Pick<
+  typeof orders.$inferSelect,
+  | "id"
+  | "payload"
+  | "productName"
+  | "amount"
+  | "currency"
+  | "status"
+  | "notes"
+  | "createdAt"
+  | "updatedAt"
+>;
+
+function serializeOrder(row: SerializedOrderRow) {
   const values = JSON.parse(row.payload) as Record<string, string>;
   return {
     id: row.id,
@@ -103,12 +120,40 @@ export async function GET(request: Request) {
       );
     }
     const rows = await db
-      .select()
+      .select({
+        id: orders.id,
+        payload: orders.payload,
+        productName: orders.productName,
+        amount: orders.amount,
+        currency: orders.currency,
+        status: orders.status,
+        notes: orders.notes,
+        createdAt: orders.createdAt,
+        updatedAt: orders.updatedAt,
+        notificationStatus: recordNotifications.status,
+        notificationRecipientEmail: recordNotifications.recipientEmail,
+        notificationAttemptCount: recordNotifications.attemptCount,
+        notificationLastError: recordNotifications.lastError,
+        notificationLastAttemptAt: recordNotifications.lastAttemptAt,
+        notificationSentAt: recordNotifications.sentAt,
+      })
       .from(orders)
+      .leftJoin(
+        recordNotifications,
+        and(
+          eq(recordNotifications.recordType, "order"),
+          eq(recordNotifications.recordId, orders.id)
+        )
+      )
       .where(eq(orders.projectId, projectId))
       .orderBy(desc(orders.createdAt))
       .limit(500);
-    return Response.json({ leads: rows.map(serializeOrder) });
+    return Response.json({
+      leads: rows.map((row) => ({
+        ...serializeOrder(row),
+        notification: notificationSummaryFromColumns(row),
+      })),
+    });
   } catch (error) {
     return Response.json(
       {
@@ -260,18 +305,29 @@ export async function POST(request: Request) {
       updatedAt: now,
     });
 
-    const workflow = project.ownerId
-      ? await runOrderWorkflow(
-          {
-            id,
-            productName: product.name,
-            amount: product.amount,
-            currency: "vnd",
-            values: safeValues,
-          },
-          project.ownerId
-        )
-      : { confirmationEmailSentAt: null, calendarEventId: null };
+    const [workflow] = await Promise.all([
+      project.ownerId
+        ? runOrderWorkflow(
+            {
+              id,
+              productName: product.name,
+              amount: product.amount,
+              currency: "vnd",
+              values: safeValues,
+            },
+            project.ownerId
+          )
+        : Promise.resolve({
+            confirmationEmailSentAt: null,
+            calendarEventId: null,
+          }),
+      sendOwnerRecordNotification({
+        projectId: project.id,
+        recordType: "order",
+        recordId: id,
+        origin: new URL(request.url).origin,
+      }).catch(() => undefined),
+    ]);
     if (workflow.confirmationEmailSentAt || workflow.calendarEventId) {
       await db
         .update(orders)

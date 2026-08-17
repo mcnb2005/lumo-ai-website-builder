@@ -16,6 +16,7 @@ import {
   serializeCookie,
 } from "../../../../google-auth";
 import { getCurrentDatabaseUser } from "../../../../server-user";
+import { sessionUserAgent } from "../../../../server/account-security";
 
 const SESSION_TTL_SECONDS = 30 * 24 * 60 * 60;
 
@@ -193,6 +194,9 @@ export async function GET(request: Request) {
     }
 
     const currentUser = existingBySubject || existingByEmail;
+    if (currentUser?.deletedAt) {
+      throw new Error("Tài khoản này đã bị xóa.");
+    }
     const userId = currentUser?.id || crypto.randomUUID();
     const now = new Date().toISOString();
     const name = profile.name?.trim() || email;
@@ -229,9 +233,17 @@ export async function GET(request: Request) {
       .run();
     await database
       .prepare(
-        "INSERT INTO auth_sessions (id, user_id, expires_at) VALUES (?, ?, ?)"
+        `INSERT INTO auth_sessions
+          (id, user_id, expires_at, user_agent, last_seen_at)
+         VALUES (?, ?, ?, ?, ?)`
       )
-      .bind(sessionHash, userId, sessionExpiresAt)
+      .bind(
+        sessionHash,
+        userId,
+        sessionExpiresAt,
+        sessionUserAgent(request),
+        now
+      )
       .run();
 
     const destination = new URL(

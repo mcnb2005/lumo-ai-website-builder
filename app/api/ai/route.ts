@@ -2,7 +2,6 @@ import { and, desc, eq } from "drizzle-orm";
 import {
   ensureDatabase,
   getAssetsBucket,
-  getD1,
   getDb,
   getRuntimeEnv,
 } from "../../../db";
@@ -14,7 +13,6 @@ import {
   type LandingImageAsset,
   type LandingSectionType,
 } from "../../landing-data";
-import { getCurrentDatabaseUser } from "../../server-user";
 import {
   forbiddenCompanyResponse,
   getAuthenticatedCompanyContext,
@@ -30,6 +28,12 @@ import type {
 } from "../../builder-generation";
 import { getPipelineErrorDetails } from "../../server/agents/pipeline-stage-error";
 import { analyzeReferenceImage } from "../../server/agents/reference-image-analysis";
+import {
+  AiUsageLimitError,
+  assertAiUsageAvailable,
+  recordSuccessfulAiUsage,
+} from "../../server/ai-usage";
+import type { AiChatUsage } from "../../server/tools/ai-chat-tool";
 
 function streamEvent(event: BuilderStreamEvent) {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -105,55 +109,6 @@ function referencePrompt(prompt: string, analysis: string) {
     .join("\n\n");
 }
 
-async function enforceUsageLimit(request: Request) {
-  await ensureDatabase();
-  const identity = await getCurrentDatabaseUser();
-  const forwardedIp =
-    request.headers.get("cf-connecting-ip") ||
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "local";
-  const subject = identity?.email || forwardedIp;
-  const digest = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(subject)
-  );
-  const key = Array.from(new Uint8Array(digest))
-    .slice(0, 12)
-    .map((byte) => byte.toString(16).padStart(2, "0"))
-    .join("");
-  const period = new Date().toISOString().slice(0, 10);
-  const limit = identity ? 100 : 10;
-  const db = getD1();
-  const existing = await db
-    .prepare("SELECT period, count FROM ai_usage WHERE key = ?")
-    .bind(key)
-    .first<{ period: string; count: number }>();
-  const currentCount = existing?.period === period ? existing.count : 0;
-
-  if (currentCount >= limit) {
-    throw new Error(
-      identity
-        ? "Bạn đã dùng hết lượt AI hôm nay. Hãy quay lại vào ngày mai."
-        : "Bạn đã dùng hết 10 lượt thử hôm nay. Đăng nhập để tiếp tục."
-    );
-  }
-
-  await db
-    .prepare(
-      `INSERT INTO ai_usage (key, period, count, updated_at)
-       VALUES (?, ?, 1, CURRENT_TIMESTAMP)
-       ON CONFLICT(key) DO UPDATE SET
-         period = excluded.period,
-         count = CASE
-           WHEN ai_usage.period = excluded.period THEN ai_usage.count + 1
-           ELSE 1
-         END,
-         updated_at = CURRENT_TIMESTAMP`
-    )
-    .bind(key, period)
-    .run();
-}
-
 export async function POST(request: Request) {
   try {
     const auth = await getAuthenticatedCompanyContext();
@@ -211,7 +166,14 @@ export async function POST(request: Request) {
       );
     }
 
-    await enforceUsageLimit(request);
+    const usageIdentity = {
+      userId: user.id,
+      email: user.email,
+      companyId: auth.company.companyId,
+    };
+    await assertAiUsageAvailable(usageIdentity);
+    const usageCalls: AiChatUsage[] = [];
+    const onUsage = (usage: AiChatUsage) => usageCalls.push(usage);
 
     const runtime = getRuntimeEnv();
     const fallbackProviders =
@@ -245,6 +207,7 @@ export async function POST(request: Request) {
             modelName,
             apiKey,
             fallbackProviders,
+            onUsage,
           })
         : "";
     const agentPrompt = imageAnalysis
@@ -277,8 +240,22 @@ export async function POST(request: Request) {
       modelName,
       apiKey,
       fallbackProviders,
+      onUsage,
       resume,
       createDemoLanding,
+    };
+
+    const finalizeUsage = async () => {
+      if (!usageCalls.length) return;
+      try {
+        await recordSuccessfulAiUsage({
+          ...usageIdentity,
+          projectId: projectId || null,
+          calls: usageCalls,
+        });
+      } catch {
+        // The completed AI result remains available if metering persistence fails.
+      }
     };
 
     if (request.headers.get("accept")?.includes("text/event-stream")) {
@@ -293,7 +270,8 @@ export async function POST(request: Request) {
             ...agentInput,
             progress: send,
           })
-            .then((result) => {
+            .then(async (result) => {
+              await finalizeUsage();
               send({
                 type: "status",
                 stage: "completed",
@@ -324,6 +302,7 @@ export async function POST(request: Request) {
     }
 
     const result = await runWebsiteBuilderAgent(agentInput);
+    await finalizeUsage();
 
     return Response.json(result);
   } catch (error) {
@@ -335,7 +314,7 @@ export async function POST(request: Request) {
         pipelineStage: pipeline?.pipelineStage,
         resume: pipeline?.resume,
       },
-      { status: message.includes("lượt") ? 429 : 500 }
+      { status: error instanceof AiUsageLimitError ? 429 : 500 }
     );
   }
 }

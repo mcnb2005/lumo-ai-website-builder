@@ -1,6 +1,10 @@
 import { and, desc, eq } from "drizzle-orm";
 import { ensureDatabase, getD1, getDb } from "../../../db";
-import { leads, projects } from "../../../db/schema";
+import { leads, projects, recordNotifications } from "../../../db/schema";
+import {
+  notificationSummaryFromColumns,
+  sendOwnerRecordNotification,
+} from "../../server/owner-notifications";
 import { getCurrentDatabaseUser } from "../../server-user";
 
 const leadStatuses = [
@@ -50,8 +54,28 @@ export async function GET(request: Request) {
     }
 
     const rows = await getDb()
-      .select()
+      .select({
+        id: leads.id,
+        payload: leads.payload,
+        status: leads.status,
+        notes: leads.notes,
+        createdAt: leads.createdAt,
+        updatedAt: leads.updatedAt,
+        notificationStatus: recordNotifications.status,
+        notificationRecipientEmail: recordNotifications.recipientEmail,
+        notificationAttemptCount: recordNotifications.attemptCount,
+        notificationLastError: recordNotifications.lastError,
+        notificationLastAttemptAt: recordNotifications.lastAttemptAt,
+        notificationSentAt: recordNotifications.sentAt,
+      })
       .from(leads)
+      .leftJoin(
+        recordNotifications,
+        and(
+          eq(recordNotifications.recordType, "lead"),
+          eq(recordNotifications.recordId, leads.id)
+        )
+      )
       .where(eq(leads.projectId, projectId))
       .orderBy(desc(leads.createdAt))
       .limit(500);
@@ -63,6 +87,7 @@ export async function GET(request: Request) {
         notes: row.notes || "",
         createdAt: row.createdAt,
         updatedAt: row.updatedAt || row.createdAt,
+        notification: notificationSummaryFromColumns(row),
       })),
     });
   } catch (error) {
@@ -219,11 +244,18 @@ export async function POST(request: Request) {
       return Response.json({ submitted: true, duplicate: true });
     }
 
+    const id = crypto.randomUUID();
     await getDb().insert(leads).values({
-      id: crypto.randomUUID(),
+      id,
       projectId: project.id,
       payload: serializedPayload,
     });
+    await sendOwnerRecordNotification({
+      projectId: project.id,
+      recordType: "lead",
+      recordId: id,
+      origin: new URL(request.url).origin,
+    }).catch(() => undefined);
     return Response.json({ submitted: true });
   } catch (error) {
     return Response.json(

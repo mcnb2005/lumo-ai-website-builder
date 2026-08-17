@@ -1,5 +1,5 @@
 import { and, eq } from "drizzle-orm";
-import { ensureDatabase, getDb } from "../../../db";
+import { ensureDatabase, getD1, getDb } from "../../../db";
 import { projects } from "../../../db/schema";
 import {
   normalizeLandingData,
@@ -11,6 +11,11 @@ import {
   unauthorizedCompanyResponse,
 } from "../../company-access";
 import { canPublishLanding } from "../../company-data";
+import {
+  normalizeProjectSlug,
+  normalizePublishSettings,
+} from "../../publish-settings";
+import { createProjectSnapshot } from "../../server/project-versions";
 
 export async function POST(request: Request) {
   try {
@@ -30,15 +35,11 @@ export async function POST(request: Request) {
       slug?: string;
       data?: unknown;
       messages?: unknown;
+      publishSettings?: unknown;
     };
     const id = payload.id?.trim();
     const name = payload.name?.trim();
-    const slug = payload.slug
-      ?.trim()
-      .toLowerCase()
-      .replace(/[^a-z0-9-]/g, "-")
-      .replace(/-+/g, "-")
-      .replace(/^-|-$/g, "");
+    const slug = normalizeProjectSlug(payload.slug);
 
     if (!id || !name || !slug || !payload.data) {
       return Response.json(
@@ -50,14 +51,62 @@ export async function POST(request: Request) {
     await ensureDatabase();
     const db = getDb();
     const [existing] = await db
-      .select({ ownerId: projects.ownerId })
+      .select({
+        ownerId: projects.ownerId,
+        slug: projects.slug,
+        deletedAt: projects.deletedAt,
+      })
       .from(projects)
       .where(eq(projects.id, id))
       .limit(1);
-    if (existing && existing.ownerId !== user.id) {
+    if (existing && (existing.ownerId !== user.id || existing.deletedAt)) {
       return Response.json(
         { error: "Bạn không có quyền xuất bản dự án này." },
         { status: 403 }
+      );
+    }
+
+    const publishSettings = normalizePublishSettings(payload.publishSettings);
+    const requestedAssets = [
+      publishSettings.ogAssetId,
+      publishSettings.faviconAssetId,
+    ].filter((value): value is string => Boolean(value));
+    if (requestedAssets.length) {
+      const placeholders = requestedAssets.map(() => "?").join(", ");
+      const result = await getD1()
+        .prepare(
+          `SELECT id FROM assets
+           WHERE project_id = ? AND owner_id = ? AND id IN (${placeholders})`
+        )
+        .bind(id, user.id, ...requestedAssets)
+        .all<{ id: string }>();
+      if ((result.results || []).length !== new Set(requestedAssets).size) {
+        return Response.json(
+          { error: "Ảnh SEO phải thuộc đúng dự án hiện tại." },
+          { status: 400 }
+        );
+      }
+    }
+
+    const slugOwner = await getD1()
+      .prepare(
+        `SELECT id FROM projects
+         WHERE slug = ? AND id <> ?
+         LIMIT 1`
+      )
+      .bind(slug, id)
+      .first<{ id: string }>();
+    const redirectOwner = await getD1()
+      .prepare(
+        `SELECT project_id FROM project_slug_redirects
+         WHERE slug = ? LIMIT 1`
+      )
+      .bind(slug)
+      .first<{ project_id: string }>();
+    if (slugOwner || (redirectOwner && redirectOwner.project_id !== id)) {
+      return Response.json(
+        { error: "Đường dẫn xuất bản đã được sử dụng." },
+        { status: 409 }
       );
     }
 
@@ -74,11 +123,30 @@ export async function POST(request: Request) {
       ),
       messages: JSON.stringify(payload.messages || []),
       status: "published",
+      publishSettings: JSON.stringify(publishSettings),
       updatedAt: now,
       publishedAt: now,
     };
 
     if (existing) {
+      if (existing.slug !== slug) {
+        await getD1()
+          .prepare(
+            "DELETE FROM project_slug_redirects WHERE slug = ? AND project_id = ?"
+          )
+          .bind(slug, id)
+          .run();
+        await getD1()
+          .prepare(
+            `INSERT INTO project_slug_redirects (slug, project_id, created_at)
+             VALUES (?, ?, ?)
+             ON CONFLICT(slug) DO UPDATE SET
+               project_id = excluded.project_id,
+               created_at = excluded.created_at`
+          )
+          .bind(existing.slug, id, now)
+          .run();
+      }
       await db
         .update(projects)
         .set(values)
@@ -87,7 +155,19 @@ export async function POST(request: Request) {
       await db.insert(projects).values(values);
     }
 
-    return Response.json({ published: true, url: `/p/${slug}` });
+    await createProjectSnapshot({
+      projectId: id,
+      userId: user.id,
+      reason: "publish",
+      force: true,
+    });
+
+    return Response.json({
+      published: true,
+      url: `/p/${slug}`,
+      slug,
+      publishSettings,
+    });
   } catch (error) {
     const message =
       error instanceof Error

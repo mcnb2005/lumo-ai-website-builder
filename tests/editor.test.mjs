@@ -101,7 +101,10 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(canvas, /onEditText/);
   assert.match(canvas, /selectedSection === section/);
   assert.match(studio, /applyLandingTextEdit/);
-  assert.match(studio, /onEditText=\{editLandingText\}/);
+  assert.match(
+    studio,
+    /onEditText=\{previewVersion \? undefined : editLandingText\}/
+  );
   assert.match(inlineComponent, /contentEditable/);
   assert.match(inlineComponent, /suppressContentEditableWarning/);
   assert.match(inlineComponent, /event\.key === "Escape"/);
@@ -151,6 +154,30 @@ test("supports hero and final CTA sections for drag-and-drop editor", async () =
   assert.match(styles, /\.section-color-panel__visibility/);
   assert.match(styles, /\.preview-loading\s*\{/);
   assert.match(styles, /contain: layout paint/);
+  assert.match(styles, /\.preview-scroll\s*\{[\s\S]*?container-type:\s*inline-size/);
+  assert.match(styles, /container-name:\s*landing-preview/);
+  assert.match(styles, /@container landing-preview \(max-width:\s*980px\)/);
+  assert.match(
+    styles,
+    /\.landing-canvas\.is-compact \.landing-hero\.has-image\s*\{[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/
+  );
+  assert.match(
+    styles,
+    /\.landing-canvas\.is-compact \.landing-hero\.variant-product-showcase \.hero-product-media\s*\{[\s\S]*?transform:\s*none/
+  );
+  assert.match(styles, /@container landing-preview \(max-width:\s*560px\)/);
+  assert.match(styles, /min-height:\s*240px/);
+  const productShowcaseRuleIndex = styles.indexOf(
+    ".landing-hero.variant-product-showcase.has-image"
+  );
+  const publicResponsiveOverrideIndex = styles.lastIndexOf(
+    "@media (max-width: 980px)"
+  );
+  assert.ok(publicResponsiveOverrideIndex > productShowcaseRuleIndex);
+  assert.match(
+    styles.slice(publicResponsiveOverrideIndex),
+    /\.landing-hero\.variant-product-showcase\.has-image[\s\S]*?grid-template-columns:\s*minmax\(0,\s*1fr\)/
+  );
   assert.match(generationProgress, /GenerationStage/);
   assert.match(styles, /\.landing-hero\.variant-centered/);
   assert.match(styles, /\.landing-hero\.variant-product-showcase/);

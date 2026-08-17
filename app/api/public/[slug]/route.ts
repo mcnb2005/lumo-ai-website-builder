@@ -1,54 +1,35 @@
-import { and, eq, isNull } from "drizzle-orm";
-import { ensureDatabase, getDb } from "../../../../db";
-import { projects } from "../../../../db/schema";
-import { inferDashboardType } from "../../../dashboard-config";
+import { getPublishedProjectBySlug } from "../../../server/public-project";
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ slug: string }> }
 ) {
   try {
     const { slug } = await params;
-    await ensureDatabase();
-    const [project] = await getDb()
-      .select({
-        data: projects.data,
-        name: projects.name,
-        dashboardType: projects.dashboardType,
-      })
-      .from(projects)
-      .where(
-        and(
-          eq(projects.slug, slug),
-          eq(projects.status, "published"),
-          isNull(projects.deletedAt)
-        )
-      )
-      .limit(1);
-
+    const project = await getPublishedProjectBySlug(slug);
     if (!project) {
       return Response.json(
         { error: "Landing page này chưa được xuất bản." },
         { status: 404 }
       );
     }
-
-    const landing = JSON.parse(project.data);
+    if (project.redirected) {
+      return Response.redirect(
+        new URL(`/api/public/${encodeURIComponent(project.slug)}`, request.url),
+        308
+      );
+    }
     return Response.json({
-      landing,
+      landing: project.landing,
       name: project.name,
-      dashboardType:
-        project.dashboardType === "auto"
-          ? inferDashboardType(landing)
-          : project.dashboardType,
+      dashboardType: project.dashboardType,
+      publishSettings: project.publishSettings,
     });
   } catch (error) {
     return Response.json(
       {
         error:
-          error instanceof Error
-            ? error.message
-            : "Không thể mở landing page.",
+          error instanceof Error ? error.message : "Không thể mở landing page.",
       },
       { status: 500 }
     );

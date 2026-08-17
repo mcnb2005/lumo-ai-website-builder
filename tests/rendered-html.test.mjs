@@ -75,11 +75,16 @@ test("ships production metadata, persistence and image storage", async () => {
   assert.match(database, /let databaseReady: Promise<void> \| null = null/);
   assert.match(database, /databaseSchemaIsCurrent/);
   assert.match(database, /if \(!schemaIsCurrent\)/);
+  assert.match(database, /UPLOADS\?: AssetBucket/);
+  assert.match(database, /getRuntimeEnv\(\)\.UPLOADS/);
+  assert.match(database, /typeof binding\.put !== "function"/);
+  assert.match(database, /typeof binding\.get !== "function"/);
   assert.match(
     companyData,
     /if \(existingMembership\) \{\s*return toContext\(existingMembership\);\s*\}/
   );
-  assert.match(hosting, /"r2": "ASSETS"/);
+  assert.match(hosting, /"r2": "UPLOADS"/);
+  assert.doesNotMatch(hosting, /"r2": "ASSETS"/);
   await assert.rejects(
     access(new URL("../app/_sites-preview/SkeletonPreview.tsx", import.meta.url))
   );
