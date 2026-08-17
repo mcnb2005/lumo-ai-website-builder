@@ -8,6 +8,7 @@ import type { BusinessBrief, LandingBlueprintSection } from "../../landing-proje
 import {
   runAiChatTool,
   type AiChatProvider,
+  type AiChatUsageReporter,
 } from "../tools/ai-chat-tool";
 import { extractAiJson } from "../tools/ai-json";
 import {
@@ -71,6 +72,7 @@ export async function runSectionContentAgent(input: {
   modelName: string;
   apiKey: string;
   fallbackProviders?: AiChatProvider[];
+  onUsage?: AiChatUsageReporter;
   repairIssues?: string[];
 }) {
   const sectionType = input.section.type;
@@ -104,6 +106,7 @@ export async function runSectionContentAgent(input: {
       modelName: input.modelName,
       apiKey: input.apiKey,
       fallbackProviders: input.fallbackProviders,
+      onUsage: input.onUsage,
       jsonMode: true,
       temperature: 0.35,
       systemPrompt: sectionDraftSystemPrompt,

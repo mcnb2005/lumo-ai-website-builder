@@ -9,6 +9,7 @@ import { extractAiJson } from "../tools/ai-json";
 import {
   runAiChatTool,
   type AiChatProvider,
+  type AiChatUsageReporter,
 } from "../tools/ai-chat-tool";
 import type { BuilderPlan } from "./builder-plan";
 import {
@@ -28,6 +29,7 @@ type BlueprintPlanningAgentInput = {
   modelName: string;
   apiKey: string;
   fallbackProviders?: AiChatProvider[];
+  onUsage?: AiChatUsageReporter;
 };
 
 export type BlueprintPlanningResult = {
@@ -131,6 +133,7 @@ export async function runBlueprintPlanningAgent(
         apiKey: input.apiKey,
         modelName: input.modelName,
         fallbackProviders: input.fallbackProviders,
+        onUsage: input.onUsage,
         jsonMode: true,
         temperature: 0.25,
         systemPrompt:

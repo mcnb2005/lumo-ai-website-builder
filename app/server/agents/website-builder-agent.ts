@@ -34,6 +34,7 @@ import {
 import {
   runAiChatTool,
   type AiChatProvider,
+  type AiChatUsageReporter,
 } from "../tools/ai-chat-tool";
 import { createDemoBuilderPlan } from "./builder-plan";
 import { runLandingCreationPipeline } from "./landing-creation-pipeline";
@@ -62,6 +63,7 @@ type WebsiteBuilderAgentInput = {
   modelName: string;
   apiKey?: string;
   fallbackProviders?: AiChatProvider[];
+  onUsage?: AiChatUsageReporter;
   resume?: PipelineResumeState;
   createDemoLanding: (prompt: string, current: LandingData) => LandingData;
   progress?: BuilderProgressReporter;
@@ -156,6 +158,7 @@ export async function runWebsiteBuilderAgent(
         modelName: input.modelName,
         apiKey: input.apiKey,
         fallbackProviders: input.fallbackProviders,
+        onUsage: input.onUsage,
       })
     : createDemoBuilderPlan(input.prompt);
   if (input.apiKey) {
@@ -329,6 +332,7 @@ export async function runWebsiteBuilderAgent(
       modelName: input.modelName,
       apiKey: input.apiKey,
       fallbackProviders: input.fallbackProviders,
+      onUsage: input.onUsage,
       resume: input.resume,
       progress: input.progress,
     });
@@ -431,6 +435,7 @@ export async function runWebsiteBuilderAgent(
       apiKey: input.apiKey,
       modelName: input.modelName,
       fallbackProviders: input.fallbackProviders,
+      onUsage: input.onUsage,
       jsonMode: true,
       systemPrompt:
         attempt === 1

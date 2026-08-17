@@ -4,6 +4,7 @@ import { landingUiDesignSkill } from "../skills/runtime-skills";
 import {
   runAiChatTool,
   type AiChatProvider,
+  type AiChatUsageReporter,
 } from "../tools/ai-chat-tool";
 import {
   builderPlanSystemPromptRules,
@@ -28,6 +29,7 @@ type PlanningAgentInput = {
   modelName: string;
   apiKey: string;
   fallbackProviders?: AiChatProvider[];
+  onUsage?: AiChatUsageReporter;
 };
 
 const plannerInstructions = [
@@ -116,6 +118,7 @@ export async function runPlanningAgent(
       apiKey: input.apiKey,
       modelName: input.modelName,
       fallbackProviders: input.fallbackProviders,
+      onUsage: input.onUsage,
       jsonMode: true,
       temperature: 0.1,
       systemPrompt:

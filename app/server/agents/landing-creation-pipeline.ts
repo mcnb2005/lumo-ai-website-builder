@@ -33,7 +33,10 @@ import {
 } from "./quality-evaluator";
 import { runSectionContentAgent } from "./section-content-agent";
 import { PipelineStageError } from "./pipeline-stage-error";
-import type { AiChatProvider } from "../tools/ai-chat-tool";
+import type {
+  AiChatProvider,
+  AiChatUsageReporter,
+} from "../tools/ai-chat-tool";
 
 type LandingCreationPipelineResult = {
   landing: LandingData;
@@ -74,6 +77,7 @@ export async function runLandingCreationPipeline(input: {
   modelName: string;
   apiKey: string;
   fallbackProviders?: AiChatProvider[];
+  onUsage?: AiChatUsageReporter;
   resume?: PipelineResumeState;
   progress?: BuilderProgressReporter;
 }): Promise<LandingCreationPipelineResult> {
@@ -98,6 +102,7 @@ export async function runLandingCreationPipeline(input: {
       modelName: input.modelName,
       apiKey: input.apiKey,
       fallbackProviders: input.fallbackProviders,
+      onUsage: input.onUsage,
     });
     if (planned.warning) warnings.push(planned.warning);
     blueprint = createLandingBlueprint({
@@ -153,6 +158,7 @@ export async function runLandingCreationPipeline(input: {
         modelName: input.modelName,
         apiKey: input.apiKey,
         fallbackProviders: input.fallbackProviders,
+        onUsage: input.onUsage,
       });
       const applied = applyLandingOperations(landing, sectionOperations);
       landing = preserveAssets(landing, applied.landing);
@@ -216,6 +222,7 @@ export async function runLandingCreationPipeline(input: {
           modelName: input.modelName,
           apiKey: input.apiKey,
           fallbackProviders: input.fallbackProviders,
+          onUsage: input.onUsage,
           repairIssues,
         });
         const applied = applyLandingOperations(landing, sectionOperations);

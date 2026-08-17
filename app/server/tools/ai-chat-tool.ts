@@ -10,6 +10,17 @@ export type AiImageInput = {
   detail?: "auto" | "low" | "high";
 };
 
+export type AiChatUsage = {
+  providerName: string;
+  modelName: string;
+  promptTokens: number | null;
+  completionTokens: number | null;
+  totalTokens: number | null;
+  usageReported: boolean;
+};
+
+export type AiChatUsageReporter = (usage: AiChatUsage) => void;
+
 export type AiChatToolInput = AiChatProvider & {
   systemPrompt: string;
   userPrompt: string;
@@ -19,6 +30,7 @@ export type AiChatToolInput = AiChatProvider & {
   maxAttempts?: number;
   jsonMode?: boolean;
   fallbackProviders?: AiChatProvider[];
+  onUsage?: AiChatUsageReporter;
 };
 
 type ChatCompletionPayload = {
@@ -30,6 +42,14 @@ type ChatCompletionPayload = {
   choices?: Array<{
     message?: { content?: string | null };
   }>;
+  model?: string;
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    input_tokens?: number;
+    output_tokens?: number;
+    total_tokens?: number;
+  };
 };
 
 const retryableStatuses = new Set([429, 500, 502, 503, 504]);
@@ -112,6 +132,38 @@ function isRetryablePayloadError(payload: ChatCompletionPayload) {
   return /(?:429|500|502|503|504|rate.?limit|overload|internal|unavailable|timeout|api_error)/i.test(
     detail
   );
+}
+
+function tokenCount(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) && value >= 0
+    ? Math.round(value)
+    : null;
+}
+
+export function normalizeAiChatUsage(
+  payload: ChatCompletionPayload,
+  provider: AiChatProvider
+): AiChatUsage {
+  const promptTokens = tokenCount(
+    payload.usage?.prompt_tokens ?? payload.usage?.input_tokens
+  );
+  const completionTokens = tokenCount(
+    payload.usage?.completion_tokens ?? payload.usage?.output_tokens
+  );
+  const totalTokens =
+    tokenCount(payload.usage?.total_tokens) ??
+    (promptTokens !== null && completionTokens !== null
+      ? promptTokens + completionTokens
+      : null);
+
+  return {
+    providerName: provider.name?.trim() || "AI",
+    modelName: payload.model?.trim() || provider.modelName,
+    promptTokens,
+    completionTokens,
+    totalTokens,
+    usageReported: Boolean(payload.usage),
+  };
 }
 
 async function requestProvider(
@@ -211,6 +263,7 @@ async function requestProvider(
   if (!output) {
     throw new AiProviderRequestError("Nhà cung cấp AI không trả về nội dung.");
   }
+  input.onUsage?.(normalizeAiChatUsage(payload, provider));
   return output;
 }
 

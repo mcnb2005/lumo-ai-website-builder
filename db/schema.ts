@@ -309,3 +309,35 @@ export const aiUsage = sqliteTable("ai_usage", {
   count: integer("count").notNull().default(0),
   updatedAt: text("updated_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+export const aiUsageEvents = sqliteTable(
+  "ai_usage_events",
+  {
+    id: text("id").primaryKey(),
+    key: text("key").notNull(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id),
+    companyId: text("company_id")
+      .notNull()
+      .references(() => companies.id),
+    projectId: text("project_id").references(() => projects.id),
+    period: text("period").notNull(),
+    providerModels: text("provider_models").notNull().default("[]"),
+    promptTokens: integer("prompt_tokens"),
+    completionTokens: integer("completion_tokens"),
+    totalTokens: integer("total_tokens"),
+    tokenUsageComplete: integer("token_usage_complete", { mode: "boolean" })
+      .notNull()
+      .default(false),
+    costMicros: integer("cost_micros"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (table) => [
+    index("ai_usage_events_key_period_idx").on(
+      table.key,
+      table.period,
+      table.createdAt
+    ),
+  ]
+);

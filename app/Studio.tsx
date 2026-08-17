@@ -11,6 +11,7 @@ import {
 import { arrayMove } from "@dnd-kit/sortable";
 import { LandingCanvas } from "./components/LandingCanvas";
 import { GenerationProgress } from "./editor/GenerationProgress";
+import { AiUsageMeter } from "./editor/AiUsageMeter";
 import { SectionColorPanel } from "./editor/SectionColorPanel";
 import { SectionNavigator } from "./editor/SectionNavigator";
 import { PublishSettingsDialog } from "./editor/PublishSettingsDialog";
@@ -265,6 +266,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
     useState<GenerationStage | null>(null);
   const [generationMessage, setGenerationMessage] = useState("");
   const [generationErrors, setGenerationErrors] = useState<string[]>([]);
+  const [aiUsageRefreshKey, setAiUsageRefreshKey] = useState(0);
   const [newProjectDialogOpen, setNewProjectDialogOpen] = useState(false);
   const [templateDialogMode, setTemplateDialogMode] = useState<
     "create" | "switch"
@@ -1032,6 +1034,7 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
         ),
       ]);
       if (imageReference) setReferenceAsset(null);
+      setAiUsageRefreshKey((current) => current + 1);
       if (result.intent.mode === "clarify") {
         setNotice("Lumo cần bạn làm rõ yêu cầu trước khi sửa trang.");
       } else if (result.mode === "demo") {
@@ -1609,6 +1612,10 @@ export function Studio({ initialUser }: { initialUser: UserInfo }) {
             </div>
             <button type="button" aria-label="Tùy chọn hội thoại">•••</button>
           </div>
+
+          {authReady && user ? (
+            <AiUsageMeter refreshKey={aiUsageRefreshKey} />
+          ) : null}
 
           <div className="conversation" aria-live="polite">
             <div className="day-label">Hôm nay</div>

@@ -2103,7 +2103,7 @@ textarea:focus-visible {
 .chat-panel {
   min-height: 0;
   display: grid;
-  grid-template-rows: 66px minmax(0, 1fr) auto auto auto;
+  grid-template-rows: 66px auto minmax(0, 1fr) auto auto auto;
   border-right: 1px solid var(--studio-line);
   background: var(--studio-panel);
   position: relative;
@@ -3423,6 +3423,106 @@ textarea:focus-visible {
   container-name: landing-preview;
   scrollbar-width: thin;
   scrollbar-color: rgba(66, 83, 74, 0.25) transparent;
+}
+
+.ai-usage-meter {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 9px 18px 10px;
+  border-bottom: 1px solid #edf0ed;
+  background: #fbfcfb;
+  color: #657069;
+}
+
+.ai-usage-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 10px;
+}
+
+.ai-usage-summary span {
+  font-weight: 700;
+  color: #425149;
+}
+
+.ai-usage-summary strong {
+  color: var(--studio-green);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ai-usage-progress {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e4e9e5;
+}
+
+.ai-usage-progress > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--studio-green);
+  transition: width 180ms ease-out;
+}
+
+.ai-usage-meter p,
+.ai-usage-meter small {
+  min-width: 0;
+  margin: 0;
+  overflow: hidden;
+  color: #7b847f;
+  font-size: 9px;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ai-usage-meter small {
+  color: #929a95;
+}
+
+.ai-usage-meter.is-exhausted .ai-usage-summary strong,
+.ai-usage-meter.is-error {
+  color: #a53c33;
+}
+
+.ai-usage-meter.is-exhausted .ai-usage-progress > span {
+  background: #c74a3f;
+}
+
+.ai-usage-meter.is-loading {
+  min-height: 48px;
+  align-content: center;
+  font-size: 10px;
+}
+
+.ai-usage-meter.is-error {
+  min-height: 48px;
+  grid-template-columns: 1fr auto;
+  align-items: center;
+  font-size: 10px;
+}
+
+.ai-usage-meter.is-error button {
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid #d7ddd8;
+  border-radius: 9px;
+  background: #fff;
+  color: var(--studio-green);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-usage-progress > span {
+    transition: none;
+  }
 }
 
 .preview-loading {

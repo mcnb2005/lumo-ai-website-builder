@@ -1,4 +1,8 @@
-import { runAiChatTool, type AiChatProvider } from "../tools/ai-chat-tool";
+import {
+  runAiChatTool,
+  type AiChatProvider,
+  type AiChatUsageReporter,
+} from "../tools/ai-chat-tool";
 
 type ReferenceImageAnalysisInput = {
   imageDataUrl: string;
@@ -7,6 +11,7 @@ type ReferenceImageAnalysisInput = {
   modelName: string;
   apiKey: string;
   fallbackProviders?: AiChatProvider[];
+  onUsage?: AiChatUsageReporter;
 };
 
 const analysisInstructions = [
@@ -26,6 +31,7 @@ export async function analyzeReferenceImage(
     modelName: input.modelName,
     apiKey: input.apiKey,
     fallbackProviders: input.fallbackProviders,
+    onUsage: input.onUsage,
     systemPrompt: analysisInstructions,
     userPrompt: [
       "Analyze this reference image to guide a landing page.",

@@ -106,6 +106,7 @@ const REQUIRED_INDEXES = [
   "record_notifications_record_idx",
   "record_notifications_project_idx",
   "ai_usage_period_idx",
+  "ai_usage_events_key_period_idx",
 ] as const;
 
 async function databaseSchemaIsCurrent(binding: D1Database) {
@@ -160,7 +161,17 @@ async function databaseSchemaIsCurrent(binding: D1Database) {
         notification.attempt_count,
         notification.last_error,
         notification.last_attempt_at,
-        notification.sent_at
+        notification.sent_at,
+        usage_event.user_id,
+        usage_event.company_id,
+        usage_event.project_id,
+        usage_event.period,
+        usage_event.provider_models,
+        usage_event.prompt_tokens,
+        usage_event.completion_tokens,
+        usage_event.total_tokens,
+        usage_event.token_usage_complete,
+        usage_event.cost_micros
        FROM users u
        CROSS JOIN auth_states auth_state
        CROSS JOIN projects project
@@ -180,6 +191,7 @@ async function databaseSchemaIsCurrent(binding: D1Database) {
        CROSS JOIN project_versions project_version
        CROSS JOIN record_notifications notification
        CROSS JOIN ai_usage usage
+       CROSS JOIN ai_usage_events usage_event
        LIMIT 0`
     )
     .all();
@@ -428,6 +440,23 @@ async function initializeDatabaseCompatibility(binding: D1Database) {
         period TEXT NOT NULL,
         count INTEGER NOT NULL DEFAULT 0,
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      )`
+    ),
+    binding.prepare(
+      `CREATE TABLE IF NOT EXISTS ai_usage_events (
+        id TEXT PRIMARY KEY NOT NULL,
+        key TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        company_id TEXT NOT NULL,
+        project_id TEXT,
+        period TEXT NOT NULL,
+        provider_models TEXT NOT NULL DEFAULT '[]',
+        prompt_tokens INTEGER,
+        completion_tokens INTEGER,
+        total_tokens INTEGER,
+        token_usage_complete INTEGER NOT NULL DEFAULT 0,
+        cost_micros INTEGER,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       )`
     ),
   ]);
@@ -687,6 +716,9 @@ async function initializeDatabaseCompatibility(binding: D1Database) {
     ),
     binding.prepare(
       "CREATE INDEX IF NOT EXISTS ai_usage_period_idx ON ai_usage (period)"
+    ),
+    binding.prepare(
+      "CREATE INDEX IF NOT EXISTS ai_usage_events_key_period_idx ON ai_usage_events (key, period, created_at)"
     ),
   ]);
 }
